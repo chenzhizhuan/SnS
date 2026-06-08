@@ -21,7 +21,7 @@ import {
 } from '../lib/thread-fork-registry'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { isInternalTemporaryWorkspace, normalizeWorkspaceRoot } from '../lib/workspace-path'
-import { buildClawRuntimePrompt, getActiveAgentApiKey } from '@shared/app-settings'
+import { buildClawRuntimePrompt, buildCodeRuntimePrompt, getActiveAgentApiKey } from '@shared/app-settings'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import {
   activeClawChannel,
@@ -559,10 +559,14 @@ export function createThreadActions(
     try {
       const seqAtSend = get().lastSeq
       const channel = get().route === 'claw' ? activeClawChannel(get()) : null
-      const runtimeText = channel
-        ? buildClawRuntimePrompt(await rendererRuntimeClient.getSettings(), trimmedText, { channel })
-        : trimmedText
-      const runtimeDisplayText = channel ? displayText : userDisplayText
+      const settings = await rendererRuntimeClient.getSettings()
+      let runtimeText: string
+      if (channel) {
+        runtimeText = buildClawRuntimePrompt(settings, trimmedText, { channel })
+      } else {
+        runtimeText = buildCodeRuntimePrompt(settings, trimmedText)
+      }
+      const runtimeDisplayText = channel ? displayText : (userDisplayText ?? trimmedText)
       const { turnId, userMessageItemId } = await p.sendUserMessage(activeThreadId, runtimeText, {
         mode,
         ...(composerModel ? { model: composerModel } : {}),

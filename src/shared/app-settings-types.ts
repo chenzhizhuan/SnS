@@ -457,6 +457,7 @@ export type AppSettingsV1 = {
   claw: ClawSettingsV1
   schedule: ScheduleSettingsV1
   guiUpdate: GuiUpdateConfigV1
+  codePromptPrefix: string
 }
 
 export type AppSettingsPatch = Partial<
