@@ -77,6 +77,46 @@ describe('DeepseekCompatModelClient', () => {
     expect(sentBodies[0]?.model).toBe('deepseek-v4-pro')
   })
 
+  it('builds chat completions URLs for base URLs with and without version segments', async () => {
+    const cases = [
+      ['https://zenmux.ai/api', 'https://zenmux.ai/api/v1/chat/completions'],
+      ['https://zenmux.ai/api/v1', 'https://zenmux.ai/api/v1/chat/completions'],
+      ['https://zenmux.ai/api/v1/', 'https://zenmux.ai/api/v1/chat/completions'],
+      ['https://zenmux.ai/api/v2', 'https://zenmux.ai/api/v2/chat/completions'],
+      ['https://zenmux.ai/api/v1/chat/completions', 'https://zenmux.ai/api/v1/chat/completions'],
+      ['https://api.deepseek.com/beta', 'https://api.deepseek.com/v1/chat/completions'],
+      ['https://api.deepseek.com', 'https://api.deepseek.com/v1/chat/completions']
+    ]
+
+    for (const [baseUrl, expectedUrl] of cases) {
+      const sentUrls: string[] = []
+      const fetchImpl: typeof fetch = async (url) => {
+        sentUrls.push(String(url))
+        return new Response(JSON.stringify({
+          id: 'url',
+          model: 'deepseek-chat',
+          choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'done' } }]
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      }
+      const client = new DeepseekCompatModelClient({
+        baseUrl,
+        apiKey: 'k',
+        model: 'deepseek-chat',
+        fetchImpl,
+        nonStreaming: true
+      })
+
+      for await (const _chunk of client.stream(buildRequest(new AbortController().signal))) {
+        // drain
+      }
+
+      expect(sentUrls[0]).toBe(expectedUrl)
+    }
+  })
+
   it('does not inject body.thinking on non-DeepSeek host (issue #26)', async () => {
     const response = {
       id: 'r3',

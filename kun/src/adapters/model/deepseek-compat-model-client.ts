@@ -9,7 +9,8 @@ import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 /**
  * Configuration for the DeepSeek-compatible HTTP model client. The
  * client intentionally mirrors the DeepSeek-TUI transport shape:
- * `POST {baseUrl}/v1/chat/completions` with `stream: true`, parsed
+ * `POST {baseUrl}/chat/completions` with `stream: true`, parsed
+ * after normalizing OpenAI-compatible bases with or without `/v1`,
  * line-by-line (`data: {json}\n\n`).
  */
 export type DeepseekCompatConfig = {
@@ -119,7 +120,7 @@ export class DeepseekCompatModelClient implements ModelClient {
       yield { kind: 'error', message: 'request was aborted before start' }
       return
     }
-    const url = this.buildUrl('/v1/chat/completions')
+    const url = buildChatCompletionsUrl(this.config.baseUrl)
     const stream = request.stream ?? !this.config.nonStreaming
     const body = this.buildRequestBody(request, stream)
     const headers = this.buildHeaders(stream)
@@ -199,11 +200,6 @@ export class DeepseekCompatModelClient implements ModelClient {
       const message = error instanceof Error ? error.message : String(error)
       return { kind: 'error', message: `model request failed: ${message}` }
     }
-  }
-
-  private buildUrl(path: string): string {
-    const base = this.config.baseUrl.replace(/\/+$/, '')
-    return `${base}${path}`
   }
 
   private buildHeaders(stream: boolean): Record<string, string> {
@@ -800,6 +796,20 @@ function shouldRetryWithoutStreamUsage(
   if (status !== 400 && status !== 422) return false
   if (!Object.prototype.hasOwnProperty.call(body, 'stream_options')) return false
   return /\b(stream_options|include_usage)\b/i.test(text)
+}
+
+function buildChatCompletionsUrl(baseUrl: string): string {
+  const normalized = baseUrl.trim().replace(/\/+$/, '')
+  if (!normalized) return '/v1/chat/completions'
+  if (normalized.toLowerCase().endsWith('/chat/completions')) return normalized
+  const lastSegment = normalized.split('/').pop()?.toLowerCase() ?? ''
+  if (lastSegment === 'beta') {
+    return `${normalized.slice(0, -'/beta'.length)}/v1/chat/completions`
+  }
+  if (/^v\d+$/.test(lastSegment)) {
+    return `${normalized}/chat/completions`
+  }
+  return `${normalized}/v1/chat/completions`
 }
 
 function isAzureOpenAiEndpoint(baseUrl: string): boolean {
