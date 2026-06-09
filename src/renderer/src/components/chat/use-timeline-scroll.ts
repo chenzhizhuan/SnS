@@ -16,7 +16,7 @@ type UseTimelineScrollOptions = {
   totalTurns: number
   busy: boolean
   /** Triggers stick-to-bottom snap scroll. */
-  scrollDeps: { contentKey: string; streaming: boolean }
+  scrollDeps: { contentKey: string; streaming: boolean; userTurnKey: string }
 }
 
 export type UseTimelineScrollResult = {
@@ -63,7 +63,7 @@ export function useTimelineScroll({
   busy,
   scrollDeps
 }: UseTimelineScrollOptions): UseTimelineScrollResult {
-  const { contentKey, streaming } = scrollDeps
+  const { contentKey, streaming, userTurnKey } = scrollDeps
   const shouldCollapseHistory = totalTurns > autoCollapseThreshold
   const [visibleTurnCount, setVisibleTurnCount] = useState(() =>
     deriveTimelineVisibleTurnCount({
@@ -77,10 +77,19 @@ export function useTimelineScroll({
   const hiddenTurnCount = Math.max(0, totalTurns - visibleTurnCount)
 
   const stickToBottomRef = useRef(true)
+  const lastUserTurnKeyRef = useRef(userTurnKey)
   const historyExpansionRequestedRef = useRef(false)
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const prependInFlightRef = useRef(false)
   const scrollFrameRef = useRef<number | null>(null)
+
+  // When the user sends a new message (userTurnKey changes to a new value),
+  // force stick-to-bottom so the timeline auto-scrolls to the new turn even
+  // if the user had previously scrolled up to read history.
+  if (userTurnKey && lastUserTurnKeyRef.current !== userTurnKey) {
+    lastUserTurnKeyRef.current = userTurnKey
+    stickToBottomRef.current = true
+  }
 
   const loadEarlierTurns = useCallback(
     (options?: { userInitiated?: boolean }): void => {
