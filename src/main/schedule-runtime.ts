@@ -441,7 +441,10 @@ export class ScheduleRuntime {
 
     const turnBody: Record<string, unknown> = {
       prompt: buildScheduleRuntimePrompt(settings, options.prompt),
-      mode: options.mode
+      mode: options.mode,
+      // Scheduled turns are headless — nobody can answer a user_input
+      // prompt, and a turn that asks one hangs until the response timeout.
+      disableUserInput: true
     }
     if (model) turnBody.model = model
     if (options.reasoningEffort) {

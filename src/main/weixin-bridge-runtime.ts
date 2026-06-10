@@ -846,6 +846,38 @@ async function monitorWeixinAccount(accountId: string, signal: AbortSignal): Pro
   let getUpdatesBuf = await loadSyncBuf(account.accountId)
   let nextTimeoutMs = DEFAULT_LONG_POLL_TIMEOUT_MS
   let consecutiveFailures = 0
+  // Per-sender dispatch chains. A single agent turn can run for minutes;
+  // awaiting it inside the long-poll loop froze the whole channel for
+  // every chat until that turn finished (or hit the webhook timeout).
+  // Chaining per sender keeps one conversation ordered while other chats
+  // and the poll loop keep moving.
+  const senderChains = new Map<string, Promise<void>>()
+  const dispatchToSender = (message: WeixinMessage, to: string, contextToken: string | undefined): void => {
+    const task = async (): Promise<void> => {
+      if (signal.aborted) return
+      const result = await postToDeepSeekGuiWebhook(message, account.accountId)
+      const reply = recordString(result, 'reply') || recordString(result, 'text')
+      if (!reply) return
+      await sendMessageWeixin({
+        account,
+        to,
+        text: reply,
+        contextToken
+      })
+    }
+    const chained = (senderChains.get(to) ?? Promise.resolve())
+      .then(task)
+      .catch((error) => {
+        logWarn('weixin-bridge', 'WeChat message dispatch failed.', {
+          accountId: account.accountId,
+          message: error instanceof Error ? error.message : String(error)
+        })
+      })
+    senderChains.set(to, chained)
+    void chained.finally(() => {
+      if (senderChains.get(to) === chained) senderChains.delete(to)
+    })
+  }
   while (!signal.aborted) {
     try {
       const resp = await getUpdates(account, getUpdatesBuf, nextTimeoutMs)
@@ -874,15 +906,7 @@ async function monitorWeixinAccount(accountId: string, signal: AbortSignal): Pro
         if (!to) continue
         const contextToken = message.context_token || undefined
         if (contextToken) await setContextToken(account.accountId, to, contextToken)
-        const result = await postToDeepSeekGuiWebhook(message, account.accountId)
-        const reply = recordString(result, 'reply') || recordString(result, 'text')
-        if (!reply) continue
-        await sendMessageWeixin({
-          account,
-          to,
-          text: reply,
-          contextToken
-        })
+        dispatchToSender(message, to, contextToken)
       }
     } catch (error) {
       if (signal.aborted) return

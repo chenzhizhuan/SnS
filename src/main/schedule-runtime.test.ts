@@ -208,7 +208,9 @@ describe('ScheduleRuntime', () => {
     })
     expect(JSON.parse(String(turnRequest))).toMatchObject({
       model: 'auto',
-      reasoningEffort: 'max'
+      reasoningEffort: 'max',
+      // Headless turn: a user_input request would hang until timeout.
+      disableUserInput: true
     })
     expect(store.read().schedule.tasks[0]).toMatchObject({
       lastStatus: 'running',
