@@ -115,6 +115,7 @@ describe('upstream model picker list', () => {
     if (result.ok) {
       expect(result.modelIds).toContain('local-only-model')
       expect(result.modelIds).toContain('custom-provider-model')
+      expect(result.modelIds).toContain('deepseek-chat')
       expect(result.modelIds).not.toContain('auto')
       expect(result.defaultModelId).toBe('local-only-model')
       expect(result.modelGroups).toEqual(expect.arrayContaining([
@@ -126,9 +127,12 @@ describe('upstream model picker list', () => {
         expect.objectContaining({
           providerId: 'deepseek',
           label: 'DeepSeek',
-          modelIds: expect.arrayContaining(['deepseek-chat', 'deepseek-reasoner'])
+          modelIds: expect.arrayContaining(['deepseek-v4-flash'])
         })
       ]))
+      const deepseekGroup = result.modelGroups?.find((group) => group.providerId === 'deepseek')
+      expect(deepseekGroup?.modelIds).not.toContain('deepseek-chat')
+      expect(deepseekGroup?.modelIds).not.toContain('deepseek-reasoner')
     }
   })
 
