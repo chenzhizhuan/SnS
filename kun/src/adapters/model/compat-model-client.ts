@@ -460,11 +460,13 @@ export class CompatModelClient implements ModelClient {
     if (stream && options.includeStreamUsage !== false) {
       body.stream_options = { include_usage: true }
     }
+    const isNativeDeepSeek = isDeepSeekHost(this.config.baseUrl)
     const includeThinking = !isAzureOpenAiEndpoint(this.config.baseUrl)
     applyReasoningEffort(body, request.reasoningEffort, {
       includeThinking,
+      nativeDeepSeekHost: isNativeDeepSeek,
       reasoning: this.modelReasoningFor(model),
-      maxReasoningEffort: isDeepSeekHost(this.config.baseUrl) ? 'max' : 'high'
+      maxReasoningEffort: isNativeDeepSeek ? 'max' : 'high'
     })
     if (
       includeThinking &&
@@ -1901,6 +1903,7 @@ function applyReasoningEffort(
   effort: string | undefined,
   options: {
     includeThinking?: boolean
+    nativeDeepSeekHost?: boolean
     reasoning?: ModelReasoningCapability
     maxReasoningEffort?: 'high' | 'max'
   } = {}
@@ -1910,23 +1913,27 @@ function applyReasoningEffort(
     : normalizeReasoningEffortValue(effort)
   if (!normalized) return
   const includeThinking = options.includeThinking !== false
+  // thinking field in DeepSeek format is only supported on the official DeepSeek API.
+  // Third-party OpenAI-compat proxies (SiliconFlow, OpenRouter, llama.cpp, etc.) may
+  // reject or mishandle it, causing 400 errors or empty responses. See issue #26.
+  const nativeDeepSeek = options.nativeDeepSeekHost === true
   if (options.reasoning) {
-    applyProfileReasoningEffort(body, normalized, options.reasoning, includeThinking)
+    applyProfileReasoningEffort(body, normalized, options.reasoning, includeThinking, nativeDeepSeek)
     return
   }
   switch (normalized) {
     case 'off':
-      if (includeThinking) body.thinking = { type: 'disabled' }
+      if (nativeDeepSeek) body.thinking = { type: 'disabled' }
       break
     case 'low':
     case 'medium':
     case 'high':
       body.reasoning_effort = 'high'
-      if (includeThinking) body.thinking = { type: 'enabled' }
+      if (nativeDeepSeek) body.thinking = { type: 'enabled' }
       break
     case 'max':
       body.reasoning_effort = options.maxReasoningEffort ?? 'max'
-      if (includeThinking) body.thinking = { type: 'enabled' }
+      if (nativeDeepSeek) body.thinking = { type: 'enabled' }
       break
   }
 }
@@ -1935,7 +1942,8 @@ function applyProfileReasoningEffort(
   body: Record<string, unknown>,
   effort: NormalizedReasoningEffort,
   reasoning: ModelReasoningCapability,
-  includeThinking: boolean
+  includeThinking: boolean,
+  nativeDeepSeekHost: boolean
 ): void {
   switch (reasoning.requestProtocol) {
     case 'none':
@@ -1943,7 +1951,7 @@ function applyProfileReasoningEffort(
     case 'anthropic-thinking':
       return
     case 'deepseek-chat-completions':
-      applyDeepSeekChatReasoningEffort(body, effort, includeThinking)
+      applyDeepSeekChatReasoningEffort(body, effort, nativeDeepSeekHost)
       return
     case 'glm-chat-completions':
       applyGlmChatReasoningEffort(body, effort, includeThinking)
