@@ -494,7 +494,7 @@ export interface AgentProvider {
   updateThreadWorkspace?(threadId: string, workspace: string): Promise<void>
   archiveThread?(threadId: string, archived: boolean): Promise<void>
   deleteThread(threadId: string): Promise<void>
-  compactThread?(threadId: string, reason?: string): Promise<void>
+  compactThread?(threadId: string, reason?: string): Promise<{ replacedTokens: number } | void>
   getThreadGoal?(threadId: string): Promise<ThreadGoal | null>
   setThreadGoal?(
     threadId: string,

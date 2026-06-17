@@ -647,11 +647,23 @@ export function FloatingComposer({
   const conversationTokensRef = useRef(0)
   const conversationTokens = useMemo(() => {
     if (!subscribeContextBlocks) return conversationTokensRef.current
+    // Only the slice from the most recent compaction onward is actually re-sent
+    // to the model — the runtime folds everything before the latest compaction
+    // summary into it (effectiveHistoryAfterLatestCompaction). Counting the full
+    // visible history would over-state usage and hide the effect of compaction.
+    let startIndex = 0
+    for (let i = contextBlocks.length - 1; i >= 0; i -= 1) {
+      if (contextBlocks[i]?.kind === 'compaction') {
+        startIndex = i
+        break
+      }
+    }
     // Cache per block: block identity is preserved for unchanged history across
     // streaming updates, so only the block that changed is re-estimated.
     const cache = messageTokenCacheRef.current
     let sum = 0
-    for (const block of contextBlocks) {
+    for (let i = startIndex; i < contextBlocks.length; i += 1) {
+      const block = contextBlocks[i]!
       let cached = cache.get(block)
       if (cached === undefined) {
         cached = estimateBlockTokens(block)

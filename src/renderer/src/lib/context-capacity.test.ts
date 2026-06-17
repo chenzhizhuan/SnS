@@ -100,6 +100,31 @@ describe('estimateBlockTokens', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('discounts base64 screenshot payloads instead of counting them as text', () => {
+    // A computer_use screenshot tool result: detail is JSON.stringify(output)
+    // carrying a huge base64 image. Counting it as text would read as ~100k+
+    // tokens (the bug that pegged the gauge at 100% after one turn).
+    const base64 = 'A'.repeat(800_000)
+    const detail = JSON.stringify({ type: 'computer_screenshot', data_base64: base64 })
+    const tokens = estimateBlockTokens({
+      kind: 'tool',
+      id: 't-shot',
+      name: 'computer_use',
+      status: 'done',
+      detail
+    } as unknown as ChatBlock)
+    // Raw text would be ~200k tokens; the flat per-image cost keeps it bounded.
+    expect(tokens).toBeLessThan(2_000)
+    expect(estimateTokensFromText(detail)).toBeGreaterThan(150_000)
+  })
+
+  it('leaves ordinary (non-base64) tool detail unchanged', () => {
+    const detail = 'ls -la\ntotal 42\ndrwxr-xr-x  5 user staff  160 file.txt'
+    expect(
+      estimateBlockTokens({ kind: 'tool', id: 't2', name: 'bash', status: 'done', detail } as unknown as ChatBlock)
+    ).toBe(estimateTokensFromText(detail))
+  })
+
   it('returns 0 for blocks with no model-visible text', () => {
     expect(
       estimateBlockTokens({

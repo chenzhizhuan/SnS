@@ -254,7 +254,24 @@ export class CompatModelClient implements ModelClient {
       round.url = redactUrlForLog(url)
     }
     const headers = this.buildHeaders(stream, endpointFormat)
-    const result = await this.postChatCompletion(url, headers, body, request.abortSignal)
+    let result = await this.postChatCompletion(url, headers, body, request.abortSignal)
+    // Retry transient gateway failures (502/503/504) a few times before giving
+    // up. These are upstream load-balancer hiccups (e.g. an ALB returning
+    // "502 Bad Gateway"), not request errors — failing the whole turn on the
+    // first blip is needlessly fragile, especially for flaky providers. No
+    // response body has been streamed yet, so re-POSTing the same request is
+    // safe. Aborts short-circuit the backoff.
+    for (let attempt = 0; attempt < MAX_TRANSIENT_RETRIES; attempt += 1) {
+      if (result.kind === 'error') break
+      if (result.response.ok || !TRANSIENT_RETRY_STATUSES.has(result.response.status)) break
+      await result.response.body?.cancel().catch(() => {})
+      const aborted = await sleepWithAbort(TRANSIENT_RETRY_BASE_MS * 2 ** attempt, request.abortSignal)
+      if (aborted || request.abortSignal.aborted) {
+        yield { kind: 'error', message: 'request was aborted during retry backoff' }
+        return
+      }
+      result = await this.postChatCompletion(url, headers, body, request.abortSignal)
+    }
     if (result.kind === 'error') {
       yield { kind: 'error', message: result.message }
       return
@@ -2219,6 +2236,29 @@ function normalizeReasoningEffortValue(effort: string | undefined): NormalizedRe
     default:
       return undefined
   }
+}
+
+// Transient upstream gateway statuses worth retrying — load balancers and
+// reverse proxies return these for momentary backend unavailability.
+const TRANSIENT_RETRY_STATUSES = new Set([502, 503, 504])
+const MAX_TRANSIENT_RETRIES = 2
+const TRANSIENT_RETRY_BASE_MS = 500
+
+/** Sleep `ms`, resolving early to `true` if the signal aborts first. */
+function sleepWithAbort(ms: number, signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(true)
+  return new Promise<boolean>((resolve) => {
+    let timer: ReturnType<typeof setTimeout>
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      resolve(true)
+    }
+    timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve(false)
+    }, ms)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function shouldRetryWithoutStreamUsage(

@@ -95,6 +95,35 @@ export function estimateTokensFromText(text: string): number {
   return Math.ceil(cjk * CJK_TOKENS_PER_CHAR + ascii / ASCII_CHARS_PER_TOKEN)
 }
 
+// A screenshot or embedded image is forwarded to the model as a bounded vision
+// payload, not as its raw base64 text — the runtime strips the base64 at
+// send-time and charges a flat per-image cost (see kun tool-result-image.ts).
+// A tool result's `detail` here is JSON.stringify(output), which still carries
+// the raw base64 (often hundreds of thousands of characters). Tokenizing that
+// as text would read a single screenshot as ~100k+ tokens and peg the gauge at
+// 100% after one computer_use turn, so we mirror the runtime and discount it.
+const FLAT_IMAGE_TOKENS = 1200
+// A contiguous run of base64-alphabet characters this long is an encoded image
+// or binary blob, never prose — real text breaks on whitespace/punctuation long
+// before this. Pretty-printed JSON keeps each base64 value on one line.
+const BASE64_RUN_RE = /[A-Za-z0-9+/]{1000,}={0,2}/g
+
+/**
+ * Estimate tokens for a tool/compaction `detail` string while discounting
+ * embedded base64 image/binary payloads to a flat per-image cost. Never
+ * inflates a false-positive match: each run is charged the *lesser* of its raw
+ * text estimate and the flat image cost, so non-image content is unaffected.
+ */
+function estimateDetailTokens(detail: string): number {
+  if (!detail) return 0
+  let imageTokens = 0
+  const stripped = detail.replace(BASE64_RUN_RE, (run) => {
+    imageTokens += Math.min(estimateTokensFromText(run), FLAT_IMAGE_TOKENS)
+    return ''
+  })
+  return estimateTokensFromText(stripped) + imageTokens
+}
+
 /**
  * Estimate the model-visible tokens for a single block. Cheap and pure so the
  * caller can memoize per block (block identity is stable across streaming
@@ -107,10 +136,10 @@ export function estimateBlockTokens(block: ChatBlock): number {
     case 'reasoning':
       return estimateTokensFromText(block.text ?? '')
     case 'system':
-      return estimateTokensFromText(block.text ?? '') + estimateTokensFromText(block.detail ?? '')
+      return estimateTokensFromText(block.text ?? '') + estimateDetailTokens(block.detail ?? '')
     case 'tool':
     case 'compaction':
-      return estimateTokensFromText(block.detail ?? '')
+      return estimateDetailTokens(block.detail ?? '')
     default:
       return 0
   }

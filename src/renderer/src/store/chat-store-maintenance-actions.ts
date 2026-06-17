@@ -285,9 +285,26 @@ export function createMaintenanceActions(
       return
     }
     try {
-      await p.compactThread(activeThreadId, reason)
+      const result = await p.compactThread(activeThreadId, reason)
       await get().refreshThreads()
       await get().selectThread(activeThreadId)
+      // A manual compact issues no model request, so no `usage` event arrives
+      // to refresh the context gauge — it would stay frozen at the pre-compact
+      // total until the next turn. Drop the measured total by the folded amount
+      // so the gauge reflects the compaction immediately. The next real turn
+      // replaces this with a precise provider count.
+      const replacedTokens = result && typeof result.replacedTokens === 'number' ? result.replacedTokens : 0
+      if (replacedTokens > 0) {
+        set((s) => {
+          const prev = s.lastTurnUsage
+          if (!prev || prev.threadId !== activeThreadId) return {}
+          const inputTokens = Math.max(0, prev.snapshot.inputTokens - replacedTokens)
+          return {
+            usageRefreshKey: s.usageRefreshKey + 1,
+            lastTurnUsage: { threadId: prev.threadId, snapshot: { ...prev.snapshot, inputTokens } }
+          }
+        })
+      }
     } catch (e) {
       set({
         error: formatRuntimeError(e),

@@ -388,7 +388,7 @@ export class KunRuntimeProvider implements AgentProvider {
     }
   }
 
-  async compactThread(threadId: string, reason?: string): Promise<void> {
+  async compactThread(threadId: string, reason?: string): Promise<{ replacedTokens: number }> {
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadCompactPath(threadId),
       'POST',
@@ -396,6 +396,19 @@ export class KunRuntimeProvider implements AgentProvider {
     )
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'compact thread failed'))
+    }
+    // Surface the folded token count so the UI can drop the context gauge
+    // immediately (a manual compact issues no model request, so no usage
+    // event would otherwise refresh it). Best-effort: a parse hiccup must
+    // not turn a successful compaction into a thrown error.
+    try {
+      const body = readRuntimeJson<{ replacedTokens?: number }>(
+        response.body,
+        'runtime returned an invalid compact response'
+      )
+      return { replacedTokens: Math.max(0, Math.floor(body.replacedTokens ?? 0)) }
+    } catch {
+      return { replacedTokens: 0 }
     }
   }
 
