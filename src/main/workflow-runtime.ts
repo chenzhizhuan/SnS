@@ -917,6 +917,45 @@ export class WorkflowRuntime {
         if (result.status === 'error') throw new Error(result.errorMessage || 'Sub-workflow failed.')
         return { payload: result.output, message: `ran ${target.name || 'sub-workflow'}` }
       }
+      case 'loop': {
+        if (depth >= MAX_SUBWORKFLOW_DEPTH) throw new Error('Loop nesting is too deep.')
+        const target = settings.workflow.workflows.find((workflow) => workflow.id === node.config.workflowId)
+        if (!target) throw new Error('Loop body workflow not found.')
+        const trigger =
+          target.nodes.find((item) => item.type === 'manual-trigger') ??
+          target.nodes.find((item) => item.type === 'schedule-trigger') ??
+          target.nodes.find((item) => item.type === 'webhook-trigger')
+        if (!trigger) throw new Error('Loop body has no trigger node.')
+        const stopCondition = {
+          leftExpr: node.config.leftExpr,
+          operator: node.config.operator,
+          rightValue: node.config.rightValue,
+          caseSensitive: node.config.caseSensitive
+        }
+        // Loop agent: run the body, feed its output back in, until the stop
+        // condition holds or maxIterations caps it.
+        let current = payload
+        let iterations = 0
+        let done = false
+        while (iterations < node.config.maxIterations) {
+          iterations += 1
+          const result = await this.runGraph(target, trigger.id, current, { settings, depth: depth + 1 })
+          if (result.status === 'error') throw new Error(result.errorMessage || 'Loop body failed.')
+          current = result.output
+          if (evaluateCondition(stopCondition, current)) {
+            done = true
+            break
+          }
+        }
+        const baseJson =
+          current.json && typeof current.json === 'object' && !Array.isArray(current.json)
+            ? { ...(current.json as Record<string, unknown>) }
+            : { value: current.json }
+        return {
+          payload: { json: { ...baseJson, _iterations: iterations, _done: done }, text: current.text },
+          message: `looped ${iterations}${done ? ' (done)' : ' (max)'}`
+        }
+      }
       case 'merge': {
         if (node.config.mode === 'object') {
           const merged: Record<string, unknown> = {}

@@ -653,6 +653,66 @@ export function NodeConfigPanel({ node, settings, lastResult, onChange, onDelete
           </Field>
         ) : null}
 
+        {node.type === 'loop' ? (
+          <>
+            <Field label={t('workflowLoopBody')}>
+              <select
+                className={INPUT_CLASS}
+                value={node.config.workflowId}
+                onChange={(event) => onChange({ ...node, config: { ...node.config, workflowId: event.target.value } })}
+              >
+                <option value="">{t('workflowSubWorkflowNone')}</option>
+                {settings.workflow.workflows.map((workflow) => (
+                  <option key={workflow.id} value={workflow.id}>
+                    {workflow.name || t('workflowUntitled')}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t('workflowLoopMax')}>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                className={INPUT_CLASS}
+                value={node.config.maxIterations}
+                onChange={(event) =>
+                  onChange({
+                    ...node,
+                    config: { ...node.config, maxIterations: Math.max(1, Math.min(100, Number(event.target.value) || 1)) }
+                  })
+                }
+              />
+            </Field>
+            <span className="text-[12px] font-medium text-ds-muted">{t('workflowLoopStopWhen')}</span>
+            <input
+              className={INPUT_CLASS}
+              placeholder={t('workflowConditionLeftPlaceholder')}
+              value={node.config.leftExpr}
+              onChange={(event) => onChange({ ...node, config: { ...node.config, leftExpr: event.target.value } })}
+            />
+            <select
+              className={INPUT_CLASS}
+              value={node.config.operator}
+              onChange={(event) =>
+                onChange({ ...node, config: { ...node.config, operator: event.target.value as WorkflowConditionOperator } })
+              }
+            >
+              {CONDITION_OPERATORS.map((operator) => (
+                <option key={operator} value={operator}>
+                  {t(`workflowOp_${operator}`)}
+                </option>
+              ))}
+            </select>
+            <input
+              className={INPUT_CLASS}
+              placeholder={t('workflowConditionValue')}
+              value={node.config.rightValue}
+              onChange={(event) => onChange({ ...node, config: { ...node.config, rightValue: event.target.value } })}
+            />
+          </>
+        ) : null}
+
         {node.type === 'merge' ? (
           <Field label={t('workflowMergeMode')}>
             <select

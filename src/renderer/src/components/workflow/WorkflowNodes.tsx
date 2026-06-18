@@ -13,6 +13,7 @@ import {
   Hand,
   Play,
   Power,
+  Repeat,
   Split,
   Timer,
   Trash2,
@@ -50,6 +51,7 @@ export const NODE_ICONS: Record<WorkflowNodeKind, LucideIcon> = {
   'http-request': Globe,
   merge: GitMerge,
   subworkflow: Workflow,
+  loop: Repeat,
   delay: Timer
 }
 
@@ -94,6 +96,8 @@ function nodeSummary(node: WorkflowNodeV1): string {
       return `${node.config.method} ${node.config.url}`.trim()
     case 'merge':
       return node.config.mode
+    case 'loop':
+      return `≤${node.config.maxIterations}×`
     case 'delay':
       return `${Math.round(node.config.delayMs / 1000)}s`
     default:

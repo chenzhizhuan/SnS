@@ -549,6 +549,7 @@ export type WorkflowNodeKind =
   | 'http-request'
   | 'merge'
   | 'subworkflow'
+  | 'loop'
   | 'delay'
 
 export const WORKFLOW_NODE_KINDS: readonly WorkflowNodeKind[] = [
@@ -563,6 +564,7 @@ export const WORKFLOW_NODE_KINDS: readonly WorkflowNodeKind[] = [
   'http-request',
   'merge',
   'subworkflow',
+  'loop',
   'delay'
 ]
 
@@ -659,6 +661,22 @@ export type WorkflowSubWorkflowConfigV1 = {
   workflowId: string
 }
 
+/**
+ * Loop agent: repeatedly runs a body workflow, feeding each iteration's output
+ * back in as the next input, until the stop condition holds or maxIterations is
+ * reached. Turns "you press enter each step" into "you set the goal, the loop runs".
+ */
+export type WorkflowLoopConfigV1 = {
+  /** id of the workflow run once per iteration. */
+  workflowId: string
+  maxIterations: number
+  /** Stop-when condition evaluated against each iteration's output. */
+  leftExpr: string
+  operator: WorkflowConditionOperator
+  rightValue: string
+  caseSensitive: boolean
+}
+
 export type WorkflowHttpHeaderV1 = {
   key: string
   value: string
@@ -703,6 +721,7 @@ export type WorkflowNodeConfigByKind = {
   'http-request': WorkflowHttpRequestConfigV1
   merge: WorkflowMergeConfigV1
   subworkflow: WorkflowSubWorkflowConfigV1
+  loop: WorkflowLoopConfigV1
   delay: WorkflowDelayConfigV1
 }
 

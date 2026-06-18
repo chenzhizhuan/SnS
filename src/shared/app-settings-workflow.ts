@@ -227,6 +227,19 @@ export function normalizeWorkflowNode(value: unknown, index: number): WorkflowNo
         type: 'subworkflow',
         config: { workflowId: asTrimmed(config.workflowId) }
       }
+    case 'loop':
+      return {
+        ...base,
+        type: 'loop',
+        config: {
+          workflowId: asTrimmed(config.workflowId),
+          maxIterations: normalizePositiveInteger(config.maxIterations, 10, 1, 100),
+          leftExpr: asText(config.leftExpr),
+          operator: normalizeConditionOperator(config.operator),
+          rightValue: asText(config.rightValue),
+          caseSensitive: normalizeBoolean(config.caseSensitive, false)
+        }
+      }
     case 'http-request':
       return {
         ...base,

@@ -801,6 +801,17 @@ const workflowSubWorkflowConfigSchema = z
   .object({ workflowId: z.string().max(MAX_ID_LENGTH).optional() })
   .strict()
 
+const workflowLoopConfigSchema = z
+  .object({
+    workflowId: z.string().max(MAX_ID_LENGTH).optional(),
+    maxIterations: z.number().int().min(1).max(100).optional(),
+    leftExpr: z.string().max(2_000).optional(),
+    operator: workflowConditionOperatorSchema.optional(),
+    rightValue: z.string().max(4_000).optional(),
+    caseSensitive: z.boolean().optional()
+  })
+  .strict()
+
 const workflowWebhookTriggerConfigSchema = z
   .object({
     path: z.string().max(256).optional(),
@@ -839,6 +850,7 @@ const workflowNodePatchSchema = z.discriminatedUnion('type', [
   z.object({ ...workflowNodeBaseShape, type: z.literal('http-request'), config: workflowHttpRequestConfigSchema.optional() }).strict(),
   z.object({ ...workflowNodeBaseShape, type: z.literal('merge'), config: workflowMergeConfigSchema.optional() }).strict(),
   z.object({ ...workflowNodeBaseShape, type: z.literal('subworkflow'), config: workflowSubWorkflowConfigSchema.optional() }).strict(),
+  z.object({ ...workflowNodeBaseShape, type: z.literal('loop'), config: workflowLoopConfigSchema.optional() }).strict(),
   z.object({ ...workflowNodeBaseShape, type: z.literal('delay'), config: workflowDelayConfigSchema.optional() }).strict()
 ])
 

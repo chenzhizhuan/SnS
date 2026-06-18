@@ -20,6 +20,7 @@ export const WORKFLOW_PALETTE: readonly WorkflowNodeKind[] = [
   'http-request',
   'merge',
   'subworkflow',
+  'loop',
   'delay'
 ]
 
@@ -94,6 +95,12 @@ export function createWorkflowNode(
       return { ...base, type: 'merge', config: { mode: 'array' } }
     case 'subworkflow':
       return { ...base, type: 'subworkflow', config: { workflowId: '' } }
+    case 'loop':
+      return {
+        ...base,
+        type: 'loop',
+        config: { workflowId: '', maxIterations: 10, leftExpr: 'json.done', operator: 'equals', rightValue: 'true', caseSensitive: false }
+      }
     case 'http-request':
       return {
         ...base,

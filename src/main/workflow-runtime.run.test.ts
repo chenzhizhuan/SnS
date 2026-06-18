@@ -534,4 +534,55 @@ describe('WorkflowRuntime end-to-end execution', () => {
       runtime.stop()
     }
   }, 15_000)
+
+  it('loop runs the body until the stop condition holds', async () => {
+    const body = buildWorkflow({
+      id: 'body',
+      name: 'Body',
+      enabled: true,
+      nodes: [
+        { id: 'bm', type: 'manual-trigger', config: {} },
+        { id: 'bc', type: 'code', config: { code: 'return { n: (Number($json.n) || 0) + 1 }' } }
+      ],
+      connections: [{ id: 'be1', source: 'bm', sourceHandle: 'out', target: 'bc', targetHandle: 'in' }]
+    })
+    const parent = buildWorkflow({
+      id: 'parent',
+      name: 'P',
+      enabled: true,
+      nodes: [
+        { id: 'm', type: 'manual-trigger', config: {} },
+        {
+          id: 'lp',
+          type: 'loop',
+          config: {
+            workflowId: 'body',
+            maxIterations: 10,
+            leftExpr: 'json.n',
+            operator: 'gte',
+            rightValue: '3',
+            caseSensitive: false
+          }
+        }
+      ],
+      connections: [{ id: 'e1', source: 'm', sourceHandle: 'out', target: 'lp', targetHandle: 'in' }]
+    })
+    const store = createStore(settingsWithWorkflows([body, parent]))
+    const runtime = createWorkflowRuntime({ store: store as never, runtimeRequest: vi.fn() as never, logError: vi.fn() })
+    const runId = requireOk(await runtime.runWorkflow('parent'))
+    await waitFor(async () => {
+      const run = (await store.load()).workflow.workflows
+        .find((wf) => wf.id === 'parent')!
+        .runs.find((entry) => entry.id === runId)
+      return Boolean(run && run.status !== 'running')
+    }, 10_000)
+    const run = store.read().workflow.workflows.find((wf) => wf.id === 'parent')!.runs.find((entry) => entry.id === runId)!
+    expect(run.status).toBe('success')
+    const loop = run.nodeResults.find((result) => result.nodeId === 'lp')!
+    const output = JSON.parse(loop.outputJson) as { n: number; _iterations: number; _done: boolean }
+    expect(output.n).toBe(3)
+    expect(output._iterations).toBe(3)
+    expect(output._done).toBe(true)
+    runtime.stop()
+  }, 15_000)
 })
