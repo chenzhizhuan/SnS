@@ -2655,7 +2655,7 @@ export function Workbench(): ReactElement {
                 />
                 <Suspense fallback={<div className="ds-surface-strong h-full w-full" />}>
                   <TerminalPanel
-                    workspaceRoot={workspaceRoot}
+                    workspaceRoot={fileTreeWorkspaceRoot}
                     height={terminalHeight}
                     className="w-full"
                     onCollapse={toggleTerminal}
