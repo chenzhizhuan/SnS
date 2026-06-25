@@ -110,6 +110,7 @@ export type ItemEvent = z.infer<typeof ItemEvent>
 export const ThreadLifecycleEvent = RuntimeEventBase.extend({
   kind: z.enum(['thread_created', 'thread_updated']),
   title: z.string().optional(),
+  titleAuto: z.boolean().optional(),
   status: z.string().optional()
 })
 export type ThreadLifecycleEvent = z.infer<typeof ThreadLifecycleEvent>

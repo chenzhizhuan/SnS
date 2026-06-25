@@ -28,6 +28,8 @@ import type { MemoryStore } from '../../memory/memory-store.js'
 import type { ReviewTarget } from '../../contracts/review.js'
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import type { ModelClient } from '../../ports/model-client.js'
+import type { RolesConfig } from '../../config/kun-config.js'
+import type { ImmutablePrefix } from '../../cache/immutable-prefix.js'
 
 export type RuntimeToolDiagnostics = {
   providers: ToolProviderPolicy[]
@@ -76,6 +78,17 @@ export type ServerRuntime = {
    */
   modelClient?: ModelClient
   defaultModel?: string
+  /**
+   * Internal-LLM role model routing. Used by on-demand routes (e.g. session
+   * summary) to resolve the summary/title/codeReview model precedence
+   * (role override -> smallModel -> defaultModel). Optional for test scaffolds.
+   */
+  roles?: RolesConfig
+  /**
+   * Immutable prefix (systemPrompt + few-shots + fingerprint). Exposed so
+   * one-shot internal routes can reuse the runtime's systemPrompt. Optional.
+   */
+  immutablePrefix?: ImmutablePrefix
   runTurn(threadId: string, turnId: string): Promise<'completed' | 'failed' | 'aborted'> | void
   /**
    * Relaunch goal continuation turns for threads whose in-flight turn was

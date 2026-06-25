@@ -779,6 +779,8 @@ export function createThreadActions(
             ? await p.createThread({
                 workspace: workspaceRoot,
                 title: generatedTitle,
+                // Provisional first-message title; let the backend LLM titler upgrade it.
+                titleAuto: true,
                 mode: mode ?? 'agent'
               })
             : null
@@ -968,14 +970,15 @@ export function createThreadActions(
         }
       }
       if (shouldRenameThreadAfterSend) {
-        const renamed = await p.renameThread(activeThreadId, generatedTitle).then(() => true).catch(() => {
+        // Provisional first-message title; let the backend LLM titler upgrade it.
+        const renamed = await p.renameThread(activeThreadId, generatedTitle, true).then(() => true).catch(() => {
           /* keep message delivery successful even if auto-title update fails */
           return false
         })
         if (renamed) {
           set((s) => ({
             threads: s.threads.map((thread) =>
-              thread.id === activeThreadId ? { ...thread, title: generatedTitle } : thread
+              thread.id === activeThreadId ? { ...thread, title: generatedTitle, titleAuto: true } : thread
             )
           }))
         }

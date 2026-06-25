@@ -176,6 +176,40 @@ describe('DelegationRuntime', () => {
     })
   })
 
+  it('threads a profile\'s blocked tool/MCP/skill deny-lists to the child executor', async () => {
+    const seen: Array<{ blockedTools?: string[]; blockedMcpServers?: string[]; blockedSkills?: string[] }> = []
+    const runtime = createRuntime({
+      defaultProfile: 'scoped',
+      profiles: {
+        scoped: {
+          toolPolicy: 'inherit',
+          blockedTools: ['bash', 'write'],
+          blockedMcpServers: ['github'],
+          blockedSkills: ['deep-research']
+        }
+      },
+      executor: async (input) => {
+        seen.push({
+          blockedTools: input.blockedTools,
+          blockedMcpServers: input.blockedMcpServers,
+          blockedSkills: input.blockedSkills
+        })
+        return { summary: 'ok' }
+      }
+    })
+    await runtime.runChild({
+      parentThreadId: 'thr_1',
+      parentTurnId: 'turn_1',
+      prompt: 'go',
+      signal: new AbortController().signal
+    })
+    expect(seen[0]).toEqual({
+      blockedTools: ['bash', 'write'],
+      blockedMcpServers: ['github'],
+      blockedSkills: ['deep-research']
+    })
+  })
+
   it('routes a child through an explicit providerId, overriding the profile, and surfaces it on the event', async () => {
     const sessionStore = new InMemorySessionStore()
     const seen: Array<{ providerId?: string }> = []
@@ -214,9 +248,28 @@ describe('DelegationRuntime', () => {
     })).rejects.toThrow(/unknown subagent profile/)
   })
 
-  it('defaults the tool policy to read-only when no profile resolves', async () => {
+  it('defaults the tool policy to inherit (follow the main agent) when no profile resolves', async () => {
     const seen: string[] = []
     const runtime = createRuntime({
+      executor: async (input) => {
+        seen.push(input.toolPolicy)
+        return { summary: 'ok' }
+      }
+    })
+    const record = await runtime.runChild({
+      parentThreadId: 'thr_1',
+      parentTurnId: 'turn_1',
+      prompt: 'investigate',
+      signal: new AbortController().signal
+    })
+    expect(seen[0]).toBe('inherit')
+    expect(record.toolPolicy).toBe('inherit')
+  })
+
+  it('still honors an explicit read-only default tool policy', async () => {
+    const seen: string[] = []
+    const runtime = createRuntime({
+      defaultToolPolicy: 'readOnly',
       executor: async (input) => {
         seen.push(input.toolPolicy)
         return { summary: 'ok' }
@@ -261,7 +314,7 @@ describe('DelegationRuntime', () => {
       prefixReused: true,
       totalTokens: 3,
       cacheHitRate: 0.5,
-      childToolPolicy: 'readOnly'
+      childToolPolicy: 'inherit'
     })
   })
 
@@ -392,7 +445,7 @@ describe('DelegationRuntime', () => {
     maxChildRuns?: number
     defaultToolPolicy?: 'readOnly' | 'inherit'
     defaultProfile?: string
-    profiles?: Record<string, { model?: string; providerId?: string; promptPreamble?: string; toolPolicy?: 'readOnly' | 'inherit' }>
+    profiles?: Record<string, { model?: string; providerId?: string; promptPreamble?: string; toolPolicy?: 'readOnly' | 'inherit'; blockedTools?: string[]; blockedMcpServers?: string[]; blockedSkills?: string[] }>
     sessionStore?: InMemorySessionStore
     executor?: ConstructorParameters<typeof DelegationRuntime>[0]['executor']
     recordExternalUsage?: ConstructorParameters<typeof DelegationRuntime>[0]['recordExternalUsage']

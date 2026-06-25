@@ -151,9 +151,11 @@ export class SkillRuntime {
     prompt: string
     workspace: string
     filePaths?: readonly string[]
+    /** Per-call skill-id deny-list (e.g. a subagent profile's blockedSkills). Hidden from catalog + auto-activation. */
+    blockedSkillIds?: readonly string[]
   }): Promise<SkillTurnResolution> {
     if (!this.config.enabled) return emptyResolution()
-    const skills = await this.skillsForWorkspace(input.workspace)
+    const skills = filterBlockedSkills(await this.skillsForWorkspace(input.workspace), input.blockedSkillIds)
     const catalogInstruction = renderCatalogInstruction(skills, this.options.catalogBudgetBytes)
     const matches = this.matchSkills(input, skills)
     const active = matches.slice(0, this.options.activeLimit)
@@ -197,7 +199,7 @@ export class SkillRuntime {
    * Returns an error payload (never throws) so the tool can surface it to the
    * model as a normal tool result.
    */
-  async loadSkillById(skillId: string, workspace = ''): Promise<{
+  async loadSkillById(skillId: string, workspace = '', blockedIds?: readonly string[]): Promise<{
     skillId: string
     name: string
     instruction: string
@@ -205,7 +207,7 @@ export class SkillRuntime {
     truncated: boolean
   } | { error: string }> {
     if (!this.config.enabled) return { error: 'skills are disabled' }
-    const skills = await this.skillsForWorkspace(workspace)
+    const skills = filterBlockedSkills(await this.skillsForWorkspace(workspace), blockedIds)
     const normalized = slug(skillId.trim().replace(/^[$@]/, '').replace(/^skill:/i, ''))
     const skill = skills.find((candidate) => candidate.id === normalized) ??
       skills.find((candidate) => slug(candidate.name) === normalized)
@@ -416,6 +418,18 @@ async function existingWorkspaceSkillRoots(workspaceRoot: string): Promise<strin
     if (await exists(root)) roots.push(root)
   }
   return roots
+}
+
+/**
+ * Per-call skill deny-list. Mirrors the global `disabledIds` discovery filter
+ * (slug both sides) but applies to a single resolveTurn/loadSkill call — e.g. a
+ * subagent profile that blocks specific skills — without mutating the shared
+ * runtime instance, so sibling children are unaffected.
+ */
+function filterBlockedSkills(skills: LoadedSkill[], blockedIds: readonly string[] | undefined): LoadedSkill[] {
+  if (!blockedIds || blockedIds.length === 0) return skills
+  const blocked = new Set(blockedIds.map(slug))
+  return skills.filter((skill) => !blocked.has(skill.id))
 }
 
 async function discoverSkills(config: SkillsCapabilityConfig): Promise<{

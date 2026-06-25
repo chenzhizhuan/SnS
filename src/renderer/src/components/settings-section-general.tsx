@@ -8,8 +8,12 @@ import {
   DEFAULT_WRITE_INLINE_COMPLETION_MODEL,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS,
   DEFAULT_KUN_DATA_DIR,
+  LEGACY_UI_FONT_SCALE_FACTORS,
+  UI_FONT_SCALE_MAX,
+  UI_FONT_SCALE_MIN,
   WRITE_INLINE_COMPLETION_MODEL_IDS,
-  isKunRuntimeInsecure
+  isKunRuntimeInsecure,
+  normalizeUiFontScale
 } from '@shared/app-settings'
 import type { SkillRootId } from '../lib/skill-root-preference'
 import { FolderOpen, Loader2, PencilLine, RefreshCw, Settings } from 'lucide-react'
@@ -234,16 +238,22 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
   const desktopBehavior = form.appBehavior
   const closeAction = desktopBehavior.closeAction ?? (desktopBehavior.closeToTray ? 'tray' : 'ask')
   const closeActionOptions: WindowCloseAction[] = ['ask', 'tray', 'quit']
-  const fontScaleOptions: AppSettingsV1['uiFontScale'][] = ['small', 'medium', 'large']
   const checkpointCleanupIntervalOptions = Array.from(CHECKPOINT_CLEANUP_INTERVAL_DAYS)
-  const selectedFontScaleIndex = fontScaleOptions.indexOf(form.uiFontScale)
-  const fontScaleIndex = selectedFontScaleIndex >= 0 ? selectedFontScaleIndex : 0
-  const currentFontScale = fontScaleOptions[fontScaleIndex]
-  const fontScaleLabel = (scale: AppSettingsV1['uiFontScale']): string => {
-    if (scale === 'large') return t('fontScaleLarge')
-    if (scale === 'medium') return t('fontScaleMedium')
-    return t('fontScaleSmall')
-  }
+  const fontScale = normalizeUiFontScale(form.uiFontScale)
+  const fontScalePercent = Math.round(fontScale * 100)
+  const setFontScale = (value: number): void => update({ uiFontScale: normalizeUiFontScale(value) })
+  const fontScalePresets: { value: number; label: string }[] = [
+    { value: LEGACY_UI_FONT_SCALE_FACTORS.small, label: t('fontScaleSmall') },
+    { value: LEGACY_UI_FONT_SCALE_FACTORS.medium, label: t('fontScaleMedium') },
+    { value: LEGACY_UI_FONT_SCALE_FACTORS.large, label: t('fontScaleLarge') }
+  ]
+  const fontScaleChipClass = (active: boolean): string =>
+    [
+      'inline-flex h-7 items-center rounded-full border px-3 text-[12px] font-medium transition',
+      active
+        ? 'border-accent/60 bg-accent/8 text-accent ring-1 ring-accent/30'
+        : 'border-ds-border bg-ds-card text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+    ].join(' ')
   const cursorSpotlightColor = normalizeHexColor(form.cursorSpotlightColor)
 
   return (
@@ -282,27 +292,68 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                   title={t('fontScale')}
                   description={t('fontScaleDesc')}
                   control={
-                    <div className="w-full min-w-0 md:max-w-md">
-                      <div className="flex items-center justify-between text-[12px] font-medium text-ds-faint">
-                        {fontScaleOptions.map((scale) => (
-                          <span key={scale}>{fontScaleLabel(scale)}</span>
+                    <div className="w-full min-w-0 space-y-2.5 md:max-w-md">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {fontScalePresets.map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            aria-pressed={fontScalePercent === Math.round(preset.value * 100)}
+                            className={fontScaleChipClass(fontScalePercent === Math.round(preset.value * 100))}
+                            onClick={() => setFontScale(preset.value)}
+                          >
+                            {preset.label}
+                          </button>
                         ))}
                       </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={fontScaleOptions.length - 1}
-                        step={1}
-                        value={fontScaleIndex}
-                        aria-label={t('fontScale')}
-                        className="mt-2 w-full accent-accent"
-                        onChange={(e) => {
-                          const nextScale = fontScaleOptions[Number(e.target.value)] ?? 'medium'
-                          update({ uiFontScale: nextScale })
-                        }}
-                      />
-                      <div className="mt-1.5 text-[13px] font-medium text-ds-muted">
-                        {t('fontScaleCurrent', { value: fontScaleLabel(currentFontScale) })}
+                      <div className="flex items-center gap-3">
+                        <span className="shrink-0 text-[12px] leading-none text-ds-faint" aria-hidden="true">
+                          A
+                        </span>
+                        <input
+                          type="range"
+                          min={UI_FONT_SCALE_MIN}
+                          max={UI_FONT_SCALE_MAX}
+                          step={0.01}
+                          value={fontScale}
+                          aria-label={t('fontScale')}
+                          className="w-full accent-accent"
+                          onChange={(e) => setFontScale(Number(e.target.value))}
+                        />
+                        <span className="shrink-0 text-[18px] leading-none text-ds-faint" aria-hidden="true">
+                          A
+                        </span>
+                        <div className="inline-flex shrink-0 items-center rounded-lg border border-ds-border bg-ds-card">
+                          <button
+                            type="button"
+                            aria-label={t('fontScaleSmall')}
+                            className="flex h-7 w-7 items-center justify-center rounded-l-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                            onClick={() => setFontScale(fontScale - 0.05)}
+                          >
+                            −
+                          </button>
+                          <div className="flex items-center border-x border-ds-border">
+                            <input
+                              type="number"
+                              min={Math.round(UI_FONT_SCALE_MIN * 100)}
+                              max={Math.round(UI_FONT_SCALE_MAX * 100)}
+                              step={1}
+                              value={fontScalePercent}
+                              aria-label={t('fontScale')}
+                              className="w-10 border-0 bg-transparent py-1 text-center text-[13px] font-medium tabular-nums text-ds-ink outline-none"
+                              onChange={(e) => setFontScale(Number(e.target.value) / 100)}
+                            />
+                            <span className="pr-1.5 text-[11px] text-ds-faint">%</span>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={t('fontScaleLarge')}
+                            className="flex h-7 w-7 items-center justify-center rounded-r-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                            onClick={() => setFontScale(fontScale + 0.05)}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                     </div>
                   }

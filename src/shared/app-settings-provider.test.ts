@@ -43,7 +43,7 @@ function settings(): AppSettingsV1 {
     version: 1,
     locale: 'en',
     theme: 'system',
-    uiFontScale: 'small',
+    uiFontScale: 0.82,
     provider: {
       ...defaultModelProviderSettings(),
       providers: [

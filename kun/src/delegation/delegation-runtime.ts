@@ -70,8 +70,16 @@ export type ChildRunExecutor = (input: {
   providerId?: string
   systemPrompt?: string
   allowedTools?: string[]
+  /** Built-in tool names blocked for this child (deny-list layered on inherit). */
+  blockedTools?: string[]
+  /** MCP server ids blocked for this child (deny-list; whole server toolset hidden). */
+  blockedMcpServers?: string[]
+  /** Skill ids blocked for this child (deny-list; catalog + activation + load_skill). */
+  blockedSkills?: string[]
   toolPolicy: SubagentToolPolicy
   promptPreamble?: string
+  /** Reasoning depth for this profile's child model requests (default 'off'). */
+  reasoningEffort?: string
   signal: AbortSignal
 }) => Promise<{
   summary: string
@@ -196,7 +204,11 @@ export class DelegationRuntime {
     const resolvedProviderId = input.providerId?.trim() || profile?.providerId
     const resolvedSystemPrompt = profile?.systemPrompt
     const resolvedAllowedTools = profile?.allowedTools
+    const resolvedBlockedTools = profile?.blockedTools
+    const resolvedBlockedMcpServers = profile?.blockedMcpServers
+    const resolvedBlockedSkills = profile?.blockedSkills
     const promptPreamble = profile?.promptPreamble
+    const resolvedReasoningEffort = profile?.reasoningEffort
 
     // Reserve against the per-thread budget before persisting anything.
     await this.ensureSeeded(input.parentThreadId)
@@ -241,7 +253,11 @@ export class DelegationRuntime {
         resolvedProviderId,
         resolvedSystemPrompt,
         resolvedAllowedTools,
+        resolvedBlockedTools,
+        resolvedBlockedMcpServers,
+        resolvedBlockedSkills,
         promptPreamble,
+        resolvedReasoningEffort,
         workspace: input.workspace,
         label: input.label,
         parentThreadId: input.parentThreadId,
@@ -285,8 +301,12 @@ export class DelegationRuntime {
         ...(resolvedProviderId ? { providerId: resolvedProviderId } : {}),
         ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
+        ...(resolvedBlockedTools ? { blockedTools: resolvedBlockedTools } : {}),
+        ...(resolvedBlockedMcpServers ? { blockedMcpServers: resolvedBlockedMcpServers } : {}),
+        ...(resolvedBlockedSkills ? { blockedSkills: resolvedBlockedSkills } : {}),
         toolPolicy,
         ...(promptPreamble ? { promptPreamble } : {}),
+        ...(resolvedReasoningEffort ? { reasoningEffort: resolvedReasoningEffort } : {}),
         signal: input.signal
       })
       const finishedAt = this.now()
@@ -338,7 +358,11 @@ export class DelegationRuntime {
     resolvedProviderId: string | undefined
     resolvedSystemPrompt: string | undefined
     resolvedAllowedTools: string[] | undefined
+    resolvedBlockedTools: string[] | undefined
+    resolvedBlockedMcpServers: string[] | undefined
+    resolvedBlockedSkills: string[] | undefined
     promptPreamble: string | undefined
+    resolvedReasoningEffort: string | undefined
     workspace: string | undefined
     label: string | undefined
     parentThreadId: string
@@ -379,8 +403,12 @@ export class DelegationRuntime {
         ...(args.resolvedProviderId ? { providerId: args.resolvedProviderId } : {}),
         ...(args.resolvedSystemPrompt ? { systemPrompt: args.resolvedSystemPrompt } : {}),
         ...(args.resolvedAllowedTools ? { allowedTools: args.resolvedAllowedTools } : {}),
+        ...(args.resolvedBlockedTools ? { blockedTools: args.resolvedBlockedTools } : {}),
+        ...(args.resolvedBlockedMcpServers ? { blockedMcpServers: args.resolvedBlockedMcpServers } : {}),
+        ...(args.resolvedBlockedSkills ? { blockedSkills: args.resolvedBlockedSkills } : {}),
         toolPolicy: args.toolPolicy,
         ...(args.promptPreamble ? { promptPreamble: args.promptPreamble } : {}),
+        ...(args.resolvedReasoningEffort ? { reasoningEffort: args.resolvedReasoningEffort } : {}),
         signal: args.signal
       })
       const finishedAt = this.now()

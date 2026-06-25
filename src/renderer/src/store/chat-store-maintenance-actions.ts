@@ -248,10 +248,11 @@ export function createMaintenanceActions(
     }
     const p = getProvider()
     try {
-      await p.renameThread(targetId, nextTitle)
+      // Manual rename → lock the title so the backend LLM titler won't overwrite it.
+      await p.renameThread(targetId, nextTitle, false)
       set((s) => ({
         threads: s.threads.map((thread) =>
-          thread.id === targetId ? { ...thread, title: nextTitle } : thread
+          thread.id === targetId ? { ...thread, title: nextTitle, titleAuto: false } : thread
         ),
         error: null
       }))

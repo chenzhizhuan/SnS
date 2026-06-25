@@ -13,17 +13,56 @@ import { AssistantMarkdown } from './AssistantMarkdown'
 import { MessageBubble } from './message-timeline-bubbles'
 import { blockHasPendingRuntimeWork, splitThink } from './message-timeline-turns'
 import { formatDuration, formatToolTitle } from './message-timeline-tools'
+import { SubagentGroup } from './SubagentCallCard'
 
 export type ProcessSection = {
   id: string
-  kind: 'reasoning' | 'execution' | 'output'
+  kind: 'reasoning' | 'execution' | 'output' | 'subagent'
   blocks: ChatBlock[]
+}
+
+/**
+ * A `delegate_task` tool call (or any block carrying child runtime metadata)
+ * is rendered as a "Kun Crew" subagent card, not a generic tool row.
+ */
+export function isSubagentBlock(block: ChatBlock): boolean {
+  if (block.kind !== 'tool') return false
+  const meta = block.meta
+  if (meta?.child && typeof meta.child === 'object') return true
+  const toolName = typeof meta?.toolName === 'string' ? meta.toolName.trim() : ''
+  return toolName === 'delegate_task'
+}
+
+function subagentParentTurnId(block: ChatBlock): string {
+  if (block.kind !== 'tool') return ''
+  const child = block.meta?.child
+  if (child && typeof child === 'object') {
+    const parent = (child as Record<string, unknown>).parentTurnId
+    if (typeof parent === 'string' && parent.trim()) return parent.trim()
+  }
+  return ''
 }
 
 export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
   const sections: ProcessSection[] = []
 
   for (const block of blocks) {
+    if (isSubagentBlock(block)) {
+      const last = sections[sections.length - 1]
+      // Coalesce sibling delegations of one turn (same parentTurnId) into one
+      // swarm section. Blocks without a parentTurnId only merge with an
+      // adjacent parentTurnId-less subagent run.
+      if (last && last.kind === 'subagent') {
+        const lastParent = subagentParentTurnId(last.blocks[0])
+        const parent = subagentParentTurnId(block)
+        if (lastParent === parent) {
+          last.blocks.push(block)
+          continue
+        }
+      }
+      sections.push({ id: `subagent-${block.id}`, kind: 'subagent', blocks: [block] })
+      continue
+    }
     const kind =
       block.kind === 'reasoning'
         ? 'reasoning'
@@ -154,6 +193,11 @@ export function ProcessSectionRow({
 }): ReactElement {
   const { t } = useTranslation('common')
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null)
+
+  if (section.kind === 'subagent') {
+    return <SubagentGroup blocks={section.blocks} />
+  }
+
   const assistantBlocks =
     section.kind === 'output'
       ? section.blocks.filter(
@@ -165,7 +209,7 @@ export function ProcessSectionRow({
   const errorTone = processSectionErrorTone(section.blocks)
   const hasError = errorTone !== null
   const defaultExpanded =
-    hasError ||
+    (processing && hasError) ||
     sectionHasPendingApproval(section) ||
     (active && section.kind === 'reasoning') ||
     (processing && section.kind === 'execution' && sectionHasRequestUserInput(section))
@@ -316,7 +360,8 @@ function ProcessStackRows({
         const autoOpenPending = processBlockIsAutoOpenPending(block, processing) || isPendingApproval(block)
         const errorTone = processBlockErrorTone(block)
         const isError = errorTone !== null
-        const defaultOpen = isError
+        // Tool-call errors stay collapsed (red header only); other error blocks still auto-open.
+        const defaultOpen = isError && block.kind !== 'tool'
         const forceOpen = autoOpenPending || autoOpenRequestInput
         const userClosed = closedBlockIds.has(block.id)
         const userOpened = openBlockId === block.id
@@ -429,7 +474,8 @@ function ProcessEntryRow({
   const errorTone = processBlockErrorTone(block)
   const isError = errorTone !== null
   const forceOpen = isAutoOpenPending || isAssistantProcessText || isStreamingAssistant
-  const defaultOpen = isError
+  // Tool-call errors stay collapsed (red header only); other error blocks still auto-open.
+  const defaultOpen = isError && block.kind !== 'tool'
   const open =
     canExpand &&
     (forceOpen || (userOpen ?? defaultOpen))
@@ -746,6 +792,10 @@ function builtInToolLabel(
     case 'bash':
     case 'shell':
       return t('toolBuiltinBash')
+    case 'delegate_task':
+      // Routed to SubagentCallCard before the generic row; labeled here as a
+      // defensive fallback so an ungrouped delegate block never reads as raw JSON.
+      return t('toolBuiltinDelegate')
     default:
       return undefined
   }

@@ -26,6 +26,7 @@ import {
   normalizeWorkflowSettings,
   normalizeWriteSettings,
   normalizeTerminalSettings,
+  normalizeUiFontScale,
   type AppSettingsPatch,
   type AppSettingsV1
 } from '@shared/app-settings'
@@ -96,10 +97,7 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     raw.theme === 'system' || raw.theme === 'light' || raw.theme === 'dark'
       ? raw.theme
       : 'system'
-  const uiFontScale =
-    raw.uiFontScale === 'small' || raw.uiFontScale === 'medium' || raw.uiFontScale === 'large'
-      ? raw.uiFontScale
-      : 'medium'
+  const uiFontScale = normalizeUiFontScale(raw.uiFontScale)
   return {
     version: 1,
     locale: raw.locale === 'zh' ? 'zh' : 'en',

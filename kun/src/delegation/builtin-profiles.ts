@@ -58,8 +58,43 @@ export const OVER_ENGINEERING_REVIEWER_PROFILE: SubagentProfileConfig = {
   ].join('')
 }
 
+/**
+ * General-purpose agent: full tool access (inherits the parent's tools and
+ * approval policy), so it can research and carry out multi-step work including
+ * editing files. The default target for "do this independent unit of work"
+ * delegations, including several in parallel.
+ */
+export const GENERAL_PROFILE: SubagentProfileConfig = {
+  mode: 'subagent',
+  toolPolicy: 'inherit',
+  description: '通用代理:研究复杂问题、执行多步骤任务,可读写文件、运行命令,可并行。',
+  promptPreamble: [
+    '你是 Kun 内置的「通用代理」(General)。你能研究复杂问题并执行多步骤任务,',
+    '拥有与主代理一致的完整工具访问权限(todo 除外),因此可以在需要时读写文件、运行命令。',
+    '适合被派去并行承担一个独立的工作单元。聚焦交给你的具体任务,完成后简洁汇报结果与关键改动。'
+  ].join('')
+}
+
+/**
+ * Fast read-only explorer: finds files, greps for keywords and answers
+ * questions about the codebase. Never edits (toolPolicy `readOnly`).
+ */
+export const EXPLORE_PROFILE: SubagentProfileConfig = {
+  mode: 'subagent',
+  toolPolicy: 'readOnly',
+  description: '只读探索代理:快速查找文件、搜索关键字、回答关于代码库的问题,不修改任何文件。',
+  promptPreamble: [
+    '你是 Kun 内置的「探索代理」(Explore),一个快速的只读代码库代理。',
+    '你只读取/搜索/列目录,绝不修改任何文件。',
+    '当需要按模式快速查找文件、搜索代码关键字、或回答关于代码库的问题时使用你。',
+    '高效定位相关位置,返回结论(文件:行 + 简要说明),不做与任务无关的展开。'
+  ].join('')
+}
+
 /** All builtin profiles, keyed by their `delegate_task` profile name. */
 export const BUILTIN_SUBAGENT_PROFILES: Readonly<Record<string, SubagentProfileConfig>> = {
+  general: GENERAL_PROFILE,
+  explore: EXPLORE_PROFILE,
   'design-reviewer': DESIGN_REVIEWER_PROFILE,
   'over-engineering-reviewer': OVER_ENGINEERING_REVIEWER_PROFILE
 }

@@ -167,6 +167,44 @@ describe('child agent executor', () => {
     expect(seen[0]?.providerId).toBe('minimax')
   })
 
+  it('gives an inherit child the parent agent full tool set (no forced read-only allowlist)', async () => {
+    const seen: ModelRequest[] = []
+    const registry = new CapabilityRegistry([{
+      id: 'builtin',
+      kind: 'built-in',
+      enabled: true,
+      available: true,
+      tools: buildDefaultLocalTools()
+    }])
+    const executor = createChildAgentExecutor({
+      model: model([
+        { kind: 'assistant_text_delta', text: 'done' },
+        { kind: 'completed', stopReason: 'stop' }
+      ], seen),
+      toolHost: new LocalToolHost({ registry }),
+      prefix: createImmutablePrefix({ systemPrompt: 'child system' }),
+      defaultModel: 'child-test',
+      nowIso: () => '2026-06-03T00:00:00.000Z'
+    })
+
+    await executor({
+      childId: 'child_inherit',
+      parentThreadId: 'thr_parent',
+      parentTurnId: 'turn_parent',
+      prompt: 'Do the work',
+      toolPolicy: 'inherit',
+      signal: new AbortController().signal
+    })
+
+    const toolNames = (seen[0]?.tools ?? []).map((tool) => tool.name)
+    // The child sees write/shell tools (not just the read-only investigation
+    // set) because inherit applies no forced allow-list.
+    expect(toolNames).toContain('read')
+    expect(toolNames.length).toBeGreaterThan(4)
+    const restricted = new Set(['read', 'grep', 'find', 'ls'])
+    expect(toolNames.some((name) => !restricted.has(name))).toBe(true)
+  })
+
   it('honors an explicit allowedTools list over the tool policy', async () => {
     const seen: ModelRequest[] = []
     const registry = new CapabilityRegistry([{

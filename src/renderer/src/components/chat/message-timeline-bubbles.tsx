@@ -1405,7 +1405,9 @@ function MessageBubbleImpl({
 
 function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boolean }): ReactElement {
   const { t } = useTranslation('common')
-  const [open, setOpen] = useState(() => block.status === 'error' || block.status === 'running')
+  // Errored tool calls stay collapsed by default — only the red header is shown so the
+  // (often verbose) error payload doesn't disrupt reading. The user can still expand it.
+  const [open, setOpen] = useState(() => block.status === 'running')
 
   useEffect(() => {
     if (block.status === 'running') {

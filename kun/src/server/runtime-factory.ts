@@ -48,6 +48,7 @@ import {
   DEFAULT_STORAGE_CONFIG,
   expandHomePath,
   type QualityConfig,
+  type RolesConfig,
   type RuntimeTuningConfig,
   type ServeProviderConfig,
   type StorageConfig
@@ -105,6 +106,8 @@ export type KunServeRuntimeOptions = {
   models?: ModelConfig
   contextCompaction?: ContextCompactionConfig
   runtime?: RuntimeTuningConfig
+  /** Internal-LLM role model routing (small-model slot + title/summary/codeReview overrides). */
+  roles?: RolesConfig
   storage?: StorageConfig
   capabilities?: KunCapabilitiesConfig
   /** Command hooks from config.json; resolved and wired into tool hosts and the loop. */
@@ -236,7 +239,10 @@ export async function createKunServeRuntime(
     ...(options.models ? { models: options.models } : {}),
     ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
     ...(tokenEconomy ? { tokenEconomy } : {}),
-    ...(options.runtime ? { runtime: options.runtime } : {})
+    ...(options.runtime ? { runtime: options.runtime } : {}),
+    ...(options.roles?.codeReviewReasoningEffort
+      ? { reasoningEffort: options.roles.codeReviewReasoningEffort }
+      : {})
   })
   const webProviders = buildWebToolProviders(options.capabilities?.web)
   const attachmentStore = options.capabilities?.attachments.enabled
@@ -438,6 +444,7 @@ export async function createKunServeRuntime(
     skillRuntime,
     tokenEconomy,
     contextCompaction: options.contextCompaction,
+    ...(options.roles ? { roles: options.roles } : {}),
     ...(options.runtime?.toolStorm ? { toolStorm: options.runtime.toolStorm } : {}),
     ...(options.runtime?.toolArgumentRepair ? { toolArgumentRepair: options.runtime.toolArgumentRepair } : {}),
     ...(resolvedHooks.length ? { hooks: resolvedHooks } : {}),
@@ -471,6 +478,8 @@ export async function createKunServeRuntime(
     ...(delegationRuntime ? { delegationRuntime } : {}),
     modelClient,
     defaultModel: options.model,
+    ...(options.roles ? { roles: options.roles } : {}),
+    immutablePrefix: prefix,
     runTurn(threadId, turnId) {
       return loop.runTurn(threadId, turnId)
     },

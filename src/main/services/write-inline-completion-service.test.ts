@@ -29,7 +29,7 @@ function createSettings(patch: Partial<AppSettingsV1['write']['inlineCompletion'
     version: 1,
     locale: 'en',
     theme: 'system',
-    uiFontScale: 'small',
+    uiFontScale: 0.82,
     provider: defaultModelProviderSettings(),
     agents: {
       kun: {

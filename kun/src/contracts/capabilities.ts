@@ -236,10 +236,27 @@ export const SubagentProfileConfig = z
     systemPrompt: z.string().min(1).optional(),
     /** Short instruction prepended to the delegated task prompt. */
     promptPreamble: z.string().min(1).optional(),
-    /** Whether the child is restricted to read-only tools or inherits the full set. */
-    toolPolicy: SubagentToolPolicy.default('readOnly'),
+    /**
+     * Whether the child is restricted to read-only tools or inherits the
+     * parent agent's full tool set + approval policy. Defaults to `inherit`
+     * (follow the main agent); a profile that needs read-only must say so
+     * explicitly (e.g. the built-in reviewers).
+     */
+    toolPolicy: SubagentToolPolicy.default('inherit'),
     /** Exact tool allow-list; overrides toolPolicy when set (e.g. ['read','grep','bash']). */
-    allowedTools: z.array(z.string().min(1)).min(1).optional()
+    allowedTools: z.array(z.string().min(1)).min(1).optional(),
+    /** Built-in tool names blocked for this profile (deny-list, layered on `inherit`; e.g. ['bash','write']). */
+    blockedTools: z.array(z.string().min(1)).optional(),
+    /** MCP server ids blocked for this profile (deny-list; the server's entire toolset is hidden from the child). */
+    blockedMcpServers: z.array(z.string().min(1)).optional(),
+    /** Skill ids blocked for this profile (deny-list; default inherits every available skill). */
+    blockedSkills: z.array(z.string().min(1)).optional(),
+    /**
+     * Reasoning depth applied to this profile's child model requests. Default
+     * 'off' (cheap); a profile opts into deeper thinking explicitly. Flows to
+     * the child agent's ModelRequest.reasoningEffort.
+     */
+    reasoningEffort: ModelReasoningEffort.optional()
   })
   .strict()
 export type SubagentProfileConfig = z.infer<typeof SubagentProfileConfig>
@@ -249,8 +266,16 @@ export const SubagentsCapabilityConfig = CapabilityToggleConfig.extend({
   maxParallel: z.number().int().nonnegative().default(0),
   /** Hard cap on total children per parent thread. */
   maxChildRuns: z.number().int().nonnegative().default(0),
-  /** Tool policy applied to children that do not resolve a profile. */
-  defaultToolPolicy: SubagentToolPolicy.default('readOnly'),
+  /**
+   * Tool policy applied to children that do not resolve a profile. Defaults to
+   * `inherit` so a delegated subagent follows the MAIN agent's tools AND
+   * approval/permission policy (it can edit/run shell iff the parent can).
+   * `inherit` never escalates beyond the parent: the child loop runs under the
+   * parent thread's approvalPolicy/sandboxMode, so a read-only parent yields a
+   * read-only child. Per-profile `toolPolicy` (e.g. the built-in read-only
+   * reviewers) still wins over this default.
+   */
+  defaultToolPolicy: SubagentToolPolicy.default('inherit'),
   /** Profile chosen when `delegate_task` omits an explicit profile. */
   defaultProfile: z.string().min(1).optional(),
   /** Named subagent roles (e.g. researcher/reviewer/verifier). */

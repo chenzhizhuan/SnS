@@ -29,7 +29,8 @@ import {
   ModelConfigSchema,
   ContextCompactionConfigSchema,
   QualityConfigSchema,
-  RuntimeTuningConfigSchema
+  RuntimeTuningConfigSchema,
+  RolesConfigSchema
 } from '../../kun/src/config/kun-config.js'
 import { HooksConfigSchema } from '../../kun/src/hooks/hook-config.js'
 import {
@@ -452,6 +453,15 @@ export async function syncGuiManagedKunConfig(
     | 'modelProfiles'
     | 'memoryEnabled'
     | 'quality'
+    | 'subagents'
+    | 'smallModel'
+    | 'smallModelProviderId'
+    | 'titleModel'
+    | 'titleProviderId'
+    | 'summaryModel'
+    | 'summaryProviderId'
+    | 'codeReviewModel'
+    | 'codeReviewProviderId'
   >,
   options?: {
     scheduleMcp?: {
@@ -511,6 +521,10 @@ export async function syncGuiManagedKunConfig(
     contextCompaction: contextCompactionConfigForRuntime(runtime.contextCompaction, existingContextCompaction),
     runtime: runtimeTuningConfigForRuntime(runtime.runtimeTuning, existingRuntimeTuning),
     quality: qualityConfigForRuntime(runtime.quality, existingQuality),
+    ...(() => {
+      const roles = rolesConfigForRuntime(runtime)
+      return Object.keys(roles).length ? { roles } : {}
+    })(),
     capabilities: {
       ...capabilities,
       attachments: {
@@ -532,9 +546,7 @@ export async function syncGuiManagedKunConfig(
         ...memory,
         enabled: runtime.memoryEnabled
       },
-      ...(runtime.subagents
-        ? { subagents: subagentProfilesForRuntime(runtime.subagents) }
-        : {}),
+      subagents: subagentProfilesForRuntime(runtime.subagents ?? { enabled: true, profiles: [] }),
       mcp: {
         ...mcp,
         ...(options?.scheduleMcp || mcpSearch.enabled || hasImportedEnabledMcpServer
@@ -893,8 +905,52 @@ function contextCompactionConfigForRuntime(
     summaryMode: contextCompaction.summaryMode,
     summaryTimeoutMs: contextCompaction.summaryTimeoutMs,
     summaryMaxTokens: contextCompaction.summaryMaxTokens,
-    summaryInputMaxBytes: contextCompaction.summaryInputMaxBytes
+    summaryInputMaxBytes: contextCompaction.summaryInputMaxBytes,
+    ...(contextCompaction.summaryModel ? { summaryModel: contextCompaction.summaryModel } : {}),
+    ...(contextCompaction.summaryProviderId ? { summaryProviderId: contextCompaction.summaryProviderId } : {})
   }
+}
+
+/**
+ * Build the kun `roles` config (internal-LLM model routing) from GUI settings.
+ * Only non-empty fields are emitted so the strict RolesConfigSchema accepts the
+ * result and a cleared field removes itself from config.json.
+ */
+function rolesConfigForRuntime(
+  runtime: Pick<
+    KunRuntimeSettingsV1,
+    | 'smallModel'
+    | 'smallModelProviderId'
+    | 'titleModel'
+    | 'titleProviderId'
+    | 'summaryModel'
+    | 'summaryProviderId'
+    | 'codeReviewModel'
+    | 'codeReviewProviderId'
+    | 'titleReasoningEffort'
+    | 'summaryReasoningEffort'
+    | 'codeReviewReasoningEffort'
+  >
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  const put = (key: string, value: string | undefined): void => {
+    const trimmed = typeof value === 'string' ? value.trim() : ''
+    if (trimmed) out[key] = trimmed
+  }
+  put('smallModel', runtime.smallModel)
+  put('smallModelProviderId', runtime.smallModelProviderId)
+  put('titleModel', runtime.titleModel)
+  put('titleProviderId', runtime.titleProviderId)
+  put('summaryModel', runtime.summaryModel)
+  put('summaryProviderId', runtime.summaryProviderId)
+  put('codeReviewModel', runtime.codeReviewModel)
+  put('codeReviewProviderId', runtime.codeReviewProviderId)
+  // Per-role reasoning depth. 'off' is the default and is intentionally omitted
+  // by the normalizer, so only an opted-in level (low/medium/high/max) is emitted.
+  put('titleReasoningEffort', runtime.titleReasoningEffort)
+  put('summaryReasoningEffort', runtime.summaryReasoningEffort)
+  put('codeReviewReasoningEffort', runtime.codeReviewReasoningEffort)
+  return out
 }
 
 function computerUseConfigForRuntime(
@@ -1051,20 +1107,72 @@ function qualityConfigForRuntime(
   }
 }
 
-function subagentProfilesForRuntime(subagents: KunSubagentsSettingsV1): SubagentsCapabilityConfig {
+const VALID_PROFILE_REASONING = new Set(['auto', 'low', 'medium', 'high', 'max'])
+
+/**
+ * Remove optional fields the runtime schema rejects when blank: empty/whitespace
+ * strings (every optional string there is `.min(1)`) and empty arrays. Leaving
+ * them in throws on SubagentsCapabilityConfig.parse and stops the runtime from
+ * starting; dropping them lets the field fall back to its server default.
+ */
+function stripBlankProfileFields(profile: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(profile)) {
+    if (typeof value === 'string' && value.trim() === '') continue
+    if (Array.isArray(value) && value.length === 0) continue
+    next[key] = value
+  }
+  return next
+}
+
+export function subagentProfilesForRuntime(subagents: KunSubagentsSettingsV1): SubagentsCapabilityConfig {
   const profiles: Record<string, unknown> = {}
   for (const profile of subagents.profiles) {
     if (!profile.enabled) continue
-    const { id: _id, enabled: _enabled, name, ...rest } = profile
-    profiles[profile.id] = { name, ...rest }
+    const { id: _id, enabled: _enabled, name, reasoningEffort, ...rest } = profile
+    // Coerce the per-profile reasoning enum so a hand-edited invalid value can't
+    // throw SubagentsCapabilityConfig.parse below ('off'/invalid → omitted).
+    const effort = typeof reasoningEffort === 'string' && VALID_PROFILE_REASONING.has(reasoningEffort)
+      ? { reasoningEffort }
+      : {}
+    // Built-in profiles carry an empty `name` (the GUI localizes their display
+    // labels rather than storing them), and the user can blank any optional
+    // field in the editor. The runtime schema marks every optional string as
+    // `.min(1)`, so forwarding an empty string throws and the runtime never
+    // connects. Drop blank strings / empty arrays so they fall back to defaults.
+    profiles[profile.id] = stripBlankProfileFields({ name, ...rest, ...effort })
   }
-  return SubagentsCapabilityConfig.parse({
-    enabled: subagents.enabled,
-    ...(subagents.maxParallel !== undefined ? { maxParallel: subagents.maxParallel } : {}),
-    ...(subagents.maxChildRuns !== undefined ? { maxChildRuns: subagents.maxChildRuns } : {}),
+  const candidate = {
+    // Subagents are a first-class feature with no GUI "enable" toggle; default ON
+    // (only an explicit `false` disables) so delegate_task + the built-in profiles
+    // (design-reviewer / over-engineering-reviewer) are always offered to the model.
+    // maxParallel/maxChildRuns MUST be >=1 or DelegationRuntime can never run a child.
+    enabled: subagents.enabled !== false,
+    maxParallel: subagents.maxParallel && subagents.maxParallel > 0 ? subagents.maxParallel : 3,
+    maxChildRuns: subagents.maxChildRuns && subagents.maxChildRuns > 0 ? subagents.maxChildRuns : 12,
     ...(subagents.defaultToolPolicy ? { defaultToolPolicy: subagents.defaultToolPolicy } : {}),
     ...(subagents.defaultProfile ? { defaultProfile: subagents.defaultProfile } : {}),
     profiles
+  }
+  // A single malformed profile must never brick the whole runtime connection.
+  // If the GUI somehow persisted a value the schema rejects, drop the custom
+  // profiles and fall back to a minimal valid block — the runtime still merges
+  // in the built-in reviewers, so subagents keep working.
+  const parsed = SubagentsCapabilityConfig.safeParse(candidate)
+  if (parsed.success) return parsed.data
+  void appendManagedLogLine(
+    'kun',
+    formatKunLogLine(
+      'lifecycle',
+      undefined,
+      `[settings] dropped invalid subagent profiles: ${JSON.stringify(parsed.error.issues)}`
+    )
+  )
+  return SubagentsCapabilityConfig.parse({
+    enabled: candidate.enabled,
+    maxParallel: candidate.maxParallel,
+    maxChildRuns: candidate.maxChildRuns,
+    ...(subagents.defaultToolPolicy ? { defaultToolPolicy: subagents.defaultToolPolicy } : {})
   })
 }
 
@@ -1156,6 +1264,9 @@ function sanitizeKunConfigSections(
     runtime: parseKunConfigSection(RuntimeTuningConfigSchema, existing.runtime),
     quality: parseKunConfigSection(QualityConfigSchema, existing.quality),
     capabilities: sanitizeKunCapabilitiesConfig(existing.capabilities),
+    ...('roles' in existing
+      ? { roles: parseKunConfigSection(RolesConfigSchema, existing.roles) }
+      : {}),
     ...(hooks.length ? { hooks } : {})
   }
 }

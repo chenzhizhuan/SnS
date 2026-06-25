@@ -27,7 +27,7 @@ function settings(endpointFormat: ModelEndpointFormat): AppSettingsV1 {
     version: 1,
     locale: 'en',
     theme: 'system',
-    uiFontScale: 'small',
+    uiFontScale: 0.82,
     provider,
     agents: {
       kun: defaultKunRuntimeSettings()

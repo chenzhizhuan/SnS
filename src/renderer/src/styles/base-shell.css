@@ -2092,6 +2092,58 @@ pre {
   }
 }
 
+/* ---------- Kun Crew · subagent call card ---------- */
+.ds-subagent-mount {
+  animation: ds-subagent-mount 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes ds-subagent-mount {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ds-subagent-dot-pulse {
+  animation: ds-subagent-pulse 1.4s ease-in-out infinite;
+  animation-delay: var(--ds-subagent-stagger, 0s);
+}
+@keyframes ds-subagent-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 216, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 216, 0);
+  }
+}
+.ds-subagent-lane-sweep {
+  background: linear-gradient(90deg, transparent, var(--ds-accent, #3b82d8), transparent);
+  animation: ds-subagent-sweep 1.5s ease-in-out infinite;
+  animation-delay: var(--ds-subagent-stagger, 0s);
+}
+@keyframes ds-subagent-sweep {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+/* Freeze the AgentKun pose motion inside a frozen disc (done/failed/off-screen). */
+.ds-subagent-frozen .ds-agent-kun img {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-subagent-mount,
+  .ds-subagent-dot-pulse,
+  .ds-subagent-lane-sweep {
+    animation: none !important;
+  }
+}
+
 @keyframes sdd-soft-enter {
   from {
     opacity: 0;

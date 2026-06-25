@@ -2042,6 +2042,23 @@
   "toolBuiltinFind": "Find",
   "toolBuiltinLs": "List",
   "toolBuiltinBash": "Bash",
+  "toolBuiltinDelegate": "Delegate task",
+  "subagentDefaultName": "Subagent",
+  "subagentStatusQueued": "Queued",
+  "subagentStatusRunning": "Running",
+  "subagentStatusDone": "Done",
+  "subagentStatusFailed": "Failed",
+  "subagentStatusAwaiting": "Awaiting approval",
+  "subagentSteps": "{{count}} steps",
+  "subagentQueuedHint": "Queued",
+  "subagentTokensChip": "{{count}} tokens",
+  "subagentPolicyReadOnly": "Read-only",
+  "subagentPolicyFull": "Full access",
+  "subagentOpenSession": "Open sub-session",
+  "subagentSwarmTitle": "{{count}} subagents",
+  "subagentSwarmRunning": "{{count}} running",
+  "subagentSwarmQueued": "{{count}} queued",
+  "subagentSwarmDone": "{{count}} done",
   "sidebarFooterHint": "Connect the local runtime to create threads and chat with the agent.",
   "appErrorTitle": "Something went wrong",
   "appErrorReload": "Reload",
@@ -2093,5 +2110,123 @@
   "planVerify": "Verify",
   "planVerifyRunning": "Verifying…",
   "sddChangedBanner": "Requirements {{ids}} changed after planning; the plan may be stale",
-  "sddReplanButton": "Replan affected steps"
+  "sddReplanButton": "Replan affected steps",
+  "agentsView": {
+    "configureModel": "configure model",
+    "delegatable": "Delegatable · usable in chat",
+    "system": "System · runs automatically",
+    "compaction": "Compaction",
+    "compactionDesc": "Compress long context",
+    "title": "Title",
+    "titleDesc": "Generate chat title",
+    "summary": "Summary",
+    "summaryDesc": "Conversation summary",
+    "ruleBased": "Rule-based",
+    "deleteConfirm": "Delete this agent?",
+    "followDefault": "Follow default",
+    "builtinTag": "built-in",
+    "edit": "Edit",
+    "delete": "Delete",
+    "editAgent": "Edit agent",
+    "fName": "Name",
+    "fDesc": "Description",
+    "fColor": "Color",
+    "fMode": "Mode",
+    "modeDelegate": "delegate",
+    "modePersona": "persona",
+    "modeBoth": "both",
+    "fTools": "Tool access",
+    "toolReadOnly": "read-only",
+    "toolInherit": "all tools",
+    "tabBasic": "Basic",
+    "tabPermissions": "Permissions",
+    "permScope": "Capability scope",
+    "permScopeReadOnly": "Read-only",
+    "permScopeAll": "All",
+    "permScopeCustom": "Custom",
+    "permScopeHint": "Pick the capabilities this agent may use — never exceeds the main agent.",
+    "permScopeReadOnlyNote": "Investigation only: read / grep / find / ls. No MCP or skills.",
+    "permScopeAllNote": "Inherits every capability the main agent has.",
+    "permSearch": "Search tools / MCP / skills…",
+    "permSecTools": "Built-in tools",
+    "permSecMcp": "MCP servers",
+    "permSecSkills": "Skills",
+    "permToolsWord": "tools",
+    "permBlocked": "blocked",
+    "permSkillsInheritNote": "Inherits all available skills by default; block individually.",
+    "permNoMcp": "No MCP servers configured.",
+    "permNoSkills": "No skills discovered.",
+    "permLoading": "Loading capabilities…",
+    "fModel": "Model",
+    "modelHint": "Pick on the list row, or set provider:model here",
+    "providerId": "provider id",
+    "fSystemPrompt": "System prompt",
+    "cancel": "Cancel",
+    "create": "Create",
+    "save": "Save",
+    "builtin": {
+      "general": "General-purpose agent: research and multi-step tasks, full tools, can edit files, runs in parallel.",
+      "explore": "Read-only code explorer: find files, search keywords, answer questions; never edits."
+    }
+  },
+  "subagents": "Subagents",
+  "disable": "Disable",
+  "enable": "Enable",
+  "expandSidebar": "Expand sidebar",
+  "rightPanelSubagents": "Subagents",
+  "subagentsPanel": {
+    "configModel": "configure model",
+    "delegatable": "Delegatable · usable in chat",
+    "system": "System · internal",
+    "global": "Global · shared",
+    "newSubagent": "New subagent",
+    "smallModel": {
+      "name": "Small model",
+      "desc": "Default for Title & Summary"
+    },
+    "role": {
+      "design-reviewer": {
+        "name": "Design review",
+        "desc": "design-reviewer · read-only"
+      },
+      "over-engineering-reviewer": {
+        "name": "Over-engineering review",
+        "desc": "over-engineering-reviewer · read-only"
+      },
+      "compaction": {
+        "name": "Compaction",
+        "desc": "Configurable · defaults to main model"
+      },
+      "codeReview": {
+        "name": "Code review",
+        "desc": "Isolated read-only run · configurable"
+      },
+      "title": {
+        "name": "Title",
+        "desc": "LLM · defaults to small model"
+      },
+      "summary": {
+        "name": "Summary",
+        "desc": "LLM · defaults to small model"
+      },
+      "general": {
+        "name": "General",
+        "desc": "Full tools · multi-step work"
+      },
+      "explore": {
+        "name": "Explore",
+        "desc": "Read-only · find & search code"
+      }
+    },
+    "builtin": "Built-in"
+  },
+  "summarizeSession": "Summarize",
+  "summarizing": "Summarizing…",
+  "summarizeFailed": "Could not summarize this conversation",
+  "name": "Name",
+  "description": "Description",
+  "color": "Color",
+  "mode": "Mode",
+  "systemPrompt": "System prompt",
+  "toolPolicy": "Tool access"
 }

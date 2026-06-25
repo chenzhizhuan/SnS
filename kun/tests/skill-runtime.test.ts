@@ -289,6 +289,36 @@ describe('SkillRuntime', () => {
     expect('error' in result).toBe(true)
   })
 
+  it('excludes per-call blockedSkillIds from resolveTurn + load_skill without mutating siblings', async () => {
+    await writeSkill('gmail', {
+      id: 'gmail',
+      name: 'Gmail',
+      triggers: { commands: ['/gmail'] }
+    }, 'gmail body')
+    await writeSkill('keeper', {
+      id: 'keeper',
+      name: 'Keeper',
+      triggers: { commands: ['/keeper'] }
+    }, 'keeper body')
+    const runtime = await createRuntime()
+
+    // A child whose profile blocks gmail: hidden from the per-turn catalog and
+    // auto-match (mixed-case form must still match the slugged id).
+    const blocked = await runtime.resolveTurn({ prompt: '/gmail send', workspace: root, blockedSkillIds: ['Gmail'] })
+    expect(blocked.catalogInstruction).not.toContain('Gmail')
+    expect(blocked.catalogInstruction).toContain('Keeper')
+    expect(blocked.activeSkillIds).not.toContain('gmail')
+    // load_skill rejects the blocked id for that child.
+    expect('error' in (await runtime.loadSkillById('gmail', root, ['gmail']))).toBe(true)
+
+    // The shared runtime is NOT mutated: a sibling call with no deny-list still
+    // sees gmail in the catalog, auto-activates it, and can load it.
+    const sibling = await runtime.resolveTurn({ prompt: '/gmail send', workspace: root })
+    expect(sibling.catalogInstruction).toContain('Gmail')
+    expect(sibling.activeSkillIds).toContain('gmail')
+    expect('error' in (await runtime.loadSkillById('gmail', root))).toBe(false)
+  })
+
   it('truncates an oversized skill body to the instruction budget on load', async () => {
     await writeSkill('huge', { id: 'huge', name: 'Huge' }, 'z'.repeat(5_000))
     const runtime = await createRuntime({ instructionBudgetBytes: 1_000 })

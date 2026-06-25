@@ -16,7 +16,7 @@ import { SubagentProfileConfig, type SubagentMode, type SubagentToolPolicy } fro
  *     mode: subagent          # subagent | primary | all
  *     model: deepseek-chat
  *     providerId: deepseek
- *     toolPolicy: readOnly    # readOnly | inherit
+ *     toolPolicy: inherit     # readOnly | inherit (default: inherit = follow main agent)
  *     allowedTools: [read, grep]
  *     color: "#3b82f6"
  *     ---
@@ -82,7 +82,13 @@ function parseAgentMarkdown(text: string, defaultId: string): { id: string; prof
     ...(fields.systemPrompt ? { systemPrompt: fields.systemPrompt } : systemPromptFromBody ? { systemPrompt: systemPromptFromBody } : {}),
     ...(fields.promptPreamble ? { promptPreamble: fields.promptPreamble } : {}),
     toolPolicy: normalizeToolPolicy(fields.toolPolicy),
-    ...(parseListField(fields, 'allowedTools') ? { allowedTools: parseListField(fields, 'allowedTools') } : {})
+    ...(parseListField(fields, 'allowedTools') ? { allowedTools: parseListField(fields, 'allowedTools') } : {}),
+    ...(parseListField(fields, 'blockedTools') ? { blockedTools: parseListField(fields, 'blockedTools') } : {}),
+    ...(parseListField(fields, 'blockedMcpServers') ? { blockedMcpServers: parseListField(fields, 'blockedMcpServers') } : {}),
+    ...(parseListField(fields, 'blockedSkills') ? { blockedSkills: parseListField(fields, 'blockedSkills') } : {}),
+    // Reasoning depth (off|low|medium|high|max). SubagentProfileConfig validates;
+    // an invalid value would fail safeParse, so only known values survive.
+    ...(fields.reasoningEffort ? { reasoningEffort: fields.reasoningEffort } : {})
   }
   // omit_base_prompt is a hint to the augment strategy; we model it as a
   // marker the runtime can check if it ever needs to. For now we just keep
@@ -100,8 +106,10 @@ function normalizeMode(value: string | undefined): SubagentMode {
 }
 
 function normalizeToolPolicy(value: string | undefined): SubagentToolPolicy {
-  if (value === 'inherit') return 'inherit'
-  return 'readOnly'
+  // Default follows the main agent (inherit); an overlay must say
+  // `toolPolicy: readOnly` explicitly to restrict the child.
+  if (value === 'readOnly') return 'readOnly'
+  return 'inherit'
 }
 
 function boolField(fields: Record<string, string>, key: string): boolean | undefined {

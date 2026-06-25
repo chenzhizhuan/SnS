@@ -23,6 +23,7 @@ export type ThreadEntity = ThreadRecord
 export function createThreadRecord(input: {
   id: string
   title: string
+  titleAuto?: boolean
   workspace: string
   model: string
   providerId?: string
@@ -50,6 +51,7 @@ export function createThreadRecord(input: {
   return {
     id: input.id,
     title: input.title,
+    ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
     workspace: input.workspace,
     model: input.model,
     ...(input.providerId ? { providerId: input.providerId } : {}),
@@ -85,7 +87,7 @@ export function toThreadSummary(
   thread: ThreadEntity
 ): Pick<
   ThreadEntity,
-  'id' | 'title' | 'workspace' | 'model' | 'providerId' | 'agentId' | 'systemPrompt' | 'mode' | 'status' | 'approvalPolicy' | 'sandboxMode' | 'pinned' | 'createdAt' | 'updatedAt'
+  'id' | 'title' | 'titleAuto' | 'summary' | 'workspace' | 'model' | 'providerId' | 'agentId' | 'systemPrompt' | 'mode' | 'status' | 'approvalPolicy' | 'sandboxMode' | 'pinned' | 'createdAt' | 'updatedAt'
   | 'costBudgetUsd' | 'costBudgetWarningSent'
   | 'relation' | 'parentThreadId'
   | 'forkedFromThreadId' | 'forkedFromTitle' | 'forkedAt' | 'forkedFromMessageCount' | 'forkedFromTurnCount'
@@ -94,6 +96,8 @@ export function toThreadSummary(
   return {
     id: thread.id,
     title: thread.title,
+    ...(thread.titleAuto !== undefined ? { titleAuto: thread.titleAuto } : {}),
+    ...(thread.summary ? { summary: thread.summary } : {}),
     workspace: thread.workspace,
     model: thread.model,
     ...(thread.providerId ? { providerId: thread.providerId } : {}),

@@ -119,6 +119,7 @@ export class ThreadService {
     const thread = createThreadRecord({
       id,
       title: options.title ?? (request.title?.trim() || 'New chat'),
+      ...(request.titleAuto !== undefined ? { titleAuto: request.titleAuto } : {}),
       workspace: request.workspace,
       model: request.model,
       ...(request.providerId?.trim() ? { providerId: request.providerId.trim() } : {}),
@@ -141,6 +142,8 @@ export class ThreadService {
 
   async update(threadId: string, patch: {
     title?: string
+    titleAuto?: boolean
+    summary?: string
     workspace?: string
     status?: ThreadStatus
     approvalPolicy?: ApprovalPolicy
@@ -174,6 +177,7 @@ export class ThreadService {
       kind: 'thread_updated',
       threadId,
       title: updated.title,
+      ...(updated.titleAuto !== undefined ? { titleAuto: updated.titleAuto } : {}),
       status: updated.status
     })
     return updated

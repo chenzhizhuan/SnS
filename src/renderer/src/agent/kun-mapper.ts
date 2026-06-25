@@ -48,6 +48,8 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
   return {
     id: thread.id,
     title: thread.title?.trim() || thread.id.slice(0, 8),
+    ...(thread.titleAuto !== undefined ? { titleAuto: thread.titleAuto } : {}),
+    ...(thread.summary?.trim() ? { summary: thread.summary.trim() } : {}),
     updatedAt: thread.updatedAt,
     model: thread.model,
     mode: thread.mode,
@@ -1225,6 +1227,14 @@ export async function dispatchKunRuntimeEvent(
       return
     case 'usage':
       if (event.usage) sink.onUsage?.(usageFromCore(event.usage))
+      return
+    case 'thread_updated':
+      sink.onThreadUpdated?.({
+        threadId: event.threadId ?? '',
+        ...(event.title !== undefined ? { title: event.title } : {}),
+        ...(event.titleAuto !== undefined ? { titleAuto: event.titleAuto } : {}),
+        ...(event.status !== undefined ? { status: event.status } : {})
+      })
       return
     case 'turn_completed':
     case 'turn_aborted':

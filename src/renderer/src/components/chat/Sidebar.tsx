@@ -2,7 +2,6 @@ import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Bot,
   Clock3,
   FileQuestion,
   Focus,
@@ -65,7 +64,6 @@ type Props = {
   onWriteOpen: () => void
   onScheduleOpen: () => void
   onWorkflowOpen: () => void
-  onSubagentsOpen: () => void
 }
 
 export function Sidebar({
@@ -97,8 +95,7 @@ export function Sidebar({
   onCodeOpen,
   onWriteOpen,
   onScheduleOpen,
-  onWorkflowOpen,
-  onSubagentsOpen
+  onWorkflowOpen
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const [isDarkMode, setIsDarkMode] = useState(
@@ -229,12 +226,6 @@ export function Sidebar({
           label={t('workflow')}
           onClick={onWorkflowOpen}
           active={activeView === 'workflow'}
-        />
-        <SidebarCommandRow
-          icon={<Bot className="h-4 w-4" strokeWidth={1.75} />}
-          label={t('subagents', 'Agents')}
-          onClick={onSubagentsOpen}
-          active={activeView === 'subagents'}
         />
       </div>
 

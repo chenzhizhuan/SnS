@@ -155,6 +155,7 @@ export class KunRuntimeProvider implements AgentProvider {
   async createThread(input: {
     workspace?: string
     title?: string
+    titleAuto?: boolean
     mode?: KunThreadMode
     agentId?: string
     providerId?: string
@@ -169,6 +170,7 @@ export class KunRuntimeProvider implements AgentProvider {
       JSON.stringify({
         workspace: input.workspace || settings.workspaceRoot || '~',
         title: input.title,
+        ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
         model: input.model?.trim() || runtime.model,
         mode: normalizeThreadMode(input.mode),
         approvalPolicy: runtime.approvalPolicy,
@@ -373,11 +375,11 @@ export class KunRuntimeProvider implements AgentProvider {
     }
   }
 
-  async renameThread(threadId: string, title: string): Promise<void> {
+  async renameThread(threadId: string, title: string, auto?: boolean): Promise<void> {
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadPath(threadId),
       'PATCH',
-      JSON.stringify({ title })
+      JSON.stringify({ title, ...(auto !== undefined ? { titleAuto: auto } : {}) })
     )
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'rename thread failed'))

@@ -9,6 +9,7 @@ import type { TurnItem } from '../contracts/items.js'
 import type { ApprovalPolicy, SandboxMode } from '../contracts/policy.js'
 import type { RuntimeTuningConfig } from '../config/kun-config.js'
 import { AgentLoop } from '../loop/agent-loop.js'
+import { normalizeRoleReasoningEffort } from '../loop/reasoning-effort.js'
 import type { ContextCompactionConfig, ModelConfig } from '../loop/model-context-profile.js'
 import { ContextCompactor } from '../loop/context-compactor.js'
 import { InflightTracker } from '../loop/inflight-tracker.js'
@@ -81,13 +82,30 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     })
     // Tool gating, most-specific first: an explicit allow-list wins; else a
     // read-only policy restricts to investigation tools; else (inherit) the
-    // child sees the full set. The capability registry enforces the list
-    // twice — dropped from the model's tool schema and rejected at execute.
+    // child sees the parent agent's FULL tool set — no forced allow-list, so
+    // it can edit/run shell exactly like the parent. The capability registry
+    // enforces an explicit list twice (dropped from the model's tool schema
+    // and rejected at execute), but `inherit` leaves it undefined so nothing
+    // is forced. The child is not an escalation: it runs under the parent
+    // thread's approvalPolicy/sandboxMode (set on the thread below from
+    // options.approvalPolicy/sandboxMode, which the runtime factory threads
+    // from the parent runtime), so a read-only parent still yields a
+    // read-only child.
     const forcedAllowedToolNames = input.allowedTools
       ? [...input.allowedTools]
       : input.toolPolicy === 'readOnly'
         ? [...SUBAGENT_READ_ONLY_TOOL_NAMES]
         : undefined
+    // GUI "custom" capability scope: deny-lists layered on top of inherit.
+    // Built-in tools block by name; MCP servers block at the provider level
+    // (`mcp:<serverId>`, drift-proof — new tools from a blocked server stay
+    // hidden); skills block by id. All three only REMOVE access, so they
+    // compose with the parent intersection and can never escalate the child.
+    const blockedToolNames = input.blockedTools?.length ? [...input.blockedTools] : undefined
+    const blockedProviderIds = input.blockedMcpServers?.length
+      ? input.blockedMcpServers.map((serverId) => `mcp:${serverId}`)
+      : undefined
+    const blockedSkillIds = input.blockedSkills?.length ? [...input.blockedSkills] : undefined
     // A custom system prompt augments the base prefix (kun tool/safety
     // conventions stay) on a distinct fingerprint, so same-agent calls still
     // hit the prompt cache; cross-agent reuse is intentionally given up.
@@ -111,6 +129,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ids,
       nowIso,
       ...(forcedAllowedToolNames ? { forcedAllowedToolNames } : {}),
+      ...(blockedToolNames ? { blockedToolNames } : {}),
+      ...(blockedProviderIds ? { blockedProviderIds } : {}),
+      ...(blockedSkillIds ? { blockedSkillIds } : {}),
       ...(options.modelCapabilities ? { modelCapabilities: options.modelCapabilities } : {}),
       ...(options.skillRuntime ? { skillRuntime: options.skillRuntime } : {}),
       ...(options.memoryStore ? { memoryStore: options.memoryStore } : {}),
@@ -147,6 +168,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         prompt,
         model,
         mode: 'agent',
+        reasoningEffort: normalizeRoleReasoningEffort(input.reasoningEffort),
         // Children have no GUI surface to answer structured input prompts.
         disableUserInput: true
       }

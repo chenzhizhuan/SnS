@@ -20,7 +20,7 @@ export function buildDelegationToolProviders(runtime: DelegationRuntime | undefi
         inputSchema: {
           type: 'object',
           properties: {
-            label: { type: 'string', description: 'Short label for this subagent run.' },
+            label: { type: 'string', description: 'A 2-4 word name for this subagent, shown in the UI as its title (e.g. "审查登录流程", "fix failing test", "greet user"). ALWAYS provide it so the user can tell subagents apart, especially when delegating several in parallel. Prefer a distinct label per call.' },
             prompt: { type: 'string', description: 'The task for the child agent.' },
             workspace: { type: 'string' },
             model: { type: 'string', description: 'Override the child model. Defaults to the profile model or server default.' },

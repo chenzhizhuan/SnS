@@ -90,7 +90,7 @@ function buildSettings(): AppSettingsV1 {
     version: 1,
     locale: 'en',
     theme: 'system',
-    uiFontScale: 'medium',
+    uiFontScale: 0.88,
     provider: defaultModelProviderSettings(),
     agents: { kun: defaultKunRuntimeSettings() },
     workspaceRoot: '/tmp/workspace',

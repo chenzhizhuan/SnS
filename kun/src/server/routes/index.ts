@@ -15,6 +15,7 @@ import {
   setThreadTodos,
   updateThread
 } from './threads.js'
+import { summarizeThread } from './threads-summarize.js'
 import {
   compactTurn,
   getTurn,
@@ -50,7 +51,6 @@ import {
   delegationDiagnostics,
   delegationProfiles
 } from './delegation.js'
-import { generateAgentProfile } from './agent-generate.js'
 import { isAuthorized, bearerToken } from '../auth.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -66,12 +66,12 @@ import type { ServerRuntime } from './server-runtime.js'
  * - `GET /v1/attachments/{id}` and `{id}/content` (auth)
  * - `GET/POST /v1/memory`, `PATCH/DELETE /v1/memory/{id}`, diagnostics (auth)
  * - `GET /v1/delegation/diagnostics` and `/v1/delegation/profiles` (auth)
- * - `POST /v1/agents/generate` (auth)
  * - `POST /v1/delegation/abort/{childId}` (auth)
  * - `GET /v1/workspace/status` (auth)
  * - `GET/POST /v1/threads` (auth)
  * - `GET/PATCH/DELETE /v1/threads/{id}` (auth)
  * - `POST /v1/threads/{id}/fork` (auth)
+ * - `POST /v1/threads/{id}/summarize` (auth)
  * - `GET/POST/DELETE /v1/threads/{id}/goal` (auth)
  * - `GET/POST/DELETE /v1/threads/{id}/todos` (auth)
  * - `POST /v1/threads/{id}/turns` (auth)
@@ -146,10 +146,6 @@ export function buildRouter(runtime: ServerRuntime): Router {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return delegationProfiles(runtime.delegationRuntime)
   })
-  router.add('POST', '/v1/agents/generate', async (request) => {
-    if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return generateAgentProfile(runtime.modelClient, runtime.defaultModel, request)
-  })
   router.add('POST', '/v1/delegation/abort/:childId', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return delegationAbort(runtime.delegationRuntime, ctx.params.childId)
@@ -183,6 +179,10 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('POST', '/v1/threads/:id/fork', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return forkThread(runtime.threadService, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/threads/:id/summarize', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return summarizeThread(runtime, ctx.params.id, request)
   })
   router.add('GET', '/v1/threads/:id/goal', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

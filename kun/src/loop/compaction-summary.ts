@@ -57,6 +57,26 @@ export function buildCompactionContinuationMessage(pinnedConstraints?: readonly 
 }
 
 /**
+ * Resolve the model + provider for the compaction-mode turn. Mirrors
+ * opencode's compaction agent precedence: an explicit compaction model
+ * override (`contextCompaction.summaryModel`) wins, otherwise it falls back to
+ * the main conversation model. Unlike one-shot roles (title/session-summary)
+ * it does NOT drop to the small model — a faithful handoff summary wants the
+ * same capability as the conversation it is folding.
+ */
+export function resolveCompactionModel(input: {
+  contextCompaction?: ContextCompactionConfig
+  fallbackModel: string
+}): { model: string; providerId?: string } {
+  const override = input.contextCompaction?.summaryModel?.trim()
+  if (override) {
+    const providerId = input.contextCompaction?.summaryProviderId?.trim()
+    return { model: override, ...(providerId ? { providerId } : {}) }
+  }
+  return { model: input.fallbackModel }
+}
+
+/**
  * Run the dedicated compaction-mode turn. The real conversation `items` are
  * fed to the model as messages (mirroring opencode's compaction agent),
  * followed by a free-form continuation prompt; the model returns a natural
@@ -67,6 +87,8 @@ export async function summarizeCompactionWithModel(input: {
   threadId: string
   turnId: string
   model: string
+  /** Optional per-provider routing id paired with `model`. */
+  providerId?: string
   modelClient: ModelClient
   prefix: ImmutablePrefix
   contextCompaction?: ContextCompactionConfig
@@ -112,6 +134,7 @@ export async function summarizeCompactionWithModel(input: {
       threadId: input.threadId,
       turnId: input.turnId,
       model: input.model,
+      ...(input.providerId ? { providerId: input.providerId } : {}),
       // Dedicated compaction-mode system prompt; the main agent prefix and
       // few-shots are intentionally dropped so this is a clean summarizer turn.
       systemPrompt: COMPACTION_SYSTEM_PROMPT,

@@ -51,7 +51,7 @@ function settings(): AppSettingsV1 {
     version: 1,
     locale: 'en',
     theme: 'system',
-    uiFontScale: 'small',
+    uiFontScale: 0.82,
     provider: defaultModelProviderSettings(),
     agents: {
       kun: defaultKunRuntimeSettings()
@@ -812,7 +812,7 @@ describe('legacy Kun defaults migration', () => {
       version: 1,
       locale: 'zh',
       theme: 'dark',
-      uiFontScale: 'small',
+      uiFontScale: 0.82,
       agentProvider: 'deepseek-runtime',
       deepseek: {
         binaryPath: '/usr/local/bin/deepseek',
@@ -853,7 +853,7 @@ describe('legacy Kun defaults migration', () => {
       version: 1,
       locale: 'zh',
       theme: 'dark',
-      uiFontScale: 'small',
+      uiFontScale: 0.82,
       agentProvider: 'deepseek-runtime',
       deepseek: {
         binaryPath: '/usr/local/bin/deepseek',

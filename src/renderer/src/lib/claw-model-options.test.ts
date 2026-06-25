@@ -25,7 +25,7 @@ function buildSettings(models: string[]): AppSettingsV1 {
     version: 1,
     locale: 'en',
     theme: 'system',
-    uiFontScale: 'medium',
+    uiFontScale: 0.88,
     provider,
     agents: { kun: defaultKunRuntimeSettings() },
     workspaceRoot: '/tmp/workspace',

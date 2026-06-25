@@ -33,7 +33,7 @@ function createSettings(binaryPath: string): AppSettingsV1 {
     version: 1,
     locale: 'en',
     theme: 'system',
-    uiFontScale: 'small',
+    uiFontScale: 0.82,
     provider: defaultModelProviderSettings(),
     agents: {
       kun: {
@@ -543,6 +543,10 @@ describe('syncGuiManagedKunConfig', () => {
     expect(parsed.runtime.toolArgumentRepair).toMatchObject({ maxStringBytes: 524288 })
     expect(parsed.capabilities.attachments).toMatchObject({ enabled: true })
     expect(parsed.capabilities.memory).toMatchObject({ enabled: false })
+    // Subagents have no GUI enable toggle: they default ON so delegate_task + the
+    // built-in profiles are always offered. maxParallel/maxChildRuns must be >=1 or
+    // DelegationRuntime can never run a child. This locks the default against regressions.
+    expect(parsed.capabilities.subagents).toMatchObject({ enabled: true, maxParallel: 3, maxChildRuns: 12 })
     expect(parsed.capabilities.web).toMatchObject({ enabled: true, fetchEnabled: true })
     expect(parsed.capabilities.mcp.search).toMatchObject({ enabled: false, mode: 'auto' })
     expect(parsed.capabilities.imageGen).toEqual({
@@ -1217,5 +1221,45 @@ describe('syncGuiManagedKunConfig', () => {
       searchEnabled: true,
       provider: 'custom-search'
     })
+  })
+})
+
+describe('subagentProfilesForRuntime', () => {
+  it('drops blank optional fields so the runtime config still parses', async () => {
+    const module = await import('./kun-process')
+    // Built-in profiles store an empty `name` (the GUI localizes the label) and
+    // the user picked a model on one of them. The runtime schema marks every
+    // optional string `.min(1)`, so a forwarded empty string used to throw and
+    // strand the runtime at "无法连接到本地运行时".
+    const config = module.subagentProfilesForRuntime({
+      enabled: true,
+      profiles: [
+        {
+          id: 'general',
+          enabled: true,
+          name: '',
+          mode: 'subagent',
+          toolPolicy: 'inherit',
+          model: 'deepseek-v4',
+          description: '   '
+        }
+      ]
+    })
+
+    expect(config.profiles.general).toBeDefined()
+    expect('name' in config.profiles.general).toBe(false)
+    expect('description' in config.profiles.general).toBe(false)
+    expect(config.profiles.general.model).toBe('deepseek-v4')
+  })
+
+  it('keeps a non-empty name', async () => {
+    const module = await import('./kun-process')
+    const config = module.subagentProfilesForRuntime({
+      enabled: true,
+      profiles: [
+        { id: 'custom', enabled: true, name: '我的代理', mode: 'subagent', toolPolicy: 'inherit' }
+      ]
+    })
+    expect(config.profiles.custom.name).toBe('我的代理')
   })
 })
