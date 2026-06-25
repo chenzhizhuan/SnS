@@ -303,8 +303,9 @@ describe('SkillRuntime', () => {
     const runtime = await createRuntime()
 
     // A child whose profile blocks gmail: hidden from the per-turn catalog and
-    // auto-match (mixed-case form must still match the slugged id).
-    const blocked = await runtime.resolveTurn({ prompt: '/gmail send', workspace: root, blockedSkillIds: ['Gmail'] })
+    // auto-match. The `skill:`-prefixed + mixed-case form must still match the
+    // slugged discovered id (mirrors load_skill's accepted forms).
+    const blocked = await runtime.resolveTurn({ prompt: '/gmail send', workspace: root, blockedSkillIds: ['skill:Gmail'] })
     expect(blocked.catalogInstruction).not.toContain('Gmail')
     expect(blocked.catalogInstruction).toContain('Keeper')
     expect(blocked.activeSkillIds).not.toContain('gmail')

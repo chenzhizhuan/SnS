@@ -103,8 +103,16 @@ export const BUILTIN_SUBAGENT_PROFILES: Readonly<Record<string, SubagentProfileC
 export function mergeBuiltinSubagentProfiles(
   config: SubagentsCapabilityConfig
 ): SubagentsCapabilityConfig {
-  return {
-    ...config,
-    profiles: { ...BUILTIN_SUBAGENT_PROFILES, ...config.profiles }
+  // Per-id DEEP merge (builtin base < user override), NOT a shallow replace.
+  // The GUI persists a builtin override carrying only the edited fields (a
+  // model pick, a reasoning level, or a deny-list) and drops the localized
+  // name; a shallow `{ ...builtins, ...config.profiles }` would let that thin
+  // override clobber the builtin's promptPreamble/description/systemPrompt.
+  // Merging per id keeps those as fallbacks while the user's fields still win.
+  const profiles: Record<string, SubagentProfileConfig> = { ...config.profiles }
+  for (const [id, builtin] of Object.entries(BUILTIN_SUBAGENT_PROFILES)) {
+    const override = config.profiles[id]
+    profiles[id] = override ? { ...builtin, ...override } : builtin
   }
+  return { ...config, profiles }
 }

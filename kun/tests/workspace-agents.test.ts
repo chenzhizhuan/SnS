@@ -72,6 +72,27 @@ describe('loadWorkspaceAgentProfiles', () => {
     expect(entry.profile.mode).toBe('subagent')
   })
 
+  it('parses blockedTools / blockedMcpServers / blockedSkills deny-lists from frontmatter', async () => {
+    await writeFile(
+      join(workspace, '.kun', 'agents', 'scoped.md'),
+      [
+        '---',
+        'id: scoped',
+        'name: Scoped',
+        'toolPolicy: inherit',
+        'blockedTools: [bash, write]',
+        'blockedMcpServers: [github]',
+        'blockedSkills: [deep-research, pdf]',
+        '---'
+      ].join('\n')
+    )
+    const profiles = await loadWorkspaceAgentProfiles(workspace)
+    const entry = profiles.find((p) => p.id === 'scoped')!
+    expect(entry.profile.blockedTools).toEqual(['bash', 'write'])
+    expect(entry.profile.blockedMcpServers).toEqual(['github'])
+    expect(entry.profile.blockedSkills).toEqual(['deep-research', 'pdf'])
+  })
+
   it('drops files without frontmatter silently', async () => {
     await writeFile(
       join(workspace, '.kun', 'agents', 'no-front.md'),

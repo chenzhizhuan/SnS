@@ -428,7 +428,10 @@ async function existingWorkspaceSkillRoots(workspaceRoot: string): Promise<strin
  */
 function filterBlockedSkills(skills: LoadedSkill[], blockedIds: readonly string[] | undefined): LoadedSkill[] {
   if (!blockedIds || blockedIds.length === 0) return skills
-  const blocked = new Set(blockedIds.map(slug))
+  // Normalize like loadSkillById's lookup (strip leading $/@ and a `skill:`
+  // prefix before slugging) so a `skill:gmail` / `$gmail` deny entry matches
+  // the discovered, slugged id.
+  const blocked = new Set(blockedIds.map((id) => slug(id.trim().replace(/^[$@]/, '').replace(/^skill:/i, ''))))
   return skills.filter((skill) => !blocked.has(skill.id))
 }
 
