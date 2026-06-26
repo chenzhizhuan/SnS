@@ -21,10 +21,15 @@ export function parseKunBranchWorktreeLayout(path: string): KunBranchWorktreeLay
   const repoName = match[2] ?? ''
   if (!poolId || !repoName) return null
   const prefix = normalized.slice(0, -(poolId.length + repoName.length + 2))
-  // Kun conversation worktrees always live under a ".../worktrees/..." root.
-  // Scheduled-agent pool slots use ".../.kun/wt-N" instead and are excluded.
-  if (!/\/worktrees(?:\/|$)/i.test(prefix)) return null
-  if (/\/\.kun\/wt-\d+(?:\/|$)/i.test(prefix)) return null
+  // Branch worktrees are created by git-service's resolveBranchWorktreeRoot under
+  // the default Kun worktree root `~/.kun/worktrees`, i.e.
+  // `<home>/.kun/worktrees/<4-hex-id>/<repo-basename>`. Anchor on that exact
+  // `.kun/worktrees` root so an unrelated user project that merely happens to sit
+  // under some other `worktrees/<hex>/<name>` directory (e.g.
+  // `/work/worktrees/2024/app`) is not misclassified and hidden as a Kun
+  // worktree. The scheduled-agent pool uses a different layout
+  // (`<root>/<basename>/pool-N`) and is intentionally not matched here.
+  if (!/(?:^|\/)\.kun\/worktrees$/i.test(prefix)) return null
   return { poolId, repoName }
 }
 

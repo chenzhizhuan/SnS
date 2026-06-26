@@ -177,13 +177,14 @@ function sidebarWorkspacePathForThread(
 ): string {
   const worktreeProjectPath = workspacePathForWorktreeRecord(worktrees[thread.id])
   if (worktreeProjectPath) return worktreeProjectPath
-  const resolved = resolveProjectWorkspacePath(thread.workspace, {
+  const workspace = thread.workspace ?? ''
+  const resolved = resolveProjectWorkspacePath(workspace, {
     threadWorktrees: worktrees,
     candidateProjectPaths
   })
   if (resolved) return resolved
-  if (shouldOmitFromCodeWorkspaceRoots(thread.workspace)) return ''
-  return normalizeWorkspaceRoot(thread.workspace)
+  if (shouldOmitFromCodeWorkspaceRoots(workspace)) return ''
+  return normalizeWorkspaceRoot(workspace)
 }
 
 function sidebarWorkspacePathForRememberedRoot(

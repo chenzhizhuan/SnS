@@ -18,9 +18,13 @@ describe('kun-worktree-path', () => {
     ).toBe('/Users/zxy/code/Kook-VoiceShop-Bot')
   })
 
-  it('recognizes custom worktree roots that still use the worktrees layout', () => {
-    const path = '/data/worktrees/ab12/my-repo'
-    expect(isKunBranchWorktreePath(path)).toBe(true)
+  it('only treats paths under the Kun worktree root (.kun/worktrees) as worktrees', () => {
+    // A user project that merely sits under some other `worktrees/<hex>/<name>`
+    // directory must NOT be misclassified as a Kun-managed worktree — otherwise
+    // it would be hidden from the sidebar project list.
+    expect(isKunBranchWorktreePath('/data/worktrees/ab12/my-repo')).toBe(false)
+    expect(isKunBranchWorktreePath('/Users/zxy/projects/worktrees/2024/app')).toBe(false)
+    expect(isKunBranchWorktreePath('/Users/zxy/.kun/worktrees/ab12/my-repo')).toBe(true)
   })
 
   it('rejects regular project directories', () => {

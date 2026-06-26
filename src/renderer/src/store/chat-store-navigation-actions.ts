@@ -741,7 +741,7 @@ export function createNavigationActions(
         ...get().codeWorkspaceRoots,
         ...threads.map((thread) => thread.workspace),
         ...displayThreads.map((thread) => thread.workspace)
-      ]
+      ].filter((path): path is string => Boolean(path))
       const codeThreadWorkspaceRoots = [
         ...threads,
         ...displayThreads
@@ -750,7 +750,7 @@ export function createNavigationActions(
         .map((thread) => {
           const record = threadWorktreeRegistry[thread.id]
           if (record?.projectPath?.trim()) return record.projectPath.trim()
-          return resolveProjectWorkspacePath(thread.workspace, {
+          return resolveProjectWorkspacePath(thread.workspace ?? '', {
             threadWorktrees: threadWorktreeRegistry,
             candidateProjectPaths: workspaceCandidates
           })
