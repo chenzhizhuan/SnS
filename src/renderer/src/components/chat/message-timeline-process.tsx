@@ -312,12 +312,12 @@ export function ProcessSectionRow({
       {expanded ? (
         <div
           ref={deferredDetailRef}
-          className="mt-1 border-l-2 border-ds-border-muted/35 pl-3"
+          className="mt-1"
           style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 220px' }}
         >
           {shouldRenderDetail ? (
             section.kind === 'reasoning' ? (
-            <div className="ds-markdown text-[13.5px] leading-6 text-ds-muted">
+            <div className="ds-markdown text-[13.5px] leading-6 text-ds-faint">
               <AssistantMarkdown text={reasoningText} streaming={active && processing} />
             </div>
           ) : (
