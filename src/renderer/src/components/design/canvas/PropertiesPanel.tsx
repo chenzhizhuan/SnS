@@ -9,11 +9,8 @@ import {
   Columns3,
   Monitor,
   PenLine,
-  Pin,
-  PinOff,
   Play,
   Rows3,
-  SlidersHorizontal,
   Smartphone,
   Sparkles,
   Tablet,
@@ -54,16 +51,16 @@ import {
   commitUpdate,
   reduceField
 } from './properties-panel/primitives'
+import {
+  PropertiesPanelShell,
+  PropertiesPanelTrigger
+} from './properties-panel/shell'
+
+export { propertiesPanelShellClass, propertiesPanelTriggerClass } from './properties-panel/shell'
 
 type Props = {
   surface?: 'design' | 'code'
   onImplementDesign?: (artifact: DesignArtifact) => void
-}
-
-export function propertiesPanelShellClass(surface: 'design' | 'code'): string {
-  return surface === 'code'
-    ? 'ds-no-drag absolute bottom-[92px] right-[64px] top-[60px] z-40 flex w-[236px] max-w-[calc(100%-80px)] flex-col overflow-hidden rounded-[14px] border border-ds-border-muted bg-white/88 text-[12px] text-ds-ink shadow-[0_14px_34px_rgba(20,47,95,0.11)] backdrop-blur-2xl dark:bg-ds-canvas/90'
-    : 'ds-no-drag absolute bottom-[104px] right-[76px] top-[72px] z-40 flex w-[252px] flex-col overflow-hidden rounded-[18px] border border-ds-border-muted bg-white/82 text-[12px] text-ds-ink shadow-[0_18px_48px_rgba(20,47,95,0.12)] backdrop-blur-2xl dark:bg-ds-canvas/88 max-lg:bottom-[116px] max-lg:top-[76px]'
 }
 
 export function shouldShowImageAnnotationAction(
@@ -71,12 +68,6 @@ export function shouldShowImageAnnotationAction(
   filledImageSelected: boolean
 ): boolean {
   return (surface === 'design' || surface === 'code') && filledImageSelected
-}
-
-export function propertiesPanelTriggerClass(surface: 'design' | 'code'): string {
-  return surface === 'code'
-    ? 'ds-no-drag absolute right-[64px] top-[60px] z-40 inline-flex h-9 max-w-[calc(100%-80px)] items-center gap-2 rounded-full border border-ds-border-muted bg-white/88 px-3 text-[12px] font-medium text-ds-muted shadow-[0_10px_28px_rgba(20,47,95,0.1)] backdrop-blur-2xl transition hover:bg-white hover:text-ds-ink dark:bg-ds-canvas/90 dark:hover:bg-ds-canvas'
-    : 'ds-no-drag absolute right-[76px] top-[72px] z-40 inline-flex h-9 items-center gap-2 rounded-full border border-ds-border-muted bg-white/82 px-3 text-[12px] font-medium text-ds-muted shadow-[0_12px_32px_rgba(20,47,95,0.11)] backdrop-blur-2xl transition hover:bg-white/95 hover:text-ds-ink dark:bg-ds-canvas/88 dark:hover:bg-ds-canvas max-lg:top-[76px]'
 }
 
 export function nextInspectorOpenForSelection(
@@ -190,51 +181,31 @@ function PropertiesPanelInner({ surface = 'design', onImplementDesign }: Props):
 
   if (shapes.length === 0) return null
 
-  const shellClass = propertiesPanelShellClass(surface)
   const triggerLabel = t('canvasInspectorTitle', 'Properties')
 
   if (!inspectorOpen) {
     return (
-      <button
-        type="button"
-        onClick={() => setInspectorOpen(true)}
-        className={propertiesPanelTriggerClass(surface)}
-        title={triggerLabel}
-        aria-label={triggerLabel}
-        data-canvas-inspector-trigger={surface}
-      >
-        <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-        <span className="min-w-0 truncate">
-          {triggerLabel}
-          {shapes.length > 1 ? <span className="ml-1 text-ds-faint">· {shapes.length}</span> : null}
-        </span>
-      </button>
+      <PropertiesPanelTrigger
+        count={shapes.length}
+        label={triggerLabel}
+        surface={surface}
+        onOpen={() => setInspectorOpen(true)}
+      />
     )
   }
 
   const renderShell = (children: ReactNode): ReactElement => (
-    <aside className={shellClass} data-canvas-inspector-surface={surface}>
-      <div className="flex h-9 shrink-0 items-center justify-between px-4">
-        <span className="select-none text-[11px] font-medium uppercase tracking-[0.1em] text-ds-faint">
-          {t('canvasInspectorTitle', 'Properties')}
-          {shapes.length > 1 ? (
-            <span className="ml-1 normal-case tracking-normal text-ds-faint">· {shapes.length}</span>
-          ) : null}
-        </span>
-        <button
-          type="button"
-          onClick={() => setPinned(!pinned)}
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] transition ${
-            pinned ? 'text-accent' : 'text-ds-faint hover:bg-ds-hover hover:text-ds-ink'
-          }`}
-          title={pinned ? t('canvasInspectorUnpin') : t('canvasInspectorPin')}
-          aria-label={pinned ? t('canvasInspectorUnpin') : t('canvasInspectorPin')}
-        >
-          {pinned ? <PinOff className="h-3.5 w-3.5" strokeWidth={1.8} /> : <Pin className="h-3.5 w-3.5" strokeWidth={1.8} />}
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">{children}</div>
-    </aside>
+    <PropertiesPanelShell
+      count={shapes.length}
+      pinned={pinned}
+      pinLabel={t('canvasInspectorPin')}
+      surface={surface}
+      title={t('canvasInspectorTitle', 'Properties')}
+      unpinLabel={t('canvasInspectorUnpin')}
+      onTogglePinned={() => setPinned(!pinned)}
+    >
+      {children}
+    </PropertiesPanelShell>
   )
 
   const x = reduceField(shapes, (s) => s.x)

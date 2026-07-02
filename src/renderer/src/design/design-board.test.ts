@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildHtmlArtifactSyncKey,
-  createScreenFrameArtifact,
   findDesignBoardArtifact,
   removedLinkedHtmlArtifactIds,
   syncHtmlArtifactsToBoardDocument,
@@ -15,49 +14,8 @@ import { useCanvasViewportStore } from './canvas/canvas-viewport-store'
 import { defaultPreviewNodeSizeForDesignTarget } from './design-context'
 import { resolvePrototypeViewportFrame } from './prototype-player'
 import { useDesignWorkspaceStore } from './design-workspace-store'
-import { defaultDesignArtifactNode, type DesignArtifact, type DesignDocument } from './design-types'
-
-const createdAt = '2026-06-20T00:00:00.000Z'
-
-function artifact(
-  id: string,
-  kind: DesignArtifact['kind'],
-  extra: Partial<DesignArtifact> = {}
-): DesignArtifact {
-  const relativePath =
-    kind === 'canvas' ? `.kun-design/doc/${id}/canvas.json` : `.kun-design/doc/${id}/v1.html`
-  return {
-    id,
-    kind,
-    title: id,
-    relativePath,
-    createdAt,
-    updatedAt: extra.updatedAt ?? createdAt,
-    versions: [{ id: `${id}-v1`, relativePath, createdAt, summary: '' }],
-    ...extra
-  }
-}
-
-function installDesignDocument(artifacts: DesignArtifact[], activeArtifactId: string | null): void {
-  const doc: DesignDocument = {
-    id: 'doc',
-    title: 'Doc',
-    createdAt,
-    updatedAt: createdAt,
-    order: 0,
-    artifacts,
-    activeArtifactId
-  }
-  useDesignWorkspaceStore.setState({
-    workspaceRoot: '/workspace',
-    documents: [doc],
-    activeDocumentId: 'doc',
-    artifacts,
-    activeArtifactId,
-    designContext: { designTarget: 'web' },
-    fileError: null
-  })
-}
+import { defaultDesignArtifactNode } from './design-types'
+import { artifact, createdAt, installDesignDocument } from './design-board.test-helpers'
 
 beforeEach(() => {
   vi.stubGlobal('window', {
@@ -146,6 +104,8 @@ describe('design board helpers', () => {
     expect(second.addedFrameIds).toEqual([])
     expect(second.updatedFrameIds).toEqual([])
   })
+
+  // HTML frame sizing sync cases live in design-board.frame-sizing.test.ts.
 
   it('does not recreate a board-hidden HTML artifact after its linked frame was deleted', () => {
     const screen = artifact('screen', 'html', {
@@ -724,69 +684,4 @@ describe('design board helpers', () => {
     })
   })
 
-  it('creates a centered screen frame without stealing the active board', () => {
-    const board = artifact('board', 'canvas')
-    installDesignDocument([board], board.id)
-
-    const result = createScreenFrameArtifact({
-      boardArtifactId: board.id,
-      brief: 'Design an onboarding screen'
-    })
-
-    const state = useDesignWorkspaceStore.getState()
-    const created = state.artifacts.find((item) => item.id === result.artifactId)
-    const shape = useCanvasShapeStore.getState().document.objects[result.shape.id]
-
-    expect(state.activeArtifactId).toBe(board.id)
-    expect(created).toMatchObject({
-      kind: 'html',
-      title: 'Design an onboarding screen',
-      relativePath: expect.stringMatching(/^\.kun-design\/doc\/.+\/v1\.html$/),
-      previewStatus: 'pending',
-      node: {
-        x: -640,
-        y: -400,
-        width: 1280,
-        height: 800,
-        sizeMode: 'auto',
-        viewMode: 'preview'
-      }
-    })
-    expect(shape).toMatchObject({
-      type: 'frame',
-      htmlArtifactId: result.artifactId,
-      x: -640,
-      y: -400,
-      width: 1280,
-      height: 800
-    })
-    expect(useCanvasSelectionStore.getState().selectedIds.has(shape.id)).toBe(true)
-    expect(useCanvasViewportStore.getState().activeTool).toBe('select')
-  })
-
-  it('creates app-target screen frames with mobile dimensions by default', () => {
-    const board = artifact('board', 'canvas')
-    installDesignDocument([board], board.id)
-    useDesignWorkspaceStore.setState({ designContext: { designTarget: 'app' } })
-
-    const result = createScreenFrameArtifact({
-      boardArtifactId: board.id,
-      brief: 'Design a mobile onboarding flow'
-    })
-
-    const created = useDesignWorkspaceStore.getState().artifacts.find((item) => item.id === result.artifactId)
-    const shape = useCanvasShapeStore.getState().document.objects[result.shape.id]
-    expect(created?.node).toMatchObject({
-      width: 390,
-      height: 844,
-      sizeMode: 'auto'
-    })
-    expect(shape).toMatchObject({
-      type: 'frame',
-      htmlArtifactId: result.artifactId,
-      width: 390,
-      height: 844,
-      devicePreset: 'mobile'
-    })
-  })
 })

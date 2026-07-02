@@ -21,9 +21,41 @@ describe('CanvasToolbar prototype playback', () => {
     expect(html).not.toContain('aria-label="Upload files to canvas"')
     expect(html).not.toContain('aria-label="Screen"')
     expect(html).not.toContain('aria-label="Design context"')
+    expect(html).not.toContain('aria-label="Agent actions"')
     expect(html).not.toContain('aria-label="Critique canvas"')
     expect(html).not.toContain('aria-label="Open design assistant"')
     expect(html).not.toContain('aria-label="Play prototype"')
+  })
+
+  it('shows agent action seeds on the design canvas', () => {
+    const html = renderToStaticMarkup(
+      createElement(CanvasToolbar, {
+        workspaceRoot: '/workspace'
+      })
+    )
+
+    expect(html).toContain('aria-label="Agent actions"')
+  })
+
+  it('keeps the design canvas toolbar focused on screen workflow controls', () => {
+    const html = renderToStaticMarkup(
+      createElement(CanvasToolbar, {
+        workspaceRoot: '/workspace'
+      })
+    )
+
+    expect(html).toContain('aria-label="Select"')
+    expect(html).toContain('aria-label="Screen"')
+    expect(html).toContain('aria-label="Frame"')
+    expect(html).toContain('aria-label="Hand"')
+    expect(html).toContain('aria-label="Upload files to canvas"')
+    expect(html).not.toContain('aria-label="AI image slot"')
+    expect(html).not.toContain('aria-label="Rectangle"')
+    expect(html).not.toContain('aria-label="Ellipse"')
+    expect(html).not.toContain('aria-label="Text"')
+    expect(html).not.toContain('aria-label="Arrow"')
+    expect(html).not.toContain('aria-label="Line"')
+    expect(html).not.toContain('aria-label="Draw"')
   })
 
   it('explains why prototype playback is disabled before a screen exists', () => {

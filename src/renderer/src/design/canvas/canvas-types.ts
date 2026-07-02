@@ -1,3 +1,6 @@
+import type { DesignCodeBinding } from '../code-binding/code-binding-types'
+import type { DesignOperationJournalEntry } from '../graph/design-graph-types'
+
 export type ShapeType =
   | 'rect'
   | 'ellipse'
@@ -137,6 +140,33 @@ export type HConstraint = 'left' | 'right' | 'left-right' | 'center' | 'scale'
 export type VConstraint = 'top' | 'bottom' | 'top-bottom' | 'center' | 'scale'
 export type Constraints = { h: HConstraint; v: VConstraint }
 
+export type CanvasAgentNoteKind = 'critique' | 'decision' | 'todo' | 'question' | 'rationale'
+export type CanvasAgentNoteSeverity = 'info' | 'warning' | 'error'
+export type CanvasAgentNoteSource = 'agent' | 'critic' | 'repair' | 'user' | 'system'
+
+export type CanvasAgentNote = {
+  kind: CanvasAgentNoteKind
+  body: string
+  source?: CanvasAgentNoteSource
+  severity?: CanvasAgentNoteSeverity
+  targetIds?: string[]
+  directionId?: string
+  createdAt?: string
+  resolved?: boolean
+}
+
+export type CanvasRunningAppFrameStatus = 'unknown' | 'reachable' | 'unreachable'
+
+export type CanvasRunningAppFrame = {
+  url: string
+  title?: string
+  routePath?: string
+  sourceFile?: string
+  componentName?: string
+  capturedAt?: string
+  status?: CanvasRunningAppFrameStatus
+}
+
 export type CanvasShape = {
   id: string
   type: ShapeType
@@ -169,6 +199,8 @@ export type CanvasShape = {
    * the token later re-resolves every bound shape. See design-system-types.
    */
   tokenBindings?: Record<string, string>
+  /** Agent/critic/decision metadata for whiteboard text notes. */
+  agentNote?: CanvasAgentNote
   /**
    * Component instance back-reference (only on an instance's ROOT shape): which
    * component def it was stamped from, at what version, and the per-instance slot
@@ -197,6 +229,8 @@ export type CanvasShape = {
   aiImageHolder?: boolean
   clipContent?: boolean
   htmlArtifactId?: string
+  /** Running app portal frame, usually a localhost route captured for Onlook-style code binding. */
+  runningApp?: CanvasRunningAppFrame
   devicePreset?: DevicePreset
   /** Linear shapes: endpoint decorations. Defaults — arrow: end `arrow`; line: none. */
   arrowheadStart?: Arrowhead
@@ -218,6 +252,16 @@ export type CanvasDocument = {
   version: 2
   rootId: string
   objects: Record<string, CanvasShape>
+  graph?: CanvasDocumentGraphMetadata
+  operationJournal?: DesignOperationJournalEntry[]
+  codeBindings?: DesignCodeBinding[]
+}
+
+export type CanvasDocumentGraphMetadata = {
+  version: 1
+  projectId?: string
+  updatedAt?: string
+  lastJournalEntryId?: string
 }
 
 export type DevicePreset = 'mobile' | 'tablet' | 'desktop'
@@ -226,20 +270,28 @@ export function isHtmlFrame(shape: CanvasShape): boolean {
   return shape.type === 'frame' && Boolean(shape.htmlArtifactId)
 }
 
+export function isRunningAppFrame(shape: CanvasShape): boolean {
+  return shape.type === 'frame' && Boolean(shape.runningApp?.url)
+}
+
+export function isCanvasPortalFrame(shape: CanvasShape): boolean {
+  return isHtmlFrame(shape) || isRunningAppFrame(shape)
+}
+
 /**
  * An *empty* box that should count as an implicit AI image slot: when the user
  * selects one and asks for a picture, the design agent fills it in place — no
  * need to explicitly mark it with `aiImageHolder`. An `image` with no picture,
  * and a childless `frame`/`rect` are the placeholders people draw where a
- * generated image should go. HTML frames (webview screens) are never slots —
- * they already carry content.
+ * generated image should go. Portal frames (generated HTML or running apps)
+ * are never slots — they already carry content.
  */
 export function isImplicitImageSlot(shape: CanvasShape): boolean {
   switch (shape.type) {
     case 'image':
       return !shape.imageUrl
     case 'frame':
-      return !isHtmlFrame(shape) && shape.children.length === 0
+      return !isCanvasPortalFrame(shape) && shape.children.length === 0
     case 'rect':
       return shape.children.length === 0
     default:

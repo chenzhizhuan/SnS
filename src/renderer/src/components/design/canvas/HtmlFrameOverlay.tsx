@@ -2,11 +2,19 @@ import { useEffect, useMemo, type ReactElement } from 'react'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
-import { isHtmlFrame, type CanvasDocument, type CanvasShape, type Rect } from '../../../design/canvas/canvas-types'
+import {
+  isCanvasPortalFrame,
+  isHtmlFrame,
+  isRunningAppFrame,
+  type CanvasDocument,
+  type CanvasShape,
+  type Rect
+} from '../../../design/canvas/canvas-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
 import type { DesignRuntimeQualityPayload } from '../../../design/design-html-quality'
 import { ScreenOverlay } from './html-frame/HtmlFrameScreenOverlay'
 import { htmlFrameOverlayCanMountAtZoom } from './html-frame/html-frame-helpers'
+import { RunningAppFrameOverlay } from './RunningAppFrameOverlay'
 
 export {
   HTML_FRAME_CONTENT_SIZE_QUERY,
@@ -19,10 +27,8 @@ export {
   htmlFramePreviewAsyncEpochMatches,
   htmlFrameShouldClearElementContextOnEditingChange,
   htmlFrameShouldApplyScrollbarSuppression,
-  htmlFrameShouldCropVisualHeight,
   htmlFrameShouldPromotePreviewToReady,
   htmlFrameShouldSuppressDocumentScrollbars,
-  htmlFrameVisualCanvasHeight,
   htmlFrameWebviewCanvasStyle,
   htmlFrameWebviewPartition,
   resolveHtmlFrameMeasurementDecision,
@@ -74,11 +80,15 @@ export function htmlFrameCanvasRectToScreenRect(
 }
 
 export function htmlFramesInCanvasPaintOrder(document: CanvasDocument): CanvasShape[] {
+  return canvasPortalFramesInCanvasPaintOrder(document).filter(isHtmlFrame)
+}
+
+export function canvasPortalFramesInCanvasPaintOrder(document: CanvasDocument): CanvasShape[] {
   const frames: CanvasShape[] = []
   const visit = (id: string): void => {
     const shape = document.objects[id]
     if (!shape || !shape.visible) return
-    if (id !== document.rootId && isHtmlFrame(shape)) {
+    if (id !== document.rootId && isCanvasPortalFrame(shape)) {
       frames.push(shape)
       return
     }
@@ -150,18 +160,18 @@ export function HtmlFrameOverlay({
   const zoom = canvasScreenTransform.scale
   const panning = activeTool === 'hand'
 
-  const htmlFrames = useMemo(() => {
-    return htmlFramesInCanvasPaintOrder(document)
+  const portalFrames = useMemo(() => {
+    return canvasPortalFramesInCanvasPaintOrder(document)
   }, [document])
 
   // Mount priority favors selected/topmost frames, then we render in paint order
   // so the DOM overlay matches the SVG canvas stacking order.
   const visibleFrames = useMemo(() => {
     return selectHtmlFramesForOverlay(
-      htmlFrames.filter((shape) => htmlFrameIntersectsViewport(shape, vbox)),
+      portalFrames.filter((shape) => htmlFrameIntersectsViewport(shape, vbox)),
       selectedIds
     )
-  }, [htmlFrames, vbox, selectedIds])
+  }, [portalFrames, vbox, selectedIds])
 
   const selectedIdsKey = useMemo(() => [...selectedIds].sort().join(','), [selectedIds])
 
@@ -169,13 +179,32 @@ export function HtmlFrameOverlay({
     onUseElementAsContext?.(null)
   }, [onUseElementAsContext, selectedIdsKey])
 
-  if (htmlFrames.length === 0 || !htmlFrameOverlayCanMountAtZoom(zoom)) return <></>
+  if (portalFrames.length === 0 || !htmlFrameOverlayCanMountAtZoom(zoom)) return <></>
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       {visibleFrames.map((shape) => {
         const screenRect = htmlFrameCanvasRectToScreenRect(shape, vbox, canvasScreenTransform)
         const active = selectedIds.has(shape.id)
+
+        if (isRunningAppFrame(shape)) {
+          return (
+            <RunningAppFrameOverlay
+              key={shape.id}
+              shape={shape}
+              screenX={screenRect.x}
+              screenY={screenRect.y}
+              screenWidth={screenRect.width}
+              screenHeight={screenRect.height}
+              zoom={zoom}
+              active={active}
+              interactive={interactiveId === shape.id}
+              panning={panning}
+              editing={editingId === shape.id}
+              onDoubleClick={onToggleInteractive}
+            />
+          )
+        }
 
         return (
           <ScreenOverlay

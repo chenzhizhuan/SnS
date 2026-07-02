@@ -43,6 +43,7 @@ export function defaultDocumentTitle(): string {
  */
 export const removedArtifactIds = new Set<string>()
 export const removedDocumentIds = new Set<string>()
+export const userCreatedDocumentIds = new Set<string>()
 
 // --- Active-document projection ------------------------------------------------
 
@@ -358,12 +359,17 @@ export async function rehydrateDesignWorkspaceArtifacts({
           : documents[0]?.id ?? null
         return { documents, activeDocumentId, ...projectActiveDoc(documents, activeDocumentId) }
       }
-      // Merge with disk truth. Drop empty stub 设计稿 that an eager pre-rehydrate
-      // board-ensure may have auto-created (keep one only if it holds 画布 or
-      // exists on disk) so loaded/migrated 设计稿 are never lost or shadowed.
+      // Merge with disk truth. Drop only the single empty stub 设计稿 that an
+      // eager pre-rehydrate board-ensure may have auto-created. User-created
+      // empty 设计稿 are real projects and must survive a stale index read.
       const loadedById = new Map(loaded.map((d) => [d.id, d]))
       const kept = state.documents
-        .filter((doc) => doc.artifacts.length > 0 || loadedById.has(doc.id))
+        .filter((doc) => {
+          if (doc.artifacts.length > 0 || loadedById.has(doc.id) || userCreatedDocumentIds.has(doc.id)) {
+            return true
+          }
+          return !(state.documents.length === 1 && loaded.length > 0)
+        })
         .map((doc) => {
           const incoming = loadedById.get(doc.id)
           if (!incoming) return doc
@@ -392,7 +398,7 @@ export async function rehydrateDesignWorkspaceArtifacts({
     if (state.documents.some((d) => d.id === defaultDoc.id)) return {}
     // Drop empty stub 设计稿 from an eager pre-rehydrate auto-create; the
     // migrated 设计稿 is authoritative for legacy data.
-    const withContent = state.documents.filter((d) => d.artifacts.length > 0)
+    const withContent = state.documents.filter((d) => d.artifacts.length > 0 || userCreatedDocumentIds.has(d.id))
     const documents = [...withContent, defaultDoc]
     const activeDocumentId = documents.some((d) => d.id === state.activeDocumentId)
       ? state.activeDocumentId

@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const CODEX_ISSUER = 'https://auth.openai.com'
@@ -9,6 +9,7 @@ const CODEX_DEVICE_CALLBACK = `${CODEX_ISSUER}/deviceauth/callback`
 const CODEX_OAUTH_PORT = 1455
 const CODEX_OAUTH_REDIRECT = `http://localhost:${CODEX_OAUTH_PORT}/auth/callback`
 const CODEX_OAUTH_TIMEOUT_MS = 5 * 60 * 1000
+const CODEX_SESSION_ID = randomUUID()
 
 export type CodexOAuthCredentials = {
   kind: 'codex-oauth'
@@ -379,4 +380,21 @@ export function parseCodexCredentials(apiKey: string): CodexOAuthCredentials | n
 
 export function encodeCodexCredentials(creds: CodexOAuthCredentials): string {
   return JSON.stringify(creds)
+}
+
+export function codexRequestHeaders(creds: CodexOAuthCredentials): Record<string, string> {
+  return {
+    'ChatGPT-Account-Id': creds.accountId,
+    originator: 'codex_cli_rs',
+    'OpenAI-Beta': 'responses=experimental',
+    'User-Agent': 'codex_cli_rs/0.0.0 (deepseekgui)',
+    session_id: CODEX_SESSION_ID
+  }
+}
+
+export function resolveCodexOAuthApiKey(rawApiKey: string): { apiKey: string; headers?: Record<string, string> } {
+  const key = rawApiKey.trim()
+  const codex = isCodexOAuthCredentials(key) ? parseCodexCredentials(key) : null
+  if (codex) return { apiKey: codex.accessToken, headers: codexRequestHeaders(codex) }
+  return { apiKey: key }
 }

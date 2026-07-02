@@ -7,6 +7,7 @@ import {
   looksLikeExistingCanvasImageEditRequest,
   replayActiveCanvasTurn,
   resolveGeneratedImageFallbackTarget,
+  shouldApplyDesignCanvasToolBlock,
   takeNextReadyScreenGeneration
 } from './use-apply-shape-ops-live'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape } from './canvas-types'
@@ -248,6 +249,30 @@ describe('replayActiveCanvasTurn', () => {
     expect(applyToolBlock).toHaveBeenCalledTimes(1)
     expect(applyToolBlock).toHaveBeenCalledWith(toolBlock)
     expect(processStreaming).toHaveBeenCalledTimes(1)
+  })
+
+  it('only treats final tool_result blocks as renderer-applied design tool output', () => {
+    const completedCall: ToolBlock = {
+      kind: 'tool',
+      id: 'tool-call-1',
+      summary: 'design_create_screen',
+      status: 'success',
+      meta: { toolName: 'design_create_screen', sourceItemKind: 'tool_call' },
+      detail: '{"name":"Home","brief":"Create a landing page"}'
+    }
+    const finalResult: ToolBlock = {
+      ...completedCall,
+      meta: { toolName: 'design_create_screen', sourceItemKind: 'tool_result' },
+      detail: '{"ok":true,"tool":"design_create_screen","action":"create_screen","ops":[{"op":"add-screen","name":"Home"}]}'
+    }
+    const legacyResult: ToolBlock = {
+      ...finalResult,
+      meta: { toolName: 'design_create_screen' }
+    }
+
+    expect(shouldApplyDesignCanvasToolBlock(completedCall)).toBe(false)
+    expect(shouldApplyDesignCanvasToolBlock(finalResult)).toBe(true)
+    expect(shouldApplyDesignCanvasToolBlock(legacyResult)).toBe(true)
   })
 })
 

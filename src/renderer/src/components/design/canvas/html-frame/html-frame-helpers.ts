@@ -247,6 +247,34 @@ export function shouldRenderHtmlFrameWebview({
   })
 }
 
+/**
+ * The full-frame brush-sketch placeholder takes over while a screen frame is
+ * generating and no webview is mounted yet (the skeleton HTML file is never
+ * painted anymore). Errors and failures fall back to the plain placeholder so
+ * their messages stay readable.
+ */
+export function htmlFrameShouldShowGeneratingCanvas({
+  webviewMounted,
+  hasArtifact,
+  transparentGeneratingSurface,
+  previewError,
+  failedMessage
+}: {
+  webviewMounted: boolean
+  hasArtifact: boolean
+  transparentGeneratingSurface: boolean
+  previewError: string
+  failedMessage: string
+}): boolean {
+  return (
+    !webviewMounted &&
+    hasArtifact &&
+    transparentGeneratingSurface &&
+    !previewError &&
+    !failedMessage
+  )
+}
+
 export function htmlFrameOverlayPointerEvents({
   panning,
   interactive,
@@ -322,39 +350,6 @@ export function htmlFrameShouldPromotePreviewToReady({
   )
 }
 
-/**
- * While a page is actively generating, `shape.height` (the store's frame size)
- * only catches up to the streamed content a beat AFTER each measurement — this
- * crops the VISUAL box down to what's actually been measured so the frame
- * doesn't flash a big blank band while waiting for that store update to land.
- *
- * This must NOT apply once the page is settled/ready: `FrameShape`'s SVG
- * background always paints at the raw (uncropped) `shape.height`, so cropping
- * the webview overlay smaller than that — using a measurement that can be
- * stale — leaves the SVG's white background visible below a short webview
- * (exactly the "白布" symptom). It also silently overrides manual resizing:
- * dragging a settled frame taller than its last measurement would otherwise
- * never visually grow past that measurement, since this always takes the min.
- */
-export function htmlFrameVisualCanvasHeight(
-  canvasHeight: number,
-  measuredContentHeight: number | null,
-  cropToMeasured: boolean
-): number {
-  if (!cropToMeasured || !measuredContentHeight) return canvasHeight
-  return Math.max(FRAME_AUTO_GROW_MIN_HEIGHT, Math.min(canvasHeight, measuredContentHeight))
-}
-
-export function htmlFrameShouldCropVisualHeight({
-  transparentGeneratingSurface,
-  autoResizeEnabled
-}: {
-  transparentGeneratingSurface: boolean
-  autoResizeEnabled: boolean
-}): boolean {
-  return transparentGeneratingSurface && autoResizeEnabled
-}
-
 export function htmlFrameWebviewCanvasStyle({
   canvasWidth,
   visualCanvasHeight,
@@ -366,6 +361,7 @@ export function htmlFrameWebviewCanvasStyle({
   zoom: number
   interactive: boolean
 }): {
+  display: 'flex'
   width: number
   height: number
   transform: string
@@ -373,6 +369,12 @@ export function htmlFrameWebviewCanvasStyle({
   pointerEvents: 'auto' | 'none'
 } {
   return {
+    // Electron's <webview> hosts its guest in a shadow <iframe> styled
+    // `flex: 1 1 auto; width: 100%` with NO height — it only fills the host
+    // when the host stays `display: flex`. Forcing block (e.g. a Tailwind
+    // `block` class) collapses the guest viewport to the 150px replaced-
+    // element default, painting the page as a short strip inside the frame.
+    display: 'flex',
     width: canvasWidth,
     height: visualCanvasHeight,
     transform: `scale(${zoom})`,
@@ -384,7 +386,7 @@ export function htmlFrameWebviewCanvasStyle({
 export function shouldAutoResizeHtmlFrame({
   sizeMode
 }: {
-  sizeMode?: 'auto' | 'manual'
+  sizeMode?: 'auto' | 'manual' | 'manual-width-auto-height'
   role?: DesignArtifactFoundationRole
   previewStatus?: 'pending' | 'ready' | 'error'
   parallelStatus?: 'queued' | 'running' | 'done' | 'failed'

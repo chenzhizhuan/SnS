@@ -249,6 +249,32 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).toContain('ds-media-printer-reveal')
   })
 
+  it('deduplicates generated files across tool blocks by path', () => {
+    const first: ToolBlock = toolBlock({
+      id: 'tool_export_1',
+      summary: 'export_report',
+      meta: {
+        generatedFiles: [
+          { relativePath: 'reports/summary.md', mimeType: 'text/markdown' }
+        ]
+      }
+    })
+    const second: ToolBlock = toolBlock({
+      id: 'tool_export_2',
+      summary: 'export_report',
+      meta: {
+        generatedFiles: [
+          { relativePath: 'reports/summary.md', mimeType: 'text/markdown' }
+        ]
+      }
+    })
+
+    const html = renderToStaticMarkup(createElement(GeneratedFilesPanel, { blocks: [first, second] }))
+
+    expect((html.match(/summary\.md/g) ?? []).length).toBe(2)
+    expect((html.match(/type="button"/g) ?? []).length).toBe(2)
+  })
+
   it('renders managed Claw prompts as the user-visible message', () => {
     const block: ChatBlock = {
       kind: 'user',

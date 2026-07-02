@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   htmlFrameCanvasRectToScreenRect,
   htmlFrameCanvasScreenTransform,
-  htmlFrameVisualCanvasHeight,
   htmlFrameWebviewCanvasStyle
 } from './HtmlFrameOverlay'
 
@@ -52,6 +51,7 @@ describe('HtmlFrameOverlay webview canvas viewport style', () => {
       zoom: 0.48,
       interactive: false
     })).toEqual({
+      display: 'flex',
       width: 1834,
       height: 930,
       transform: 'scale(0.48)',
@@ -71,13 +71,22 @@ describe('HtmlFrameOverlay webview canvas viewport style', () => {
     })
   })
 
-  it('uses the resized frame height instead of stale measured height for settled frames', () => {
-    const resizedFrameHeight = htmlFrameVisualCanvasHeight(2400, 420, false)
-
-    expect(resizedFrameHeight).toBe(2400)
+  it('keeps the webview host display:flex so the shadow iframe fills the guest viewport', () => {
+    // Electron's <webview> shadow iframe is `flex: 1 1 auto; width: 100%` with
+    // no height. A block host collapses the guest viewport to the replaced
+    // element default (150px tall), which painted pages as a short strip.
     expect(htmlFrameWebviewCanvasStyle({
       canvasWidth: 1280,
-      visualCanvasHeight: resizedFrameHeight,
+      visualCanvasHeight: 4627,
+      zoom: 0.48,
+      interactive: false
+    }).display).toBe('flex')
+  })
+
+  it('always sizes the webview viewport to the full frame height', () => {
+    expect(htmlFrameWebviewCanvasStyle({
+      canvasWidth: 1280,
+      visualCanvasHeight: 2400,
       zoom: 0.5,
       interactive: false
     })).toMatchObject({

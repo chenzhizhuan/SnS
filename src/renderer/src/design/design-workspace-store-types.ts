@@ -91,7 +91,7 @@ export type DesignWorkspaceState = {
   setCanvasBackground: (background: 'light' | 'dark') => void
   setActiveArtifact: (artifactId: string | null) => void
   /** Create a new 设计稿 (empty), make it active, and return its id. */
-  createDocument: (title?: string) => string
+  createDocument: (title?: string, options?: { transient?: boolean }) => string
   /** Rename a 设计稿 (persisted to documents.json). */
   renameDocument: (documentId: string, title: string) => void
   /** Delete a 设计稿 and all its 画布 (on-disk dirs + index entry). */

@@ -153,6 +153,13 @@ export function replayActiveCanvasTurn(
   processStreaming()
 }
 
+export function shouldApplyDesignCanvasToolBlock(block: ToolBlock): boolean {
+  if (!isDesignCanvasToolName(block.meta?.toolName)) return false
+  if (block.status !== 'success') return false
+  const sourceItemKind = block.meta?.sourceItemKind
+  return sourceItemKind === undefined || sourceItemKind === 'tool_result'
+}
+
 export function canvasReplayStateForStoreUpdate(
   state: ActiveCanvasTurnReplayState,
   prev?: Pick<ActiveCanvasTurnReplayState, 'currentTurnId' | 'currentTurnUserId'>
@@ -310,8 +317,7 @@ export function useApplyShapeOpsLive(
 
     const applyToolBlock = (block: ToolBlock): void => {
       if (appliedToolBlockIds.has(block.id)) return
-      if (!isDesignCanvasToolName(block.meta?.toolName)) return
-      if (block.status !== 'success') return
+      if (!shouldApplyDesignCanvasToolBlock(block)) return
       const detail = block.detail?.trim()
       if (!detail) return
       let parsed: unknown
@@ -322,7 +328,6 @@ export function useApplyShapeOpsLive(
       }
       const blocks = extractCanvasOpBlocksFromValue(parsed)
       if (blocks.length === 0) {
-        appliedToolBlockIds.add(block.id)
         return
       }
       const { affectedIds, errors } = applyCanvasOpBlocks(blocks, `tool:${block.id}`, executeOptions)

@@ -5,6 +5,10 @@ import { executeAdvancedShapeOp } from './handlers-advanced'
 import { executeBasicShapeOp } from './handlers-basic'
 import { executeDesignSystemShapeOp } from './handlers-system'
 import { type ExecuteOpsOptions, type ExecuteResult, type OpError, type ShapeOp, ShapeOpSchema } from './schema'
+import {
+  appendDesignOperationJournalEntry,
+  shapeOpToDesignOperation
+} from '../../graph/design-operation-journal'
 
 function executeOne(
   op: ShapeOp,
@@ -57,6 +61,15 @@ export function executeOps(
       )
     }
   })
+
+  const journalEntry = appendDesignOperationJournalEntry({
+    label,
+    status: errors.length === 0 ? 'applied' : 'partial',
+    operations: validatedOps.map((op) => shapeOpToDesignOperation(op, label)),
+    affectedIds: Array.from(affectedIds),
+    errors: errors.map((error) => ({ ...error }))
+  })
+  useCanvasShapeStore.getState().appendOperationJournalEntry(journalEntry)
 
   return {
     ok: errors.length === 0,

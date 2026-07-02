@@ -6,7 +6,8 @@ import {
   persistCanvasDocument,
   serializeCanvasDocument
 } from './canvas-persistence'
-import { createDefaultShape, createEmptyDocument, createHtmlFrameShape, isHtmlFrame } from './canvas-types'
+import { createDefaultShape, createEmptyDocument, createHtmlFrameShape, isHtmlFrame, isRunningAppFrame } from './canvas-types'
+import { createRunningAppFrameShape } from './running-app-frame'
 
 describe('canvas-persistence round-trip', () => {
   it('builds a stable document key from workspace and canvas path', () => {
@@ -39,6 +40,31 @@ describe('canvas-persistence round-trip', () => {
     const root = reloaded!.objects[reloaded!.rootId]
     expect(root.htmlArtifactId).toBeUndefined()
     expect(isHtmlFrame(root)).toBe(false)
+  })
+
+  it('preserves running app frames across serialize -> parse', () => {
+    const doc = createEmptyDocument()
+    const frame = createRunningAppFrameShape({
+      x: 24,
+      y: 36,
+      url: 'localhost:3000/settings',
+      title: 'Settings route',
+      routePath: '/settings',
+      sourceFile: 'src/app/settings/page.tsx'
+    })!
+    doc.objects[frame.id] = { ...frame, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...doc.objects[doc.rootId], children: [frame.id] }
+
+    const reloaded = parseCanvasDocument(serializeCanvasDocument(doc))
+    const loadedFrame = reloaded!.objects[frame.id]
+
+    expect(isRunningAppFrame(loadedFrame)).toBe(true)
+    expect(loadedFrame.runningApp).toMatchObject({
+      url: 'http://localhost:3000/settings',
+      title: 'Settings route',
+      routePath: '/settings',
+      sourceFile: 'src/app/settings/page.tsx'
+    })
   })
 
   it('migrates v1 relative child coords to absolute (v2) and bumps version', () => {
@@ -98,6 +124,81 @@ describe('canvas-persistence round-trip', () => {
     // parseShape is an allowlist — a dropped flag silently demotes the holder.
     expect(reloaded!.objects[holder.id].aiImageHolder).toBe(true)
     expect(reloaded!.objects[plain.id].aiImageHolder).toBeUndefined()
+  })
+
+  it('preserves graph metadata and operation journal entries across serialize -> parse', () => {
+    const doc = createEmptyDocument()
+    const root = doc.objects[doc.rootId]
+    const rect = createDefaultShape('rect', 10, 20)
+    doc.objects[rect.id] = { ...rect, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...root, children: [rect.id] }
+    doc.graph = {
+      version: 1,
+      projectId: 'board_1',
+      updatedAt: '2026-07-02T00:00:00.000Z',
+      lastJournalEntryId: 'journal_1'
+    }
+    doc.operationJournal = [
+      {
+        id: 'journal_1',
+        label: 'add-card',
+        createdAt: '2026-07-02T00:00:00.000Z',
+        status: 'applied',
+        affectedIds: [rect.id],
+        errors: [],
+        operations: [
+          {
+            id: 'op_1',
+            type: 'create_shape',
+            label: 'add-card',
+            source: 'agent',
+            createdAt: '2026-07-02T00:00:00.000Z',
+            targetIds: [],
+            payload: { op: 'add' }
+          }
+        ]
+      }
+    ]
+    doc.codeBindings = [
+      {
+        id: 'binding_1',
+        designObjectId: rect.id,
+        kind: 'dom-node',
+        status: 'active',
+        createdAt: '2026-07-02T00:00:00.000Z',
+        target: {
+          sourceFile: 'src/app/page.tsx',
+          componentName: 'CheckoutCard',
+          onlookId: 'oid_123',
+          domId: 'checkout-card'
+        }
+      }
+    ]
+
+    const reloaded = parseCanvasDocument(serializeCanvasDocument(doc))
+
+    expect(reloaded?.graph).toMatchObject({
+      projectId: 'board_1',
+      lastJournalEntryId: 'journal_1'
+    })
+    expect(reloaded?.operationJournal?.[0]).toMatchObject({
+      id: 'journal_1',
+      label: 'add-card',
+      status: 'applied',
+      affectedIds: [rect.id]
+    })
+    expect(reloaded?.codeBindings?.[0]).toMatchObject({
+      id: 'binding_1',
+      designObjectId: rect.id,
+      kind: 'dom-node',
+      status: 'active',
+      target: {
+        sourceFile: 'src/app/page.tsx',
+        componentName: 'CheckoutCard',
+        onlookId: 'oid_123',
+        domId: 'checkout-card'
+      }
+    })
   })
 
   it('ignores a malformed devicePreset value', () => {

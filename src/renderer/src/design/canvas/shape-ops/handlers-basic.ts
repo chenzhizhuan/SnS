@@ -7,6 +7,7 @@ import { centerRectInViewport, placeRectInViewportAvoiding } from '../canvas-pla
 import { alignShapes, collectiveBounds, distributeShapes, type AlignAxis, type DistributeAxis } from '../canvas-align'
 import { getScreenArtifactFactory, getScreenCreationFactory, setScreenBrief } from '../screen-artifact-bridge'
 import { selectedReusableScreenTargetFrameId } from '../screen-lifecycle'
+import { normalizeRunningAppUrl } from '../running-app-frame'
 import type { ExecuteOpsOptions, OpError, ShapeOp } from './schema'
 import {
   LINEAR_TYPES,
@@ -23,6 +24,26 @@ import {
   reflowFrame,
   suggestionForMissingId
 } from './context'
+
+function normalizeRunningAppShape(
+  type: CanvasShape['type'],
+  patch: Partial<CanvasShape>,
+  errors: OpError[]
+): boolean {
+  if (!patch.runningApp) return true
+  if (type !== 'frame') {
+    errors.push({ code: 'UNSUPPORTED_TYPE', message: 'runningApp can only be attached to frame shapes' })
+    return false
+  }
+  const url = normalizeRunningAppUrl(patch.runningApp.url)
+  if (!url) {
+    errors.push({ code: 'INVALID_OP', message: 'runningApp.url must be an http or https URL' })
+    return false
+  }
+  patch.runningApp = { ...patch.runningApp, url }
+  patch.clipContent = true
+  return true
+}
 
 function imageChildFillShouldUpdateParentSlot(op: Extract<ShapeOp, { op: 'add' }>): CanvasShape | null {
   if (op.shape.type !== 'image') return null
@@ -70,12 +91,14 @@ export function executeBasicShapeOp(
         affectedIds.add(parentImageSlot.id)
         break
       }
-      const { type } = op.shape
-      const x = op.shape.x ?? 0
-      const y = op.shape.y ?? 0
+      const shapeSpec: Partial<CanvasShape> & { type: CanvasShape['type'] } = { ...op.shape }
+      if (!normalizeRunningAppShape(shapeSpec.type, shapeSpec, errors)) return true
+      const { type } = shapeSpec
+      const x = shapeSpec.x ?? 0
+      const y = shapeSpec.y ?? 0
       const base = createDefaultShape(type as ShapeType, x, y)
       // Apply optional overrides from the op (excluding type/x/y already baked in).
-      const overrides: Partial<CanvasShape> = { ...op.shape }
+      const overrides: Partial<CanvasShape> = { ...shapeSpec }
       delete (overrides as Record<string, unknown>).type
       delete (overrides as Record<string, unknown>).x
       delete (overrides as Record<string, unknown>).y
@@ -100,6 +123,7 @@ export function executeBasicShapeOp(
       }
       {
         const patch: Partial<CanvasShape> = { ...op.patch }
+        if (!normalizeRunningAppShape(existing.type, patch, errors)) return true
         if (
           typeof patch.imageUrl === 'string' &&
           patch.imageUrl.trim() &&

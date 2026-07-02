@@ -70,7 +70,9 @@ function parseNode(value: unknown): DesignArtifactNode | undefined {
     y: node.y,
     width: Math.max(240, node.width),
     height: Math.max(180, node.height),
-    ...(node.sizeMode === 'auto' || node.sizeMode === 'manual' ? { sizeMode: node.sizeMode } : {}),
+    ...(node.sizeMode === 'auto' || node.sizeMode === 'manual' || node.sizeMode === 'manual-width-auto-height'
+      ? { sizeMode: node.sizeMode }
+      : {}),
     ...(typeof node.favorite === 'boolean' ? { favorite: node.favorite } : {}),
     ...(typeof node.boardHidden === 'boolean' ? { boardHidden: node.boardHidden } : {}),
     ...(viewMode ? { viewMode } : {})

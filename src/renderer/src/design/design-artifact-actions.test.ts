@@ -96,7 +96,7 @@ describe('design artifact actions', () => {
     })
   })
 
-  it('treats board-hidden HTML artifacts as agent drawings so they can be restored from the sidebar', () => {
+  it('does not treat board-hidden HTML artifacts as agent drawings', () => {
     const visibleLinked = artifact('visible-linked', 'html')
     const hidden = artifact('hidden-screen', 'html', {
       node: { x: 40, y: 60, width: 390, height: 844, sizeMode: 'auto', boardHidden: true }
@@ -109,7 +109,7 @@ describe('design artifact actions', () => {
       new Set(['visible-linked'])
     )
 
-    expect([...agentIds].sort()).toEqual(['hidden-screen', 'visible-linked'])
+    expect([...agentIds].sort()).toEqual(['visible-linked'])
     expect(grouped.html.map((item) => item.id)).toEqual(['hidden-screen', 'loose-draft'])
   })
 

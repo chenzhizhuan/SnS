@@ -71,6 +71,7 @@ export function buildHtmlArtifactSyncKey(
         return [
           artifact.id,
           artifact.title,
+          artifact.previewStatus ?? '',
           inferDesignArtifactFoundationRole(artifact) ?? '',
           node?.x ?? '',
           node?.y ?? '',
@@ -160,8 +161,35 @@ function ensureHtmlFrameMinSize(size: Pick<Rect, 'width' | 'height'>): Pick<Rect
   }
 }
 
-function frameRectFromNode(node: DesignArtifactNode): Rect {
-  return { x: node.x, y: node.y, ...ensureHtmlFrameMinSize(node) }
+/**
+ * Minimum sensible height for a PENDING width-locked screen, derived from the
+ * target's aspect ratio. This is a FLOOR, not a hard set: it exists to restore
+ * frames stuck at a stale short skeleton measurement, and must never shrink a
+ * taller frame the user explicitly drew — their drawn height should hold until
+ * real content is measured.
+ */
+function pendingFrameAspectHeight(
+  artifact: DesignArtifact,
+  width: number,
+  designTarget: DesignTarget | undefined
+): number | null {
+  if (artifact.previewStatus !== 'pending') return null
+  const generic = genericFrameSizeForArtifact(artifact, designTarget)
+  if (generic.width <= 0 || generic.height <= 0) return null
+  return Math.max(BOARD_HTML_FRAME_MIN_HEIGHT, Math.round(width * (generic.height / generic.width)))
+}
+
+function frameRectFromNode(
+  node: DesignArtifactNode,
+  artifact: DesignArtifact,
+  designTarget: DesignTarget | undefined
+): Rect {
+  const aspectFloor =
+    node.sizeMode === 'manual-width-auto-height'
+      ? pendingFrameAspectHeight(artifact, node.width, designTarget)
+      : null
+  const height = aspectFloor === null ? node.height : Math.max(node.height, aspectFloor)
+  return { x: node.x, y: node.y, ...ensureHtmlFrameMinSize({ width: node.width, height }) }
 }
 
 function artifactNodeIsDefault(node: DesignArtifactNode | undefined, index: number): boolean {
@@ -237,6 +265,7 @@ function genericFrameSizeForArtifact(
  * regular screens, this side stops TRUSTING one that's already stored).
  */
 function measuredFrameHeightForArtifact(artifact: DesignArtifact, index: number): number | null {
+  if (artifact.previewStatus === 'pending') return null
   const measuredAutoNode = autoArtifactNode(artifact, index)
   if (!measuredAutoNode) return null
   return Math.max(BOARD_HTML_FRAME_MIN_HEIGHT, Math.round(measuredAutoNode.height))
@@ -300,10 +329,11 @@ function frameNodeSizeMode(
 ): DesignArtifactNode['sizeMode'] {
   const current = artifact.node
   // A freshly generated screen has no node yet: default to 'auto' so the frame
-  // follows the current Web/App target. An explicit resize promotes it to
-  // 'manual' and locks the size.
+  // follows the current Web/App target. Horizontal resize promotes it to
+  // 'manual-width-auto-height'; vertical/corner resize promotes it to 'manual'.
   if (!current) return 'auto'
   if (current.sizeMode === 'auto') return 'auto'
+  if (current.sizeMode === 'manual-width-auto-height') return 'manual-width-auto-height'
   if (
     artifactNodeIsDefault(current, index) &&
     rectsAlmostEqual(
@@ -394,6 +424,15 @@ export function syncHtmlArtifactsToBoardDocument(
       const minSize = ensureHtmlFrameMinSize(existing)
       if (Math.abs(minSize.width - existing.width) > 0.5) patch.width = minSize.width
       if (Math.abs(minSize.height - existing.height) > 0.5) patch.height = minSize.height
+      if (customNode?.sizeMode === 'manual-width-auto-height') {
+        // Grow-only floor: rescue frames stuck at a stale short skeleton
+        // measurement, but never shrink a taller frame the user drew — the
+        // drawn height holds until real content is measured.
+        const nextHeight = pendingFrameAspectHeight(artifact, existing.width, designTarget)
+        if (nextHeight !== null && existing.height < nextHeight - 0.5) {
+          patch.height = nextHeight
+        }
+      }
       if (!customNode) {
         // A stale device preset means the design target genuinely changed for
         // this frame (e.g. Web -> App) — snap it to the new target's base size
@@ -427,7 +466,7 @@ export function syncHtmlArtifactsToBoardDocument(
     if (!nextRoot) return
 
     const rect = customNode
-      ? frameRectFromNode(customNode)
+      ? frameRectFromNode(customNode, artifact, designTarget)
       : autoNode
         ? { x: autoNode.x, y: autoNode.y, ...defaultFrameSize }
       : occupiedAutoRects.length === 0

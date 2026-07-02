@@ -17,6 +17,7 @@ import { takeLastLintFindings } from "../canvas/design-lint"
 import type { DerivedTokens } from "../design-token-extract"
 import type { DesignContextLocation, DesignHtmlElementContext } from "../design-composer-context"
 import { formatDesignHtmlQualityFindings, type DesignHtmlQualityFinding } from "../design-html-quality"
+import type { DesignModeSurfaceManifest } from '../design-mode/design-mode-surface'
 
 /**
  * Render the design tokens already extracted from the live design (palette +
@@ -48,7 +49,7 @@ export type DesignFrameContext = {
   name?: string
   width: number
   height: number
-  sizeMode?: 'auto' | 'manual'
+  sizeMode?: 'auto' | 'manual' | 'manual-width-auto-height'
 }
 
 export type DesignTurnOptions = {
@@ -123,6 +124,8 @@ export type DesignTurnOptions = {
    * into HTML/screen turns so the agent fixes quality issues during iteration.
    */
   qualityFindings?: DesignHtmlQualityFinding[]
+  /** Design mode surface/workflow contract for choosing agent tool lanes. */
+  designModeManifest?: DesignModeSurfaceManifest
 }
 
 /**
@@ -309,6 +312,6 @@ export type ScreenTurnOptions = DesignTurnOptions & {
   screenName: string
   screenWidth?: number
   screenHeight?: number
-  screenSizeMode?: 'auto' | 'manual'
+  screenSizeMode?: 'auto' | 'manual' | 'manual-width-auto-height'
   screenManifest: ScreenManifestEntry[]
 }

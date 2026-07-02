@@ -104,6 +104,31 @@ const StrokeSchema = z.object({
 
 const ArrowheadSchema = z.enum(['none', 'arrow', 'triangle', 'circle', 'bar', 'diamond'])
 
+const AgentNoteSchema = z
+  .object({
+    kind: z.enum(['critique', 'decision', 'todo', 'question', 'rationale']),
+    body: z.string().min(1),
+    source: z.enum(['agent', 'critic', 'repair', 'user', 'system']).optional(),
+    severity: z.enum(['info', 'warning', 'error']).optional(),
+    targetIds: z.array(z.string()).optional(),
+    directionId: z.string().optional(),
+    createdAt: z.string().optional(),
+    resolved: z.boolean().optional()
+  })
+  .strict()
+
+const RunningAppFrameSchema = z
+  .object({
+    url: z.string().min(1),
+    title: z.string().optional(),
+    routePath: z.string().optional(),
+    sourceFile: z.string().optional(),
+    componentName: z.string().optional(),
+    capturedAt: z.string().optional(),
+    status: z.enum(['unknown', 'reachable', 'unreachable']).optional()
+  })
+  .strict()
+
 /** Value schema for a `type` design token (reusable text style). */
 export const TextStyleSpecSchema = z
   .object({
@@ -145,7 +170,9 @@ const PartialShapeSchema = z
     shadows: z.array(ShadowSchema).optional(),
     blendMode: BlendModeSchema.optional(),
     layout: AutoLayoutSchema.optional(),
-    constraints: ConstraintsSchema.optional()
+    constraints: ConstraintsSchema.optional(),
+    agentNote: AgentNoteSchema.optional(),
+    runningApp: RunningAppFrameSchema.optional()
   })
   .strict()
 
@@ -178,6 +205,8 @@ const PatchSchema = z
     blendMode: BlendModeSchema.optional(),
     layout: AutoLayoutSchema.optional(),
     constraints: ConstraintsSchema.optional(),
+    agentNote: AgentNoteSchema.optional(),
+    runningApp: RunningAppFrameSchema.optional(),
     visible: z.boolean().optional(),
     locked: z.boolean().optional()
   })
@@ -459,4 +488,3 @@ export type ExecuteOpsOptions = {
    */
   screenFallback?: 'plain-frame'
 }
-

@@ -7,6 +7,9 @@ import { CapabilityRegistry } from '../src/adapters/tool/capability-registry.js'
 import { LocalToolHost } from '../src/adapters/tool/local-tool-host.js'
 import {
   buildImageGenToolProviders,
+  CodexResponsesImageClient,
+  codexResponsesImageUrl,
+  createImageGenClient,
   mapImageSize,
   MiniMaxImageClient,
   minimaxImageDimensionFields,
@@ -207,6 +210,71 @@ describe('Image gen tool provider', () => {
     // A fully-qualified generations URL still routes the edits call.
     expect(openAiCompatImageUrl('https://x.test/v1/images/generations', 'edits'))
       .toBe('https://x.test/v1/images/edits')
+  })
+
+  it('posts Codex subscription image requests through responses image_generation SSE', async () => {
+    expect(codexResponsesImageUrl('https://chatgpt.com/backend-api/codex'))
+      .toBe('https://chatgpt.com/backend-api/codex/responses')
+    expect(codexResponsesImageUrl('https://chatgpt.com/backend-api/codex/responses'))
+      .toBe('https://chatgpt.com/backend-api/codex/responses')
+    expect(createImageGenClient({
+      protocol: 'codex-responses-image',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      apiKey: 'codex-access'
+    }).id).toBe('codex-responses-image')
+
+    const requests: Array<{ url: string; headers: Record<string, string>; body: string }> = []
+    const resultBase64 = png(8, 8).toString('base64')
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      requests.push({
+        url: String(url),
+        headers: init?.headers as Record<string, string>,
+        body: String(init?.body)
+      })
+      return new Response([
+        `data: ${JSON.stringify({
+          type: 'response.output_item.done',
+          item: { type: 'image_generation_call', result: resultBase64 }
+        })}`,
+        'data: [DONE]'
+      ].join('\n\n'), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' }
+      })
+    }))
+    const client = new CodexResponsesImageClient('https://chatgpt.com/backend-api/codex', 'codex-access', {
+      'ChatGPT-Account-Id': 'acct_123',
+      originator: 'codex_cli_rs'
+    })
+
+    const image = await client.generate({
+      prompt: 'tiny square',
+      model: 'gpt-image-2',
+      size: '1024x1024',
+      timeoutMs: 1_000,
+      signal: new AbortController().signal
+    })
+
+    expect(image).toMatchObject({ mimeType: 'image/png' })
+    expect(image.data.byteLength).toBeGreaterThan(0)
+    expect(requests).toHaveLength(1)
+    expect(requests[0].url).toBe('https://chatgpt.com/backend-api/codex/responses')
+    expect(requests[0].headers).toMatchObject({
+      Authorization: 'Bearer codex-access',
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+      'ChatGPT-Account-Id': 'acct_123',
+      originator: 'codex_cli_rs'
+    })
+    expect(JSON.parse(requests[0].body)).toMatchObject({
+      model: 'gpt-5.5',
+      input: [{ role: 'user', content: [{ type: 'input_text', text: 'tiny square' }] }],
+      instructions: 'You are an image generation assistant.',
+      tools: [{ type: 'image_generation', model: 'gpt-image-2', size: '1024x1024' }],
+      tool_choice: { type: 'image_generation' },
+      stream: true,
+      store: false
+    })
   })
 
   it('generates an image, saves it to the workspace, and scopes the attachment', async () => {

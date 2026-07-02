@@ -45,6 +45,14 @@ type Props = {
   onToggleTheme: () => void
 }
 
+export function getDesignSidebarVisibleArtifacts(artifacts: readonly DesignArtifact[]): DesignArtifact[] {
+  return artifacts.filter((artifact) => artifact.node?.boardHidden !== true)
+}
+
+export function getDesignSidebarDocumentScreenCount(doc: Pick<DesignDocument, 'artifacts'>): number {
+  return getDesignSidebarVisibleArtifacts(doc.artifacts).filter((artifact) => artifact.kind === 'html').length
+}
+
 /**
  * Design-mode left sidebar: mode tabs + a 设计稿 (design document) tree. Each
  * 设计稿 is a top-level container; its 画布 (artifacts) show nested under the
@@ -94,8 +102,10 @@ export function DesignSidebar({
   const committingDocRef = useRef(false)
   const [agentDrawingsOpen, setAgentDrawingsOpen] = useState(true)
 
-  const canvasObjects = useCanvasShapeStore((s) => s.document.objects)
+  const canvasDocument = useCanvasShapeStore((s) => s.document)
+  const canvasObjects = canvasDocument.objects
   const selectedIds = useCanvasSelectionStore((s) => s.selectedIds)
+  const visibleArtifacts = useMemo(() => getDesignSidebarVisibleArtifacts(artifacts), [artifacts])
   const screenLinkedIds = useMemo(() => {
     const ids = new Set<string>()
     for (const id of Object.keys(canvasObjects)) {
@@ -104,7 +114,6 @@ export function DesignSidebar({
     }
     return ids
   }, [canvasObjects])
-  const grouped = groupDesignArtifacts(artifacts, screenLinkedIds)
   const selectedHtmlArtifactId = useMemo(() => {
     for (const id of selectedIds) {
       const shape = canvasObjects[id]
@@ -112,12 +121,16 @@ export function DesignSidebar({
     }
     return null
   }, [canvasObjects, selectedIds])
+  const grouped = useMemo(
+    () => groupDesignArtifacts(visibleArtifacts, screenLinkedIds),
+    [screenLinkedIds, visibleArtifacts]
+  )
   const agentDrawingArtifactIds = useMemo(() => {
-    return collectAgentDrawingArtifactIds(artifacts, grouped, screenLinkedIds)
-  }, [artifacts, grouped, screenLinkedIds])
+    return collectAgentDrawingArtifactIds(visibleArtifacts, grouped, screenLinkedIds)
+  }, [grouped, screenLinkedIds, visibleArtifacts])
   const agentDrawingArtifacts = useMemo(
-    () => artifacts.filter((artifact) => artifact.kind === 'html' && agentDrawingArtifactIds.has(artifact.id)),
-    [agentDrawingArtifactIds, artifacts]
+    () => visibleArtifacts.filter((artifact) => artifact.kind === 'html' && agentDrawingArtifactIds.has(artifact.id)),
+    [agentDrawingArtifactIds, visibleArtifacts]
   )
   const sortedDocuments = useMemo(
     () => [...documents].sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt)),
@@ -388,12 +401,12 @@ export function DesignSidebar({
     const items = grouped.html.filter((artifact) => !agentDrawingArtifactIds.has(artifact.id))
     return (
       <div className="ml-3 mt-0.5 space-y-1 border-l border-[var(--ds-sidebar-row-ring)] pl-2">
-        {agentDrawingArtifacts.length > 0 ? renderAgentDrawingsSection(agentDrawingArtifacts) : null}
         {items.length > 0 ? (
           renderArtifactRows(items)
         ) : agentDrawingArtifacts.length === 0 && activeArtifact?.kind !== 'canvas' ? (
           <div className="px-2.5 py-1.5 text-[12px] leading-5 text-ds-faint">{t('designDocEmpty')}</div>
         ) : null}
+        {agentDrawingArtifacts.length > 0 ? renderAgentDrawingsSection(agentDrawingArtifacts) : null}
         {activeArtifact?.kind === 'canvas' ? (
           <section>
             <SidebarSectionHeader label={t('canvasLayersTitle')} />
@@ -406,6 +419,7 @@ export function DesignSidebar({
 
   const renderDocument = (doc: DesignDocument): ReactElement => {
     const isActive = doc.id === activeDocumentId
+    const screenCount = getDesignSidebarDocumentScreenCount(doc)
     return (
       <li key={doc.id}>
         {editingDocId === doc.id ? (
@@ -431,8 +445,8 @@ export function DesignSidebar({
             className="min-h-[34px]"
             buttonClassName="items-center gap-2 px-2.5 py-2"
             trailing={
-              doc.artifacts.length > 0 ? (
-                <span className="text-[11.5px] text-ds-faint">{doc.artifacts.length}</span>
+              screenCount > 0 ? (
+                <span className="text-[11.5px] text-ds-faint">{screenCount}</span>
               ) : null
             }
             actions={

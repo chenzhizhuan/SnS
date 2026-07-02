@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape, type CanvasDocument } from './canvas/canvas-types'
 import {
+  buildDesignTargetContextChip,
+  designComposerContextTargetsKey,
+  designContextChipsForRoute,
   designTargetContextChip,
   designHtmlElementContextTarget,
   designSelectedContextLocations,
+  isHtmlElementContextChipId,
+  nextSuppressedDesignContextIds,
+  reconcileDesignHtmlElementContext,
+  resolveDesignComposerContextViewTargets,
   resolveDesignComposerContextTargets,
   resolveDesignComposerScreenFrameTarget
 } from './design-composer-context'
@@ -47,6 +54,100 @@ describe('design composer context', () => {
       label: 'App',
       removable: false
     })
+  })
+
+  it('builds localized design target chips from the target frame size', () => {
+    expect(buildDesignTargetContextChip({
+      designTarget: 'app',
+      webLabel: 'Web',
+      appLabel: 'App',
+      detail: ({ width, height, target }) => `${target}:${width}x${height}`
+    })).toEqual({
+      id: 'design-target:app',
+      kind: 'design-target',
+      label: 'App',
+      detail: 'app:390x844',
+      removable: false
+    })
+  })
+
+  it('builds route-scoped context targets and chips', () => {
+    const html = artifact('screen-a')
+    const element = {
+      artifactId: html.id,
+      artifactTitle: html.title,
+      artifactRelativePath: html.relativePath,
+      selector: '#cta',
+      tagName: 'button',
+      text: 'Start',
+      html: '<button id="cta">Start</button>'
+    }
+    const targets = resolveDesignComposerContextViewTargets({
+      route: 'design',
+      artifacts: [html],
+      activeArtifactId: html.id,
+      canvasDocument: createEmptyDocument(),
+      selectedIds: new Set(),
+      htmlElementContext: element
+    })
+
+    expect(designComposerContextTargetsKey(targets)).toBe(
+      'html-element:screen-a:#cta|html-artifact:screen-a'
+    )
+    expect(designContextChipsForRoute({
+      route: 'design',
+      targetChip: designTargetContextChip({ label: 'Web' }),
+      targets
+    }).map((chip) => chip.id)).toEqual([
+      'design-target:web',
+      'html-element:screen-a:#cta',
+      'html-artifact:screen-a'
+    ])
+    expect(designContextChipsForRoute({
+      route: 'chat',
+      targetChip: designTargetContextChip({ label: 'Web' }),
+      targets
+    })).toEqual([])
+  })
+
+  it('reconciles stale HTML element context when the active design target changes', () => {
+    const html = artifact('screen-a')
+    const canvas = artifact('board', 'canvas')
+    const context = {
+      artifactId: html.id,
+      artifactTitle: html.title,
+      artifactRelativePath: html.relativePath,
+      selector: '#cta',
+      tagName: 'button',
+      text: 'Start',
+      html: '<button id="cta">Start</button>'
+    }
+
+    expect(reconcileDesignHtmlElementContext({
+      current: context,
+      route: 'design',
+      artifacts: [canvas, html],
+      activeArtifactId: canvas.id
+    })).toBe(context)
+    expect(reconcileDesignHtmlElementContext({
+      current: context,
+      route: 'design',
+      artifacts: [html],
+      activeArtifactId: 'other'
+    })).toBeNull()
+    expect(reconcileDesignHtmlElementContext({
+      current: context,
+      route: 'chat',
+      artifacts: [html],
+      activeArtifactId: html.id
+    })).toBeNull()
+  })
+
+  it('updates suppressed context ids and detects HTML element chips', () => {
+    const next = nextSuppressedDesignContextIds(new Set(['a']), 'html-element:x')
+    expect([...next]).toEqual(['a', 'html-element:x'])
+    expect(isHtmlElementContextChipId('html-element:x')).toBe(true)
+    expect(isHtmlElementContextChipId('html-artifact:x')).toBe(false)
   })
 
   it('uses the active HTML artifact as composer context', () => {

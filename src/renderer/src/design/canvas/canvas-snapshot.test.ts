@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { snapshotCanvas } from './canvas-snapshot'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape } from './canvas-types'
+import { createRunningAppFrameShape } from './running-app-frame'
+import type { DesignArtifact } from '../design-types'
+
+const createdAt = '2026-07-02T00:00:00.000Z'
+
+function htmlArtifact(id: string): DesignArtifact {
+  return {
+    id,
+    kind: 'html',
+    title: 'Checkout',
+    relativePath: `.kun-design/doc/${id}/v1.html`,
+    createdAt,
+    updatedAt: createdAt,
+    versions: [{ id: `${id}-v1`, relativePath: `.kun-design/doc/${id}/v1.html`, createdAt, summary: '' }],
+    direction: { id: 'dir_1', name: 'Checkout refresh', status: 'active' }
+  }
+}
 
 describe('snapshotCanvas', () => {
   it('returns empty for a fresh document', () => {
@@ -133,6 +150,152 @@ describe('snapshotCanvas', () => {
       h: 800
     })
     expect(snap.placement?.recommendedSlots).toHaveLength(3)
+  })
+
+  it('includes graph direction and recent operation summaries', () => {
+    const doc = createEmptyDocument()
+    const root = doc.objects[doc.rootId]
+    const frame = createHtmlFrameShape('Checkout draft', 120, 80, 'checkout', 'desktop')
+    doc.objects[frame.id] = { ...frame, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...root, children: [frame.id] }
+    doc.graph = {
+      version: 1,
+      projectId: 'board_1',
+      updatedAt: createdAt,
+      lastJournalEntryId: 'journal_1'
+    }
+    doc.operationJournal = [
+      {
+        id: 'journal_1',
+        label: 'create checkout',
+        createdAt,
+        status: 'applied',
+        affectedIds: [frame.id],
+        errors: [],
+        operations: [
+          {
+            id: 'op_1',
+            type: 'generate_screen',
+            label: 'create checkout',
+            source: 'agent',
+            createdAt,
+            targetIds: [frame.id],
+            payload: { op: 'add-screen' }
+          }
+        ]
+      }
+    ]
+
+    const snap = snapshotCanvas(doc, new Set(), {
+      projectId: 'board_1',
+      artifacts: [htmlArtifact('checkout')]
+    })
+
+    expect(snap.graph).toMatchObject({
+      projectId: 'board_1',
+      objectCount: 1,
+      rootObjectCount: 1,
+      directionCount: 1,
+      lastJournalEntryId: 'journal_1',
+      directions: [{ id: 'dir_1', name: 'Checkout refresh', status: 'active', objectCount: 1 }],
+      recentOperations: [
+        {
+          label: 'create checkout',
+          status: 'applied',
+          operationTypes: ['generate_screen'],
+          affectedCount: 1,
+          errorCount: 0
+        }
+      ]
+    })
+  })
+
+  it('includes running app portal metadata for live code frames', () => {
+    const doc = createEmptyDocument()
+    const frame = createRunningAppFrameShape({
+      x: 80,
+      y: 100,
+      url: 'localhost:5173/dashboard',
+      title: 'Dashboard app',
+      routePath: '/dashboard',
+      sourceFile: 'src/app/dashboard/page.tsx',
+      componentName: 'DashboardPage'
+    })!
+    doc.objects[frame.id] = { ...frame, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...doc.objects[doc.rootId], children: [frame.id] }
+
+    const snap = snapshotCanvas(doc)
+
+    expect(snap.shapes[0]).toMatchObject({
+      id: frame.id,
+      name: 'Dashboard app',
+      type: 'frame',
+      runningApp: {
+        url: 'http://localhost:5173/dashboard',
+        title: 'Dashboard app',
+        routePath: '/dashboard',
+        sourceFile: 'src/app/dashboard/page.tsx',
+        componentName: 'DashboardPage',
+        status: 'unknown'
+      }
+    })
+  })
+
+  it('includes code binding summaries with selected bindings first', () => {
+    const doc = createEmptyDocument()
+    const root = doc.objects[doc.rootId]
+    const selected = createDefaultShape('rect', 10, 20)
+    const stale = createDefaultShape('rect', 200, 20)
+    doc.objects[selected.id] = { ...selected, parentId: doc.rootId }
+    doc.objects[stale.id] = { ...stale, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...root, children: [selected.id, stale.id] }
+    doc.codeBindings = [
+      {
+        id: 'binding_stale',
+        designObjectId: stale.id,
+        kind: 'component',
+        status: 'stale',
+        createdAt,
+        target: { sourceFile: 'src/app/card.tsx', componentName: 'Card' }
+      },
+      {
+        id: 'binding_selected',
+        designObjectId: selected.id,
+        kind: 'dom-node',
+        status: 'active',
+        createdAt,
+        target: { sourceFile: 'src/app/page.tsx', onlookId: 'oid_1', domId: 'hero' }
+      }
+    ]
+
+    const snap = snapshotCanvas(doc, new Set([selected.id]))
+
+    expect(snap.codeBindings).toMatchObject({
+      count: 2,
+      boundObjectCount: 2,
+      staleCount: 1,
+      missingCount: 0,
+      entries: [
+        {
+          id: 'binding_selected',
+          designObjectId: selected.id,
+          kind: 'dom-node',
+          status: 'active',
+          sourceFile: 'src/app/page.tsx',
+          onlookId: 'oid_1',
+          domId: 'hero',
+          selected: true
+        },
+        {
+          id: 'binding_stale',
+          designObjectId: stale.id,
+          kind: 'component',
+          status: 'stale',
+          sourceFile: 'src/app/card.tsx',
+          componentName: 'Card'
+        }
+      ]
+    })
   })
 
   it('uses the requested default screen size for placement recommendations', () => {

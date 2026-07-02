@@ -5,24 +5,9 @@ import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-s
 import { useCanvasUiScale } from '../../../design/canvas/canvas-ui-scale'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { useImageAnnotationStore } from '../../../design/canvas/image-annotation-store'
-import { useCanvasUndoStore } from '../../../design/canvas/canvas-undo-store'
 import { createHandTool } from '../../../design/canvas/tools/hand-tool'
 import type { CanvasToolHandler } from '../../../design/canvas/tools/tool-types'
-import type { CanvasDocument, Rect } from '../../../design/canvas/canvas-types'
-import { createEmptyDocument } from '../../../design/canvas/canvas-types'
-import { canvasDocumentKey, loadCanvasDocument, persistCanvasDocument } from '../../../design/canvas/canvas-persistence'
-import { loadDesignSystem, persistDesignSystem } from '../../../design/canvas/design-system-persistence'
-import { useDesignSystemStore } from '../../../design/canvas/design-system-store'
-import { createEmptyDesignSystem } from '../../../design/canvas/design-system-types'
-import {
-  buildHtmlArtifactSyncKey,
-  removedLinkedHtmlArtifactIds,
-  syncHtmlArtifactsToBoardDocument,
-  syncHtmlFrameNodesToArtifacts
-} from '../../../design/design-board'
-import {
-  getCanvasDocumentContentBounds
-} from '../../../design/canvas/canvas-placement'
+import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
 import type { DesignArtifact } from '../../../design/design-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
@@ -52,23 +37,18 @@ import {
 import { htmlFrameOverlayCanMountAtZoom } from './html-frame/html-frame-helpers'
 import { SidebarTitlebarToggleButton } from '../../sidebar/SidebarPrimitives'
 import {
-  boundsForShapeIds,
   canvasViewportStorageKey,
   createCanvasTool,
-  readStoredCanvasViewport,
   shouldHandleCanvasKeyboardEvent,
   shouldOpenImageAnnotation,
   shouldRenderCanvasMinimap,
   shouldRenderDesignArtifactOverlays,
   shouldSyncCanvasHtmlFrames,
   shouldToggleHtmlFrameInteractiveOnDoubleClick,
-  writeStoredCanvasViewport,
   resolveCanvasDesignSystemBaseDir,
-  resolveCanvasSelectionAfterDocumentSync,
-  resolveHtmlFrameOverlayInteractionState,
-  shouldResetCanvasTransientInteractionAfterDocumentSync,
-  mergeLoadedCanvasDocumentWithLiveChanges
+  resolveHtmlFrameOverlayInteractionState
 } from './canvas-viewport/helpers'
+import { useCanvasViewportDocumentSync } from './canvas-viewport/use-canvas-viewport-document-sync'
 
 export {
   resolveCanvasDesignSystemBaseDir,
@@ -141,7 +121,6 @@ export function CanvasViewport({
   const marqueeRect = useCanvasSelectionStore((s) => s.marqueeRect)
   const snapGuides = useCanvasSelectionStore((s) => s.activeSnapGuides)
 
-  const [docLoaded, setDocLoaded] = useState(false)
   const [prototypePlayerOpen, setPrototypePlayerOpen] = useState(false)
   const [interactiveHtmlFrameId, setInteractiveHtmlFrameId] = useState<string | null>(null)
   const [editingHtmlFrameId, setEditingHtmlFrameId] = useState<string | null>(null)
@@ -210,6 +189,17 @@ export function CanvasViewport({
     () => canvasDocumentKey(workspaceRoot, artifactId, baseDir),
     [artifactId, baseDir, workspaceRoot]
   )
+  const docLoaded = useCanvasViewportDocumentSync({
+    workspaceRoot,
+    artifactId,
+    baseDir,
+    resolvedDesignSystemBaseDir,
+    viewportStorageKey,
+    documentKey,
+    htmlFrameSyncEnabled,
+    designArtifacts,
+    designTarget
+  })
   const selectedHtmlArtifactId = useMemo(() => {
     for (const id of selectedIds) {
       const shape = document.objects[id]
@@ -245,187 +235,6 @@ export function CanvasViewport({
       setActiveTool('select')
     }
   }, [activeTool, setActiveTool, surface])
-
-  // Data flow loop: load on artifact change, persist on doc change, reset on unmount/switch
-  useEffect(() => {
-    if (!artifactId || !workspaceRoot) {
-      setDocLoaded(false)
-      return
-    }
-
-    let cancelled = false
-    let viewFrame = 0
-    let nodeSyncTimer: ReturnType<typeof setTimeout> | null = null
-    let nodeSyncDoc: CanvasDocument | null = null
-    setDocLoaded(false)
-
-    const focusBoundsToFit = (bounds: Rect | null): void => {
-      if (!bounds) return
-      viewFrame = requestAnimationFrame(() => {
-        if (!cancelled) {
-          useCanvasViewportStore.getState().zoomToFit(bounds, 72, { maxZoom: 1, minZoom: 0.04 })
-        }
-      })
-    }
-
-    const queueHtmlFrameNodeSync = (doc: CanvasDocument): void => {
-      nodeSyncDoc = doc
-      if (nodeSyncTimer) clearTimeout(nodeSyncTimer)
-      nodeSyncTimer = setTimeout(() => {
-        nodeSyncTimer = null
-        if (!cancelled && nodeSyncDoc) syncHtmlFrameNodesToArtifacts(nodeSyncDoc)
-      }, 180)
-    }
-
-    // 1) Reset transient state for the new artifact
-    useCanvasSelectionStore.getState().clearSelection()
-    useCanvasSelectionStore.getState().setMarquee(null)
-    useCanvasSelectionStore.getState().setHoverTarget(null)
-    const initialDocument = createEmptyDocument()
-    useCanvasShapeStore.getState().loadDocument(initialDocument, documentKey)
-    useCanvasViewportStore.getState().resetView()
-    useCanvasUndoStore.getState().clear()
-
-    // 2) Load from disk, fall back to empty document
-    void loadCanvasDocument(workspaceRoot, artifactId, baseDir).then((loaded) => {
-      if (cancelled) return
-      const currentShapeState = useCanvasShapeStore.getState()
-      const liveDocument = currentShapeState.documentKey === documentKey
-        ? currentShapeState.document
-        : initialDocument
-      let doc = mergeLoadedCanvasDocumentWithLiveChanges(
-        loaded ?? createEmptyDocument(),
-        liveDocument,
-        initialDocument
-      )
-      let addedFrameIds: string[] = []
-      if (htmlFrameSyncEnabled) {
-        const synced = syncHtmlArtifactsToBoardDocument(
-          doc,
-          useDesignWorkspaceStore.getState().artifacts
-        )
-        doc = synced.document
-        addedFrameIds = synced.addedFrameIds
-        if (synced.addedFrameIds.length > 0 || synced.updatedFrameIds.length > 0 || synced.removedFrameIds.length > 0) {
-          persistCanvasDocument(workspaceRoot, artifactId, doc, baseDir)
-        }
-      }
-      useCanvasShapeStore.getState().loadDocument(doc, documentKey)
-      const storedView = readStoredCanvasViewport(viewportStorageKey)
-      if (storedView) {
-        useCanvasViewportStore.getState().setVbox(storedView)
-      } else if (addedFrameIds.length > 0) {
-        focusBoundsToFit(boundsForShapeIds(doc, addedFrameIds))
-      } else if (loaded) {
-        focusBoundsToFit(getCanvasDocumentContentBounds(doc))
-      }
-      setDocLoaded(true)
-    })
-
-    // 2b) Load the doc-level design system (tokens + components), shared across
-    // this document's artifacts. Reset to empty when none on disk.
-    void loadDesignSystem(workspaceRoot, resolvedDesignSystemBaseDir).then((system) => {
-      if (cancelled) return
-      useDesignSystemStore.getState().loadSystem(system ?? createEmptyDesignSystem())
-    })
-
-    // 3) Subscribe to document changes and persist (debounced by persistCanvasDocument)
-    const unsubscribe = useCanvasShapeStore.subscribe((state, prev) => {
-      if (cancelled) return
-      if (state.document === prev.document) return
-      persistCanvasDocument(workspaceRoot, artifactId, state.document, baseDir)
-      if (htmlFrameSyncEnabled) {
-        const removedArtifactIds = removedLinkedHtmlArtifactIds(prev.document, state.document)
-        if (removedArtifactIds.length > 0) {
-          const designStore = useDesignWorkspaceStore.getState()
-          const htmlArtifacts = new Map(
-            designStore.artifacts
-              .filter((item) => item.kind === 'html')
-              .map((item) => [item.id, item])
-          )
-          for (const removedArtifactId of removedArtifactIds) {
-            const artifact = htmlArtifacts.get(removedArtifactId)
-            if (artifact && artifact.node?.boardHidden !== true) {
-              designStore.updateArtifactNode(removedArtifactId, { boardHidden: true })
-            }
-          }
-        }
-        queueHtmlFrameNodeSync(state.document)
-      }
-    })
-
-    // 3b) Persist the design system when tokens/components change (debounced).
-    const unsubscribeDesignSystem = useDesignSystemStore.subscribe((state, prev) => {
-      if (cancelled) return
-      if (state.system === prev.system) return
-      persistDesignSystem(workspaceRoot, state.system, resolvedDesignSystemBaseDir)
-    })
-
-    return () => {
-      cancelled = true
-      if (viewFrame) cancelAnimationFrame(viewFrame)
-      if (nodeSyncTimer) clearTimeout(nodeSyncTimer)
-      unsubscribe()
-      unsubscribeDesignSystem()
-    }
-  }, [workspaceRoot, artifactId, baseDir, documentKey, htmlFrameSyncEnabled, resolvedDesignSystemBaseDir, viewportStorageKey])
-
-  const htmlArtifactSyncKey = useMemo(() => {
-    if (!htmlFrameSyncEnabled) return ''
-    return buildHtmlArtifactSyncKey(designArtifacts, designTarget)
-  }, [designArtifacts, designTarget, htmlFrameSyncEnabled])
-
-  useEffect(() => {
-    if (!docLoaded || !htmlFrameSyncEnabled || !artifactId || !workspaceRoot) return
-    const current = useCanvasShapeStore.getState().document
-    const synced = syncHtmlArtifactsToBoardDocument(current, useDesignWorkspaceStore.getState().artifacts)
-    if (
-      synced.addedFrameIds.length === 0 &&
-      synced.updatedFrameIds.length === 0 &&
-      synced.removedFrameIds.length === 0
-    ) return
-    useCanvasShapeStore.getState().loadDocument(synced.document, documentKey)
-    if (synced.removedFrameIds.length > 0) {
-      const selection = useCanvasSelectionStore.getState()
-      if (shouldResetCanvasTransientInteractionAfterDocumentSync(synced.removedFrameIds)) {
-        selection.setMarquee(null)
-        selection.setSnapGuides([])
-      }
-      const nextSelection = resolveCanvasSelectionAfterDocumentSync(synced.document, selection)
-      if (nextSelection.selectedIds.length !== selection.selectedIds.size) {
-        selection.select(nextSelection.selectedIds)
-      }
-      const afterSelection = useCanvasSelectionStore.getState()
-      if (afterSelection.hoverTargetId !== nextSelection.hoverTargetId) {
-        afterSelection.setHoverTarget(nextSelection.hoverTargetId)
-      }
-      if (afterSelection.editingId !== nextSelection.editingId) {
-        afterSelection.setEditing(nextSelection.editingId)
-      }
-    }
-    persistCanvasDocument(workspaceRoot, artifactId, synced.document, baseDir)
-    if (synced.addedFrameIds.length > 0) {
-      const bounds = boundsForShapeIds(synced.document, synced.addedFrameIds)
-      if (bounds) useCanvasViewportStore.getState().zoomToFit(bounds, 72, { maxZoom: 1, minZoom: 0.04 })
-    }
-  }, [artifactId, baseDir, docLoaded, documentKey, htmlArtifactSyncKey, htmlFrameSyncEnabled, workspaceRoot])
-
-  useEffect(() => {
-    if (!docLoaded || !artifactId || !workspaceRoot) return
-    let timer: ReturnType<typeof setTimeout> | null = null
-    const unsubscribe = useCanvasViewportStore.subscribe((state, prev) => {
-      if (state.vbox === prev.vbox) return
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => {
-        timer = null
-        writeStoredCanvasViewport(viewportStorageKey, useCanvasViewportStore.getState().vbox)
-      }, 250)
-    })
-    return () => {
-      if (timer) clearTimeout(timer)
-      unsubscribe()
-    }
-  }, [artifactId, docLoaded, viewportStorageKey, workspaceRoot])
 
   const screenToCanvas = useCallback(
     (clientX: number, clientY: number) => {

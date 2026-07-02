@@ -61,7 +61,8 @@ export function DesignCanvas({
         height: request.height,
         targetFrameId: request.targetFrameId,
         devicePreset: request.devicePreset,
-        preparePreview: request.preparePreview
+        preparePreview: request.preparePreview,
+        sizeMode: request.sizeMode
       })
       return created ? { artifactId: created.artifactId, shapeId: created.shape.id } : null
     })

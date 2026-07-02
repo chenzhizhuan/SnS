@@ -50,12 +50,14 @@ describe('useHtmlFrameAutoSize measurement write policy', () => {
     expect(htmlFrameAutoSizeMeasurementCanWrite({
       artifactKind: 'html',
       sizeMode: 'manual',
-      previewStatus: 'pending'
+      previewStatus: 'pending',
+      currentRenderableContent: true
     })).toBe(false)
     expect(htmlFrameAutoSizeMeasurementCanWrite({
       artifactKind: 'html',
       sizeMode: 'manual',
-      parallelStatus: 'running'
+      parallelStatus: 'running',
+      currentRenderableContent: true
     })).toBe(false)
   })
 
@@ -63,15 +65,38 @@ describe('useHtmlFrameAutoSize measurement write policy', () => {
     expect(htmlFrameAutoSizeMeasurementCanWrite({
       artifactKind: 'html',
       sizeMode: 'auto',
-      previewStatus: 'pending'
+      previewStatus: 'pending',
+      currentRenderableContent: true
     })).toBe(true)
+    expect(htmlFrameAutoSizeMeasurementCanWrite({
+      artifactKind: 'html',
+      sizeMode: 'manual-width-auto-height',
+      previewStatus: 'pending',
+      currentRenderableContent: true
+    })).toBe(true)
+  })
+
+  it('does not let loading skeleton measurements write frame size', () => {
+    expect(htmlFrameAutoSizeMeasurementCanWrite({
+      artifactKind: 'html',
+      sizeMode: 'auto',
+      previewStatus: 'pending',
+      currentRenderableContent: false
+    })).toBe(false)
+    expect(htmlFrameAutoSizeMeasurementCanWrite({
+      artifactKind: 'html',
+      sizeMode: 'manual-width-auto-height',
+      parallelStatus: 'running',
+      currentRenderableContent: false
+    })).toBe(false)
   })
 
   it('ignores measurements for non-html artifacts', () => {
     expect(htmlFrameAutoSizeMeasurementCanWrite({
       artifactKind: 'canvas',
       sizeMode: 'auto',
-      previewStatus: 'pending'
+      previewStatus: 'pending',
+      currentRenderableContent: true
     })).toBe(false)
   })
 

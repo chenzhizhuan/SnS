@@ -158,6 +158,42 @@ export function shouldSendPromptToCodeCanvas(options: {
     : false
 }
 
+export type CodeCanvasComposerRouteInput = {
+  route: string
+  composerMode: string
+  userText: string
+  preparedText: string
+  preparedDisplayText?: string
+  emptyPrompt: string
+  whiteboardOpen: boolean
+  hasSelection?: boolean
+}
+
+export type CodeCanvasComposerRoute = {
+  baseText: string
+  canvasBrief: string
+  displayText: string
+}
+
+export function resolveCodeCanvasComposerRoute(
+  input: CodeCanvasComposerRouteInput
+): CodeCanvasComposerRoute | null {
+  if (input.route !== 'chat' || input.composerMode !== 'agent') return null
+  const codeCanvasPromptText = input.userText || input.preparedDisplayText || input.preparedText || ''
+  if (!shouldSendPromptToCodeCanvas({
+    text: codeCanvasPromptText,
+    whiteboardOpen: input.whiteboardOpen,
+    hasSelection: input.hasSelection
+  })) {
+    return null
+  }
+  return {
+    baseText: input.preparedText,
+    canvasBrief: input.preparedDisplayText ?? (input.userText || input.emptyPrompt),
+    displayText: input.preparedDisplayText ?? input.preparedText
+  }
+}
+
 export type CodeCanvasPromptSnapshotOptions = {
   workspaceRoot: string
   threadId: string
@@ -194,6 +230,7 @@ export async function snapshotCodeCanvasForPrompt(
   const snapshotOptions = (includeViewBox: boolean) => ({
     maxShapes: options.maxShapes ?? 180,
     defaultScreenSize: options.defaultScreenSize,
+    projectId: codeCanvasArtifactId(options.threadId),
     ...(includeViewBox ? { viewBox: options.viewBox } : {})
   })
   const expectedDocumentKey = canvasDocumentKey(

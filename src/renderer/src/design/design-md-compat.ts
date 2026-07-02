@@ -1,6 +1,14 @@
 import { DESIGN_SYSTEM_DISPLAY, formatDesignContextLines, type DesignContext } from './design-context'
 import type { DesignArtifact } from './design-types'
-import type { ComponentDef, DesignSystem, DesignToken, DesignTokenKind, TextStyleSpec } from './canvas/design-system-types'
+import type {
+  ComponentDef,
+  ComponentSlot,
+  ComponentSlotKind,
+  DesignSystem,
+  DesignToken,
+  DesignTokenKind,
+  TextStyleSpec
+} from './canvas/design-system-types'
 import { resolvePrototypeViewportFrame } from './prototype-player'
 
 /** Project-level Stitch/code-agent compatible design brief export. */
@@ -27,7 +35,15 @@ export type ImportedStitchDesign = {
   title: string
   contextPatch: Partial<DesignContext>
   tokens: DesignToken[]
+  components: ImportedDesignComponentHint[]
   sections: Record<string, string>
+}
+
+export type ImportedDesignComponentHint = {
+  name: string
+  rootShapeCount?: number
+  slots: ComponentSlot[]
+  raw: string
 }
 
 function clean(value: string | undefined): string {
@@ -189,7 +205,14 @@ export function parseStitchDesignMarkdown(raw: string): ImportedDesignMarkdown |
     'Tokens',
     'Components',
     'Screens and Prototype Flow',
-    'Implementation Guidance'
+    'Implementation Guidance',
+    'Design Document',
+    'Design Mode',
+    'Design Graph',
+    'Canvas Operation Journal',
+    'Code Bindings',
+    'Assets',
+    'Agent Contract'
   ]
   const designGuidelines = guidelineSections
     .map((name) => sections[name])
@@ -285,6 +308,49 @@ function parseImportedTokens(tokensSection: string | undefined): DesignToken[] {
   return out
 }
 
+function parseComponentSlotKind(value: string): ComponentSlotKind | null {
+  const kind = value.trim().toLowerCase()
+  if (kind === 'text' || kind === 'image' || kind === 'color' || kind === 'visible') return kind
+  return null
+}
+
+function parseComponentSlots(value: string): ComponentSlot[] {
+  if (!value.trim() || value.trim().toLowerCase() === 'none') return []
+  return value
+    .split(',')
+    .map((entry) => {
+      const [pathRaw, kindRaw] = entry.split(':')
+      const path = pathRaw?.trim()
+      const kind = parseComponentSlotKind(kindRaw ?? '')
+      return path && kind ? { path, kind } : null
+    })
+    .filter((slot): slot is ComponentSlot => Boolean(slot))
+}
+
+function parseComponentLine(line: string): ImportedDesignComponentHint | null {
+  const match = line.match(/^[-*]\s+\*\*(.+?)\*\*\s*:\s*(.+)$/)
+  if (!match) return null
+  const name = match[1]?.trim()
+  const body = match[2]?.trim() ?? ''
+  if (!name) return null
+  const rootShapeCount = body.match(/(\d+)\s+layer/i)?.[1]
+  const slots = body.match(/\bslots\s*:\s*(.+)$/i)?.[1]
+  return {
+    name,
+    ...(rootShapeCount ? { rootShapeCount: Number(rootShapeCount) } : {}),
+    slots: parseComponentSlots(slots ?? ''),
+    raw: line.trim()
+  }
+}
+
+function parseImportedComponents(componentsSection: string | undefined): ImportedDesignComponentHint[] {
+  if (!componentsSection) return []
+  return componentsSection
+    .split('\n')
+    .map((line) => parseComponentLine(line.trim()))
+    .filter((component): component is ImportedDesignComponentHint => Boolean(component))
+}
+
 function extractPreset(text: string): DesignContext['designSystemPreset'] | undefined {
   const lower = text.toLowerCase()
   if (lower.includes('shadcn')) return 'shadcn'
@@ -360,6 +426,7 @@ export function importStitchDesignMarkdown(raw: string): ImportedStitchDesign | 
   const parsed = parseStitchDesignMarkdown(raw)
   if (!parsed) return null
   const tokens = parseImportedTokens(parsed.sections.Tokens)
+  const components = parseImportedComponents(parsed.sections.Components)
   const allGuidelines = parsed.designGuidelines.trim()
   const contextPatch: Partial<DesignContext> = {
     designGuidelines: allGuidelines
@@ -378,6 +445,7 @@ export function importStitchDesignMarkdown(raw: string): ImportedStitchDesign | 
     title: parsed.title,
     contextPatch,
     tokens,
+    components,
     sections: parsed.sections
   }
 }

@@ -670,6 +670,11 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
       'gpt-5.4-mini': visionChatProfile(128_000),
       'gpt-5.3-codex-spark': textChatProfile(128_000)
     },
+    image: {
+      protocol: 'codex-responses-image',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      models: ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini']
+    },
     docsUrl: 'https://openai.com/index/codex/',
     apiKeyUrl: 'https://chatgpt.com'
   },

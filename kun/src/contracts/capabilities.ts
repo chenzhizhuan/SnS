@@ -352,6 +352,7 @@ export const ImageGenCapabilityConfig = CapabilityToggleConfig.extend({
   protocol: ImageGenerationProtocol.default('openai-images'),
   baseUrl: z.string().min(1).optional(),
   apiKey: z.string().min(1).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   model: z.string().min(1).optional(),
   defaultSize: z.string().min(1).optional(),
   timeoutMs: z.number().int().positive().default(180_000),

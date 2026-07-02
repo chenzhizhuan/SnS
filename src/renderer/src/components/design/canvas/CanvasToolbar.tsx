@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import {
   ArrowRight,
   Circle,
@@ -26,7 +26,14 @@ import { useDesignSystemStore } from '../../../design/canvas/design-system-store
 import type { CanvasTool } from '../../../design/canvas/canvas-types'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
+import {
+  buildRecommendedDesignWorkflowAction,
+  buildDesignAgentActions,
+  type DesignAgentAction
+} from '../../../design/agent-actions/design-agent-actions'
 import { DesignContextPopover } from '../DesignContextPopover'
+import { useDesignAgentActionRunner } from '../useDesignAgentActionRunner'
+import { DesignAgentActionMenu } from './DesignAgentActionMenu'
 
 type Props = {
   workspaceRoot: string
@@ -59,6 +66,13 @@ const tools: ToolButton[] = [
   { id: 'hand', icon: Hand, labelKey: 'canvasToolHand' }
 ]
 
+const designSurfaceTools = tools.filter((tool) => (
+  tool.id === 'select' ||
+  tool.id === 'screen' ||
+  tool.id === 'frame' ||
+  tool.id === 'hand'
+))
+
 function CanvasToolbarInner({
   workspaceRoot,
   surface = 'design',
@@ -69,19 +83,44 @@ function CanvasToolbarInner({
   onRequestCanvasCritique
 }: Props) {
   const { t } = useTranslation('common')
+  const canvasDocument = useCanvasShapeStore((s) => s.document)
+  const designSystem = useDesignSystemStore((s) => s.system)
+  const documents = useDesignWorkspaceStore((s) => s.documents)
+  const activeDocumentId = useDesignWorkspaceStore((s) => s.activeDocumentId)
+  const artifacts = useDesignWorkspaceStore((s) => s.artifacts)
   const activeTool = useCanvasViewportStore((s) => s.activeTool)
   const setActiveTool = useCanvasViewportStore((s) => s.setActiveTool)
   const vbox = useCanvasViewportStore((s) => s.vbox)
+  const selectedIds = useCanvasSelectionStore((s) => s.selectedIds)
   const setFileError = useDesignWorkspaceStore((s) => s.setFileError)
   const setCanvasAssistantOpen = useDesignWorkspaceStore((s) => s.setCanvasAssistantOpen)
   const canvasAssistantOpen = useDesignWorkspaceStore((s) => s.canvasAssistantOpen)
   const toggleCanvasAssistantOpen = useDesignWorkspaceStore((s) => s.toggleCanvasAssistantOpen)
+  const designTarget = useDesignWorkspaceStore((s) => s.designContext.designTarget ?? 'web')
   const [imageImportBusy, setImageImportBusy] = useState(false)
   const [contextOpen, setContextOpen] = useState(false)
+  const [agentActionsOpen, setAgentActionsOpen] = useState(false)
+  const runAgentAction = useDesignAgentActionRunner(onRequestCanvasCritique)
   const designSurface = surface === 'design'
   const visibleTools = designSurface
-    ? tools
+    ? designSurfaceTools
     : tools.filter((tool) => tool.id !== 'screen')
+  const agentActions = useMemo(
+    () => {
+      const activeDocument = documents.find((document) => document.id === activeDocumentId) ?? null
+      const recommendedAction = buildRecommendedDesignWorkflowAction({
+        document: activeDocument,
+        artifacts,
+        doc: canvasDocument,
+        selectedIds,
+        designTarget,
+        designSystem
+      })
+      const baseActions = buildDesignAgentActions({ doc: canvasDocument, selectedIds, designTarget, designSystem })
+      return recommendedAction ? [recommendedAction, ...baseActions] : baseActions
+    },
+    [activeDocumentId, artifacts, canvasDocument, designSystem, designTarget, documents, selectedIds]
+  )
 
   const requestCanvasCritique = useCallback((): void => {
     const doc = useCanvasShapeStore.getState().document
@@ -115,6 +154,11 @@ function CanvasToolbarInner({
       })
       .finally(() => setImageImportBusy(false))
   }, [imageImportBusy, setFileError, t, vbox, workspaceRoot])
+
+  const requestAgentAction = useCallback((action: DesignAgentAction): void => {
+    runAgentAction(action)
+    setAgentActionsOpen(false)
+  }, [runAgentAction])
 
   const iconBtnBase =
     'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-45'
@@ -164,12 +208,28 @@ function CanvasToolbarInner({
             <button
               type="button"
               className={`${iconBtnBase} ${contextOpen ? btnActive : btnInactive}`}
-              onClick={() => setContextOpen((open) => !open)}
+              onClick={() => {
+                setAgentActionsOpen(false)
+                setContextOpen((open) => !open)
+              }}
               title={t('designContextLabel')}
               aria-label={t('designContextLabel')}
             >
               <Palette className="h-4 w-4" strokeWidth={1.9} />
             </button>
+
+            <DesignAgentActionMenu
+              open={agentActionsOpen}
+              actions={agentActions}
+              buttonClassName={iconBtnBase}
+              buttonActiveClassName={btnActive}
+              buttonInactiveClassName={btnInactive}
+              onToggle={() => {
+                setContextOpen(false)
+                setAgentActionsOpen((open) => !open)
+              }}
+              onSelect={requestAgentAction}
+            />
 
             <button
               type="button"

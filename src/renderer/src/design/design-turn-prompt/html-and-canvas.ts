@@ -19,6 +19,7 @@ import type { DesignContextLocation, DesignHtmlElementContext } from "../design-
 import { formatDesignHtmlQualityFindings, type DesignHtmlQualityFinding } from "../design-html-quality"
 import type { DesignFrameContext, DesignTurnOptions, ScreenTurnOptions } from './shared'
 import { formatCanvasTargetFrameLines, formatContextLocationLines, formatDerivedTokenLines, formatDesignTargetFrameLines, formatScreenManifestLines } from './shared'
+import { formatDesignModeContextLines } from './design-mode-context'
 
 /**
  * Screen-target turn prompt: generate HTML for a specific screen frame on the
@@ -56,6 +57,7 @@ export function buildScreenTurnPrompt(options: ScreenTurnOptions): string {
           'Read it first, reproduce it, then apply ONLY the changes in the brief below — preserve everything else (structure, content, styling).'
         ]
       : []),
+    ...formatDesignModeContextLines(options.designModeManifest),
     `Reserved artifact file: ${options.artifactRelativePath}`,
     ...(options.designNotesPath ? [`Design notes file: ${options.designNotesPath}`] : []),
     '',
@@ -309,6 +311,7 @@ export function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
     `Workspace: ${options.workspaceRoot}`,
     ...formatCanvasTargetFrameLines(options.designContext, options.canvasSurface ?? 'design'),
     '',
+    ...formatDesignModeContextLines(codeCanvasMode ? undefined : options.designModeManifest),
     ...errorLines,
     ...formatLintFindingsLines(options.canvasFeedbackKey),
     ...editHintLines,
@@ -458,7 +461,7 @@ export function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
     '- Do NOT invent paths. If the target shape has no `imageUrl` field in the snapshot, treat it as empty and generate fresh.',
     '',
     ...formatDesignSystemLines(codeCanvasMode ? (options.canvasDesignSystem ?? null) : undefined),
-    'Current canvas snapshot (shape ids, names, positions, `selected`/`inView`/`nearSelection`/`aiImageHolder` flags, `imageUrl` for filled image shapes, `tokenBindings` for token-bound props, sampled absolute `points` for arrows/lines/freehand with per-shape `pointsOmitted` when extra vertices were compacted, `placement` guide for viewBox/content bounds/occupied frames/recommended new-screen slots, plus a style digest — `fill`/`stroke` (color/width)/`fontColor`/`cornerRadius` — when set, so you can MATCH the existing palette instead of guessing; if `omitted` > 0 the view is truncated but selected, nearby, and viewport-visible shapes are prioritized):',
+    'Current canvas snapshot (shape ids, names, positions, graph summary, recent operation journal, `codeBindings` for design-to-code anchors, `selected`/`inView`/`nearSelection`/`aiImageHolder` flags, `imageUrl` for filled image shapes, `tokenBindings` for token-bound props, sampled absolute `points` for arrows/lines/freehand with per-shape `pointsOmitted` when extra vertices were compacted, `placement` guide for viewBox/content bounds/occupied frames/recommended new-screen slots, plus a style digest — `fill`/`stroke` (color/width)/`fontColor`/`cornerRadius` — when set, so you can MATCH the existing palette instead of guessing; if `omitted` > 0 the view is truncated but selected, nearby, and viewport-visible shapes are prioritized):',
     '```json',
     snapshotJson,
     '```'

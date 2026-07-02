@@ -24,6 +24,15 @@ export type CreateLinkedHtmlScreenOptions = Partial<Rect> & {
   targetFrameId?: string
   preparePreview?: boolean
   select?: boolean
+  /**
+   * How the provided width/height should be persisted on the artifact node:
+   * - 'manual-width-auto-height': lock the width as an explicit user sizing
+   *   (board sync keeps it instead of snapping back to the design target's
+   *   default device size) while the height keeps following rendered content.
+   * - 'manual': lock both width and height.
+   * Defaults to 'auto'.
+   */
+  sizeMode?: 'auto' | 'manual' | 'manual-width-auto-height'
 }
 
 export type CreateLinkedHtmlScreenResult = {
@@ -157,7 +166,7 @@ export function createLinkedHtmlScreen(
       y: Math.round(geometry.y),
       width: Math.round(geometry.width),
       height: Math.round(geometry.height),
-      sizeMode: reusableTargetFrame ? 'manual' : 'auto',
+      sizeMode: reusableTargetFrame ? 'manual' : options.sizeMode ?? 'auto',
       viewMode: 'preview'
     }
   })

@@ -13,11 +13,23 @@ import {
   isImplicitImageSlot,
   shapeGeometry
 } from './canvas-types'
-import type { CanvasDocument, CanvasShape, Point, Rect } from './canvas-types'
+import type { CanvasAgentNote, CanvasDocument, CanvasShape, Point, Rect } from './canvas-types'
 import {
   getCanvasDocumentContentBounds,
   placeRectInViewportAvoiding
 } from './canvas-placement'
+import type { DesignArtifact } from '../design-types'
+import { buildDesignGraphFromCanvasDocument } from '../graph/design-graph-from-canvas'
+import { summarizeCanvasOperationJournal } from '../graph/canvas-operation-journal'
+import { groupDesignArtifacts } from '../design-artifact-actions'
+import {
+  buildDesignDirectionManagerModel,
+  summarizeDirectionForAgent
+} from '../directions/direction-manager'
+import {
+  summarizeCodeBindingsForSnapshot,
+  type CanvasCodeBindingSnapshot
+} from '../code-binding/code-binding-summary'
 
 export type CanvasSnapshotShape = {
   id: string
@@ -54,6 +66,15 @@ export type CanvasSnapshotShape = {
 
   /** Primary fill color (hex) when the shape has a visible fill. */
   fill?: string
+  /** Running app portal metadata for Onlook-style live code canvas frames. */
+  runningApp?: {
+    url: string
+    title?: string
+    routePath?: string
+    sourceFile?: string
+    componentName?: string
+    status?: string
+  }
   /** Gradient summary (e.g. `linear 90deg #a→#b`) for gradient-filled shapes. */
   gradient?: string
   /** Primary stroke as `color/width` (e.g. `#111827/1`) when visibly stroked. */
@@ -70,6 +91,16 @@ export type CanvasSnapshotShape = {
   layout?: string
   /** Design-token bindings (prop → token name) so the agent sees what's already systematized. */
   tokenBindings?: Record<string, string>
+  /** Agent/critic/decision metadata for whiteboard notes. The note body is carried by textContent. */
+  agentNote?: {
+    kind: CanvasAgentNote['kind']
+    source?: CanvasAgentNote['source']
+    severity?: CanvasAgentNote['severity']
+    targetIds?: string[]
+    directionId?: string
+    resolved?: boolean
+    createdAt?: string
+  }
 
   /** Linear shapes only: vertices in ABSOLUTE canvas coords. */
   points?: Point[]
@@ -146,9 +177,24 @@ function sampledAbsolutePoints(shape: CanvasShape): Pick<CanvasSnapshotShape, 'p
   }
 }
 
+function compactAgentNote(note: CanvasAgentNote | undefined): CanvasSnapshotShape['agentNote'] | undefined {
+  if (!note) return undefined
+  return {
+    kind: note.kind,
+    ...(note.source ? { source: note.source } : {}),
+    ...(note.severity ? { severity: note.severity } : {}),
+    ...(note.targetIds && note.targetIds.length > 0 ? { targetIds: note.targetIds } : {}),
+    ...(note.directionId ? { directionId: note.directionId } : {}),
+    ...(note.resolved === true ? { resolved: true } : {}),
+    ...(note.createdAt ? { createdAt: note.createdAt } : {})
+  }
+}
+
 export type CanvasSnapshot = {
   shapeCount: number
   shapes: CanvasSnapshotShape[]
+  graph?: CanvasSnapshotGraphSummary
+  codeBindings?: CanvasCodeBindingSnapshot
   /**
    * Whiteboard placement guide for screen creation: the current viewport, whole
    * board bounds, occupied HTML frames and safe suggested slots for new screens.
@@ -156,6 +202,32 @@ export type CanvasSnapshot = {
   placement?: CanvasPlacementGuide
   /** When `maxShapes` truncated the result, how many shapes were dropped. */
   omitted?: number
+}
+
+export type CanvasSnapshotGraphSummary = {
+  projectId: string
+  objectCount: number
+  rootObjectCount: number
+  directionCount: number
+  updatedAt?: string
+  lastJournalEntryId?: string
+  directions?: Array<{
+    id: string
+    name: string
+    status: string
+    objectCount: number
+    screenCount?: number
+    prototypeLinkCount?: number
+    implementedCount?: number
+    uniqueScreens?: string[]
+  }>
+  recentOperations?: Array<{
+    label: string
+    status: string
+    operationTypes: string[]
+    affectedCount: number
+    errorCount: number
+  }>
 }
 
 export type CanvasPlacementRect = {
@@ -199,6 +271,8 @@ export type SnapshotOptions = {
   viewBox?: Rect
   selectedNeighborPadding?: number
   defaultScreenSize?: { width: number; height: number }
+  projectId?: string
+  artifacts?: DesignArtifact[]
 }
 
 function normalizeSnapshotScreenSize(size: SnapshotOptions['defaultScreenSize']): { width: number; height: number } {
@@ -226,6 +300,8 @@ export function snapshotCanvas(
   const viewBox = opts?.viewBox
   const selectedNeighborPadding = opts?.selectedNeighborPadding ?? 240
   const defaultScreenSize = normalizeSnapshotScreenSize(opts?.defaultScreenSize)
+  const graph = buildSnapshotGraphSummary(doc, opts)
+  const codeBindings = summarizeCodeBindingsForSnapshot(doc, selectedIds)
   const selectedBounds = selectedIds && selectedIds.size > 0
     ? selectionBounds(objects, selectedIds, selectedNeighborPadding)
     : null
@@ -264,11 +340,24 @@ export function snapshotCanvas(
         parentName,
         ...(s.textContent ? { textContent: s.textContent.slice(0, 120) } : {}),
         ...(s.htmlArtifactId ? { htmlArtifactId: s.htmlArtifactId } : {}),
+        ...(s.runningApp
+          ? {
+              runningApp: {
+                url: s.runningApp.url,
+                ...(s.runningApp.title ? { title: s.runningApp.title } : {}),
+                ...(s.runningApp.routePath ? { routePath: s.runningApp.routePath } : {}),
+                ...(s.runningApp.sourceFile ? { sourceFile: s.runningApp.sourceFile } : {}),
+                ...(s.runningApp.componentName ? { componentName: s.runningApp.componentName } : {}),
+                ...(s.runningApp.status ? { status: s.runningApp.status } : {})
+              }
+            }
+          : {}),
         ...(s.imageUrl && !s.imageUrl.startsWith('data:') ? { imageUrl: s.imageUrl } : {}),
         ...styleDigest(s),
         ...(s.tokenBindings && Object.keys(s.tokenBindings).length > 0
           ? { tokenBindings: s.tokenBindings }
           : {}),
+        ...(s.agentNote ? { agentNote: compactAgentNote(s.agentNote) } : {}),
         ...(selected ? { selected: true } : {}),
         ...(inView ? { inView: true } : {}),
         ...(nearSelection ? { nearSelection: true } : {}),
@@ -292,6 +381,8 @@ export function snapshotCanvas(
     return {
       shapeCount: shapes.length,
       shapes: prioritized,
+      graph,
+      ...(codeBindings ? { codeBindings } : {}),
       ...(viewBox ? { placement: buildPlacementGuide(doc, selectedIds, viewBox, defaultScreenSize) } : {}),
       omitted
     }
@@ -299,7 +390,71 @@ export function snapshotCanvas(
   return {
     shapeCount: shapes.length,
     shapes,
+    graph,
+    ...(codeBindings ? { codeBindings } : {}),
     ...(viewBox ? { placement: buildPlacementGuide(doc, selectedIds, viewBox, defaultScreenSize) } : {})
+  }
+}
+
+function buildSnapshotGraphSummary(
+  doc: CanvasDocument,
+  opts: SnapshotOptions | undefined
+): CanvasSnapshotGraphSummary {
+  const projectId = opts?.projectId ?? doc.graph?.projectId ?? 'canvas'
+  const graph = buildDesignGraphFromCanvasDocument(doc, {
+    projectId,
+    artifacts: opts?.artifacts,
+    updatedAt: doc.graph?.updatedAt
+  })
+  const groupedArtifacts = opts?.artifacts ? groupDesignArtifacts(opts.artifacts) : null
+  const directionManager = groupedArtifacts
+    ? buildDesignDirectionManagerModel(groupedArtifacts.directions, groupedArtifacts.archivedDirections)
+    : null
+  const managerDirections = new Map(
+    (directionManager?.directions ?? []).map(summarizeDirectionForAgent).map((direction) => [direction.id, direction])
+  )
+  const graphDirectionIds = new Set(Object.keys(graph.directions))
+  const graphDirections = Object.values(graph.directions)
+    .map((direction) => {
+      const managed = managerDirections.get(direction.id)
+      return {
+        id: direction.id,
+        name: direction.name,
+        status: direction.status,
+        objectCount: direction.objectIds.length,
+        ...(managed
+          ? {
+              screenCount: managed.screenCount,
+              prototypeLinkCount: managed.prototypeLinkCount,
+              implementedCount: managed.implementedCount,
+              ...(managed.uniqueScreens ? { uniqueScreens: managed.uniqueScreens } : {})
+            }
+          : {})
+      }
+    })
+  const managerOnlyDirections = Array.from(managerDirections.values())
+    .filter((direction) => !graphDirectionIds.has(direction.id))
+    .map((direction) => ({
+      id: direction.id,
+      name: direction.name,
+      status: direction.status,
+      objectCount: 0,
+      screenCount: direction.screenCount,
+      prototypeLinkCount: direction.prototypeLinkCount,
+      implementedCount: direction.implementedCount,
+      ...(direction.uniqueScreens ? { uniqueScreens: direction.uniqueScreens } : {})
+    }))
+  const directions = [...graphDirections, ...managerOnlyDirections].slice(0, 8)
+  const recentOperations = summarizeCanvasOperationJournal(doc)
+  return {
+    projectId,
+    objectCount: Object.keys(graph.objects).length,
+    rootObjectCount: graph.rootObjectIds.length,
+    directionCount: Math.max(Object.keys(graph.directions).length, managerDirections.size),
+    ...(doc.graph?.updatedAt ? { updatedAt: doc.graph.updatedAt } : {}),
+    ...(doc.graph?.lastJournalEntryId ? { lastJournalEntryId: doc.graph.lastJournalEntryId } : {}),
+    ...(directions.length > 0 ? { directions } : {}),
+    ...(recentOperations.length > 0 ? { recentOperations } : {})
   }
 }
 

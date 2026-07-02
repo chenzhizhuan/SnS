@@ -10,11 +10,9 @@ import {
   htmlFramePreviewAsyncEpochMatches,
   htmlFrameShouldClearElementContextOnEditingChange,
   htmlFrameShouldApplyScrollbarSuppression,
-  htmlFrameShouldCropVisualHeight,
   htmlFrameShouldPromotePreviewToReady,
   htmlFrameWebviewPartition,
   htmlFrameShouldSuppressDocumentScrollbars,
-  htmlFrameVisualCanvasHeight,
   htmlFramesInCanvasPaintOrder,
   htmlFrameIntersectsViewport,
   resolveHtmlFrameMeasurementDecision,
@@ -312,51 +310,6 @@ describe('HtmlFrameOverlay native webview scaling', () => {
   })
 })
 
-describe('HtmlFrameOverlay visual crop policy', () => {
-  it('keeps the full frame visible before measurement', () => {
-    expect(htmlFrameVisualCanvasHeight(844, null, true)).toBe(844)
-  })
-
-  it('crops frames to measured content while the preview is generating', () => {
-    expect(htmlFrameVisualCanvasHeight(844, 260, true)).toBe(260)
-    expect(htmlFrameVisualCanvasHeight(844, 240, true)).toBe(240)
-    expect(htmlFrameVisualCanvasHeight(844, 80, true)).toBe(180)
-    expect(htmlFrameVisualCanvasHeight(844, 1200, true)).toBe(844)
-  })
-
-  it('does not crop a settled/ready frame, even with a stale or smaller measurement', () => {
-    // Once generation has finished, FrameShape's SVG background always paints at
-    // the raw shape.height. Cropping the webview overlay smaller than that using
-    // a (possibly stale) measurement would leave the SVG's white background
-    // visible below a short webview, and would silently defeat manual resizing
-    // (dragging a settled frame taller would otherwise never visually grow past
-    // whatever was last measured).
-    expect(htmlFrameVisualCanvasHeight(844, 260, false)).toBe(844)
-    expect(htmlFrameVisualCanvasHeight(3200, 800, false)).toBe(3200)
-  })
-
-  it('does not crop manual frames while a stale generating measurement exists', () => {
-    const cropToMeasured = htmlFrameShouldCropVisualHeight({
-      transparentGeneratingSurface: true,
-      autoResizeEnabled: false
-    })
-
-    expect(cropToMeasured).toBe(false)
-    expect(htmlFrameVisualCanvasHeight(1200, 260, cropToMeasured)).toBe(1200)
-  })
-
-  it('only crops transparent generating surfaces for auto-sized frames', () => {
-    expect(htmlFrameShouldCropVisualHeight({
-      transparentGeneratingSurface: true,
-      autoResizeEnabled: true
-    })).toBe(true)
-    expect(htmlFrameShouldCropVisualHeight({
-      transparentGeneratingSurface: false,
-      autoResizeEnabled: true
-    })).toBe(false)
-  })
-})
-
 describe('HtmlFrameOverlay content measurement query', () => {
   it('measures painted text instead of preserving a full-height blank container', () => {
     const titleText: FakeTextNode = {
@@ -609,6 +562,10 @@ describe('HtmlFrameOverlay auto resize policy', () => {
     expect(shouldAutoResizeHtmlFrame({
       sizeMode: 'auto',
       role: 'design-system',
+      previewStatus: 'ready'
+    })).toBe(true)
+    expect(shouldAutoResizeHtmlFrame({
+      sizeMode: 'manual-width-auto-height',
       previewStatus: 'ready'
     })).toBe(true)
   })

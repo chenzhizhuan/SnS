@@ -4,6 +4,12 @@ import { createEmptyDocument, createShapeId, ROOT_SHAPE_ID } from './canvas-type
 import { useCanvasUndoStore } from './canvas-undo-store'
 import type { ShapePatch } from './canvas-undo-store'
 import { useCanvasSelectionStore } from './canvas-selection-store'
+import type { DesignOperationJournalEntry } from '../graph/design-graph-types'
+import { appendOperationJournalEntryToCanvasDocument } from '../graph/canvas-operation-journal'
+import {
+  applyDomSourceBindingsToCanvasDocument,
+  type DomSourceBindingOptions
+} from '../code-binding/dom-source-adapter'
 
 type ShapeState = {
   document: CanvasDocument
@@ -23,6 +29,8 @@ type ShapeState = {
   duplicateShape: (id: string, options?: { skipUndo?: boolean }) => string | null
 
   applyPatches: (patches: ShapePatch[], direction: 'undo' | 'redo') => void
+  appendOperationJournalEntry: (entry: DesignOperationJournalEntry) => void
+  syncDomSourceBindings: (options: DomSourceBindingOptions) => void
   undo: () => void
   redo: () => void
 }
@@ -352,6 +360,23 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
       }
       return { document: { ...s.document, objects } }
     })
+  },
+
+  appendOperationJournalEntry: (entry) => {
+    set((s) => ({ document: appendOperationJournalEntryToCanvasDocument(s.document, entry) }))
+  },
+
+  syncDomSourceBindings: (options) => {
+    if (options.matches.length === 0) return
+    const scopeDesignObjectIds = options.scopeDesignObjectIds ?? [
+      ...new Set(options.matches.map((match) => match.designObjectId))
+    ]
+    set((s) => ({
+      document: applyDomSourceBindingsToCanvasDocument(s.document, {
+        ...options,
+        scopeDesignObjectIds
+      })
+    }))
   },
 
   undo: () => {

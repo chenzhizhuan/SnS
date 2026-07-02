@@ -43,7 +43,12 @@ export type DesignArtifactNode = {
   y: number
   width: number
   height: number
-  sizeMode?: 'auto' | 'manual'
+  /**
+   * auto: width/height can follow generated content/default target sizing.
+   * manual: user locked both width and height.
+   * manual-width-auto-height: user locked width, height follows rendered HTML.
+   */
+  sizeMode?: 'auto' | 'manual' | 'manual-width-auto-height'
   favorite?: boolean
   /** Hidden from the board after the user deletes its linked frame. */
   boardHidden?: boolean

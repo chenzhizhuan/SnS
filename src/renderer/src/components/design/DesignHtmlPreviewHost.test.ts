@@ -30,6 +30,21 @@ describe('DesignHtmlPreviewHost helpers', () => {
     })).toBe(false)
   })
 
+  it('never mounts skeletons for surfaces that opt out of skeleton painting', () => {
+    expect(shouldRenderDesignHtmlPreviewWebview({
+      fileUrl: 'file:///workspace/.kun-design/screen/v1.html',
+      renderState: 'skeleton',
+      hasRenderableContent: false,
+      mountWhileSkeleton: false
+    })).toBe(false)
+    expect(shouldRenderDesignHtmlPreviewWebview({
+      fileUrl: 'file:///workspace/.kun-design/screen/v1.html',
+      renderState: 'renderable',
+      hasRenderableContent: true,
+      mountWhileSkeleton: false
+    })).toBe(true)
+  })
+
   it('builds revision URLs without remount-oriented keys', () => {
     expect(designHtmlPreviewUrl('file:///workspace/page.html', 3)).toBe('file:///workspace/page.html?rev=3')
     expect(designHtmlPreviewUrl('file:///workspace/page.html?token=1', 4)).toBe('file:///workspace/page.html?token=1&rev=4')

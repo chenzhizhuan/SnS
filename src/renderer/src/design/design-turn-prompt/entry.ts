@@ -20,6 +20,7 @@ import {
   formatHtmlElementContextLines,
   formatHtmlIterationEditDisciplineLines
 } from './html-and-canvas'
+import { formatDesignModeContextLines } from './design-mode-context'
 
 export function buildParallelDesignPagesPrompt(options: ParallelDesignPagesPromptOptions): string {
   const jobs = options.jobs.filter((job) => job.artifactId.trim() && job.relativePath.trim())
@@ -110,6 +111,7 @@ export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
           'Read it first, reproduce it, then apply ONLY the changes in the brief below — preserve everything else (structure, content, styling).'
         ]
       : []),
+    ...formatDesignModeContextLines(options.designModeManifest),
     `Reserved artifact file: ${options.artifactRelativePath}`,
     ...(options.designNotesPath ? [`Design notes file: ${options.designNotesPath}`] : []),
     '',

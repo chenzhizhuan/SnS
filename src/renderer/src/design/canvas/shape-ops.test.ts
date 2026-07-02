@@ -35,6 +35,126 @@ describe('executeOps execution', () => {
     expect(added?.width).toBe(50)
   })
 
+  it('add op can create structured agent note shapes', () => {
+    const r = executeOps(
+      [
+        {
+          op: 'add',
+          shape: {
+            type: 'text',
+            name: 'Critique note',
+            x: 24,
+            y: 36,
+            width: 280,
+            height: 96,
+            textContent: 'Critique: Primary CTA is hard to find.',
+            agentNote: {
+              kind: 'critique',
+              body: 'Primary CTA is hard to find.',
+              source: 'critic',
+              severity: 'warning',
+              targetIds: ['hero']
+            }
+          }
+        }
+      ],
+      'agent-note'
+    )
+
+    const doc = useCanvasShapeStore.getState().document
+    const added = doc.objects[r.affectedIds[0]]
+    expect(r.ok).toBe(true)
+    expect(added).toMatchObject({
+      type: 'text',
+      agentNote: {
+        kind: 'critique',
+        body: 'Primary CTA is hard to find.',
+        targetIds: ['hero']
+      }
+    })
+    expect(doc.operationJournal?.[0].operations[0]).toMatchObject({
+      type: 'create_shape',
+      label: 'agent-note'
+    })
+  })
+
+  it('add op can create running app portal frames', () => {
+    const r = executeOps([
+      {
+        op: 'add',
+        shape: {
+          type: 'frame',
+          name: 'Orders app',
+          x: 0,
+          y: 0,
+          width: 1280,
+          height: 800,
+          runningApp: {
+            url: 'localhost:5173/orders',
+            title: 'Orders app',
+            routePath: '/orders',
+            sourceFile: 'src/app/orders/page.tsx'
+          }
+        }
+      }
+    ])
+
+    const doc = useCanvasShapeStore.getState().document
+    const added = doc.objects[r.affectedIds[0]]
+    expect(r.ok).toBe(true)
+    expect(added).toMatchObject({
+      type: 'frame',
+      clipContent: true,
+      runningApp: {
+        url: 'http://localhost:5173/orders',
+        title: 'Orders app',
+        routePath: '/orders'
+      }
+    })
+  })
+
+  it('rejects running app metadata on non-frame shapes', () => {
+    const r = executeOps([
+      {
+        op: 'add',
+        shape: {
+          type: 'rect',
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 100,
+          runningApp: { url: 'localhost:5173' }
+        }
+      }
+    ])
+
+    expect(r.ok).toBe(false)
+    expect(r.errors[0]).toMatchObject({
+      code: 'UNSUPPORTED_TYPE',
+      message: 'runningApp can only be attached to frame shapes'
+    })
+  })
+
+  it('records executed batches in the canvas operation journal', () => {
+    const r = executeOps(
+      [{ op: 'add', shape: { type: 'rect', name: 'Card', x: 0, y: 0, width: 50, height: 50 } }],
+      'agent-add-card'
+    )
+
+    const doc = useCanvasShapeStore.getState().document
+    expect(r.ok).toBe(true)
+    expect(doc.graph?.lastJournalEntryId).toBe(doc.operationJournal?.[0].id)
+    expect(doc.operationJournal?.[0]).toMatchObject({
+      label: 'agent-add-card',
+      status: 'applied',
+      affectedIds: r.affectedIds
+    })
+    expect(doc.operationJournal?.[0].operations[0]).toMatchObject({
+      type: 'create_shape',
+      source: 'agent'
+    })
+  })
+
   it('add + update is one undo entry (atomic batch)', () => {
     const initial = useCanvasUndoStore.getState().undoStack.length
     const r = executeOps([

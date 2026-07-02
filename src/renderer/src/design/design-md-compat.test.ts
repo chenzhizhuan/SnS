@@ -148,7 +148,31 @@ describe('design-md-compat', () => {
     expect(parseStitchDesignMarkdown('   ')).toBeNull()
   })
 
-  it('imports exported markdown into design context and simple tokens', () => {
+  it('keeps project contract mode and asset sections in imported guidelines', () => {
+    const parsed = parseStitchDesignMarkdown([
+      '# DESIGN.md: Ops app',
+      '',
+      '## Product Brief',
+      '',
+      'An operations workspace',
+      '',
+      '## Design Mode',
+      '',
+      '- code-bridge (active): 78/100',
+      '',
+      '## Assets',
+      '',
+      '- `asset_logo` image: Logo'
+    ].join('\n'))
+
+    expect(parsed?.sections['Design Mode']).toContain('code-bridge')
+    expect(parsed?.sections.Assets).toContain('asset_logo')
+    expect(parsed?.designGuidelines).toContain('code-bridge (active)')
+    expect(parsed?.designGuidelines).toContain('asset_logo')
+  })
+
+  it('imports exported markdown into design context, tokens, and component hints', () => {
+    const componentRoot = shape('card-root')
     const markdown = buildStitchDesignMarkdown({
       title: 'Ops app',
       brief: 'An operations workspace',
@@ -190,6 +214,31 @@ describe('design-md-compat', () => {
       }
     ])
     expect(importStitchDesignMarkdown('')).toBeNull()
+
+    const withComponent = importStitchDesignMarkdown(buildStitchDesignMarkdown({
+      title: 'Component guide',
+      designSystem: {
+        tokens: {},
+        components: {
+          card: {
+            id: 'card',
+            name: 'Insight card',
+            version: 1,
+            tree: [componentRoot],
+            slots: [{ path: 'Title', kind: 'text' }, { path: 'Hero image', kind: 'image' }]
+          }
+        }
+      },
+      updatedAt: now
+    }))
+    expect(withComponent?.components).toEqual([
+      {
+        name: 'Insight card',
+        rootShapeCount: 1,
+        slots: [{ path: 'Title', kind: 'text' }, { path: 'Hero image', kind: 'image' }],
+        raw: '- **Insight card**: 1 layer; slots: Title:text, Hero image:image'
+      }
+    ])
   })
 
   it('imports flexible target labels from external design guides', () => {

@@ -42,6 +42,7 @@ import {
   writeJson,
   type ScheduleRuntimeDeps
 } from './schedule-runtime-helpers'
+import { resolveCodexOAuthApiKey } from './codex-auth'
 
 const MAX_NODE_EXECUTIONS = 200
 const MAX_RUN_DURATION_MS = 30 * 60_000
@@ -1872,7 +1873,12 @@ export class WorkflowRuntime {
         const outputDir = resolveImageOutputDir(workspace, interpolate(node.config.outputDir, payload, scope))
         // Lazy import keeps the kun image module out of the unit-test graph.
         const { createImageGenClient } = await import('../../kun/src/adapters/tool/image-gen-tool-provider.js')
-        const client = createImageGenClient(imageGen)
+        const imageAuth = resolveCodexOAuthApiKey(imageGen.apiKey)
+        const client = createImageGenClient({
+          ...imageGen,
+          apiKey: imageAuth.apiKey,
+          ...(imageAuth.headers ? { headers: imageAuth.headers } : {})
+        })
         const size = node.config.size.trim() || imageGen.defaultSize.trim()
         const image = await client.generate({
           prompt: interpolate(node.config.prompt, payload, scope),

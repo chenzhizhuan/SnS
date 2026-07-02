@@ -56,7 +56,8 @@ export function createScreenTool(): CanvasToolHandler {
       drawing = false
 
       const shape = useCanvasShapeStore.getState().getShape(previewId)
-      if (shape && shape.width < 2 && shape.height < 2) {
+      const clickCreated = Boolean(shape && shape.width < 2 && shape.height < 2)
+      if (shape && clickCreated) {
         useCanvasShapeStore.getState().updateShape(previewId, clickCreateSize, true)
       }
       const finalShape = useCanvasShapeStore.getState().getShape(previewId)
@@ -72,7 +73,13 @@ export function createScreenTool(): CanvasToolHandler {
           devicePreset: finalShape.devicePreset ?? defaultDevicePresetForDesignTarget(
             useDesignWorkspaceStore.getState().designContext.designTarget
           ),
-          preparePreview: true
+          preparePreview: true,
+          // A drag-drawn frame locks the drawn WIDTH as an explicit user sizing
+          // (so board sync won't reset it to the default device size), while
+          // the height keeps following rendered content — matching the
+          // horizontal-resize semantics in SelectionOverlay. Click-create keeps
+          // the default target size and stays fully content-driven ('auto').
+          sizeMode: clickCreated ? 'auto' : 'manual-width-auto-height'
         })
         if (created) useCanvasSelectionStore.getState().select([created.shapeId])
       }

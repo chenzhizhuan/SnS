@@ -130,7 +130,7 @@ describe('shape creation tools', () => {
   })
 
   it('finalizes drawn screen frames through the linked screen creation factory', () => {
-    const requests: Array<{ preparePreview?: boolean }> = []
+    const requests: Array<{ preparePreview?: boolean; sizeMode?: 'auto' | 'manual' | 'manual-width-auto-height' }> = []
     setScreenCreationFactory((request) => {
       requests.push(request)
       const shape = createHtmlFrameShape(request.name, request.x, request.y, 'artifact-linked', request.devicePreset)
@@ -163,6 +163,28 @@ describe('shape creation tools', () => {
     expect(useCanvasShapeStore.getState().document.objects[preview.id]).toBeUndefined()
     expect(useCanvasViewportStore.getState().activeTool).toBe('select')
     expect(requests[0]?.preparePreview).toBe(true)
+    // A drag-drawn size is an explicit user sizing: the width must be locked
+    // so board sync keeps it instead of resetting to 1280x800, while height
+    // stays content-driven like a horizontal SelectionOverlay resize.
+    expect(requests[0]?.sizeMode).toBe('manual-width-auto-height')
+  })
+
+  it('requests auto sizing for click-created screens through the creation factory', () => {
+    const requests: Array<{ width: number; height: number; sizeMode?: 'auto' | 'manual' | 'manual-width-auto-height' }> = []
+    setScreenCreationFactory((request) => {
+      requests.push(request)
+      const shape = createHtmlFrameShape(request.name, request.x, request.y, 'artifact-linked', request.devicePreset)
+      shape.width = request.width
+      shape.height = request.height
+      useCanvasShapeStore.getState().addShape(shape)
+      return { artifactId: 'artifact-linked', shapeId: shape.id }
+    })
+    const tool = createScreenTool()
+
+    tool.onPointerDown(pointer(24, 32))
+    tool.onPointerUp(pointer(24, 32))
+
+    expect(requests[0]).toMatchObject({ width: 1280, height: 800, sizeMode: 'auto' })
   })
 
   it('click-creates app-sized screen frames when the design target is app', () => {

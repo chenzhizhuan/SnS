@@ -13,12 +13,15 @@ import {
 } from '../../../design/canvas/canvas-resize'
 import { angleFromPivot, computeRotation } from '../../../design/canvas/canvas-rotate'
 import { findResizeSnaps, type SnapGuide } from '../../../design/canvas/canvas-snap'
+import { BOARD_HTML_FRAME_MIN_HEIGHT } from '../../../design/canvas/canvas-placement'
 import { useCanvasShapeStore, withDescendants } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasUndoStore } from '../../../design/canvas/canvas-undo-store'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
 import { useDesignAssistantStore } from '../../../design/design-assistant-store'
 import { filterEditableShapeIds } from '../../../design/canvas/canvas-editability'
+import { defaultFrameSizeForDesignTarget } from '../../../design/design-context'
+import type { DesignArtifact } from '../../../design/design-types'
 import { LinearPointEditor } from './LinearPointEditor'
 
 const HANDLE_SIZE = 7
@@ -43,6 +46,34 @@ type RotateDragState = {
   pivotY: number
   startAngleFromPivot: number
   shapeStartRotations: Map<string, number>
+}
+
+export function applyPendingHtmlFrameAspectResize({
+  handle,
+  bounds,
+  shape,
+  artifact,
+  parallelStatus,
+  designTarget,
+  singleSelection
+}: {
+  handle: ResizeHandle
+  bounds: ShapeBoundsLike
+  shape: CanvasShape | undefined
+  artifact: DesignArtifact | undefined
+  parallelStatus?: 'queued' | 'running' | 'done' | 'failed'
+  designTarget: unknown
+  singleSelection: boolean
+}): ShapeBoundsLike {
+  if (!singleSelection) return bounds
+  if (handle !== 'e' && handle !== 'w') return bounds
+  if (!shape || !isHtmlFrame(shape) || artifact?.kind !== 'html') return bounds
+  const generating =
+    artifact.previewStatus === 'pending' || parallelStatus === 'queued' || parallelStatus === 'running'
+  if (!generating) return bounds
+  const targetSize = defaultFrameSizeForDesignTarget(designTarget)
+  const aspectHeight = Math.round(bounds.width * (targetSize.height / targetSize.width))
+  return { ...bounds, height: Math.max(BOARD_HTML_FRAME_MIN_HEIGHT, aspectHeight) }
 }
 
 function SelectionOverlayInner({
@@ -126,6 +157,26 @@ function SelectionOverlayInner({
         if (s) shapeStarts.set(id, { x: s.x, y: s.y, width: s.width, height: s.height })
       }
 
+      const htmlFrameSizeMode = handle === 'e' || handle === 'w' ? 'manual-width-auto-height' : 'manual'
+
+      // Entering resize is an explicit user sizing action. Horizontal-only
+      // resizing locks the viewport width while leaving height content-driven;
+      // vertical/corner resizing locks the whole frame.
+      const designStore = useDesignWorkspaceStore.getState()
+      for (const [id, start] of shapeStarts) {
+        const shape = store.document.objects[id]
+        if (!shape || !isHtmlFrame(shape) || !shape.htmlArtifactId) continue
+        designStore.updateArtifactNode(shape.htmlArtifactId, {
+          x: Math.round(start.x),
+          y: Math.round(start.y),
+          width: Math.round(start.width),
+          height: Math.round(start.height),
+          sizeMode: htmlFrameSizeMode,
+          viewMode:
+            designStore.artifacts.find((item) => item.id === shape.htmlArtifactId)?.node?.viewMode ?? 'preview'
+        })
+      }
+
       resizeStateRef.current = {
         handle,
         startBounds: selBounds,
@@ -168,8 +219,22 @@ function SelectionOverlayInner({
         }
         const newShapeBounds = scaleShapesToBounds(state.shapeStarts, state.startBounds, endBounds)
         const shapeStore = useCanvasShapeStore.getState()
+        const designStore = useDesignWorkspaceStore.getState()
+        const singleSelection = state.shapeStarts.size === 1
         for (const [id, b] of newShapeBounds) {
-          shapeStore.updateShape(id, b, true)
+          const shape = shapeStore.document.objects[id]
+          const artifactId = shape && isHtmlFrame(shape) ? shape.htmlArtifactId : undefined
+          const artifact = artifactId ? designStore.artifacts.find((item) => item.id === artifactId) : undefined
+          const nextBounds = applyPendingHtmlFrameAspectResize({
+            handle: state.handle,
+            bounds: b,
+            shape,
+            artifact,
+            parallelStatus: artifactId ? designStore.parallelPageStates[artifactId]?.status : undefined,
+            designTarget: designStore.designContext.designTarget,
+            singleSelection
+          })
+          shapeStore.updateShape(id, nextBounds, true)
         }
       }
 
@@ -197,18 +262,9 @@ function SelectionOverlayInner({
           if (patches.length > 0) {
             useCanvasUndoStore.getState().pushChange({ patches, label: 'resize' })
           }
-          // Promote any resized HTML frame's artifact node to 'manual' HERE,
-          // synchronously on drag-end. The reactive shape->artifact reverse sync
-          // (syncHtmlFrameNodesToArtifacts, debounced ~180ms) never flips an
-          // artifact OUT of 'auto' once it's already 'auto' — it only keeps 'auto'
-          // frames in sync with the current design-target default. Left to that
-          // path alone, HtmlFrameOverlay's own live-measurement auto-grow (which
-          // gates on artifact.node.sizeMode still reading 'auto') would see its
-          // own scheduled remeasurement fire shortly after the drag and reset the
-          // frame straight back to the last measured content size — i.e. exactly
-          // "resize immediately snaps back". Setting sizeMode: 'manual' before
-          // that can happen stops HtmlFrameOverlay from ever overwriting a
-          // deliberate manual resize.
+          // Persist the final linked HTML frame sizing. Horizontal-only resize
+          // keeps auto-height alive so the page can reflow to the new width;
+          // vertical/corner resize means the user locked both dimensions.
           const designStore = useDesignWorkspaceStore.getState()
           for (const { id } of patches) {
             const shape = doc.objects[id]
@@ -218,7 +274,7 @@ function SelectionOverlayInner({
               y: Math.round(shape.y),
               width: Math.round(shape.width),
               height: Math.round(shape.height),
-              sizeMode: 'manual',
+              sizeMode: htmlFrameSizeMode,
               viewMode:
                 designStore.artifacts.find((item) => item.id === shape.htmlArtifactId)?.node?.viewMode ?? 'preview'
             })

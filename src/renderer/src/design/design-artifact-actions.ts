@@ -81,9 +81,6 @@ export function collectAgentDrawingArtifactIds(
     for (const artifact of direction.artifacts) ids.add(artifact.id)
   }
   for (const id of screenLinkedIds) ids.add(id)
-  for (const artifact of artifacts) {
-    if (artifact.kind === 'html' && artifact.node?.boardHidden) ids.add(artifact.id)
-  }
   return ids
 }
 

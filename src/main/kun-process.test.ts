@@ -675,6 +675,53 @@ describe('syncGuiManagedKunConfig', () => {
     })
     const cleared = JSON.parse(readFileSync(configPath, 'utf8')) as any
     expect('apiKey' in cleared.capabilities.imageGen).toBe(false)
+    expect('headers' in cleared.capabilities.imageGen).toBe(false)
+  })
+
+  it('unwraps Codex OAuth credentials and writes Codex headers for image generation', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const module = await import('./kun-process')
+    const codexCredentials = JSON.stringify({
+      kind: 'codex-oauth',
+      accessToken: 'codex-access-token',
+      refreshToken: 'codex-refresh-token',
+      expiresAt: Date.now() + 3600_000,
+      accountId: 'acct_123',
+      email: 'user@example.com'
+    })
+
+    await module.syncGuiManagedKunConfig(tempRoot, {
+      ...defaultKunRuntimeSettings(),
+      imageGeneration: {
+        enabled: true,
+        providerId: 'codex',
+        protocol: 'codex-responses-image',
+        baseUrl: 'https://chatgpt.com/backend-api/codex',
+        apiKey: codexCredentials,
+        model: 'gpt-image-2',
+        defaultSize: '',
+        timeoutMs: 180000
+      }
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.capabilities.imageGen).toMatchObject({
+      enabled: true,
+      protocol: 'codex-responses-image',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      apiKey: 'codex-access-token',
+      model: 'gpt-image-2',
+      timeoutMs: 180000,
+      headers: {
+        'ChatGPT-Account-Id': 'acct_123',
+        originator: 'codex_cli_rs',
+        'OpenAI-Beta': 'responses=experimental'
+      }
+    })
+    expect(parsed.capabilities.imageGen.headers['User-Agent']).toContain('codex_cli_rs')
+    expect(typeof parsed.capabilities.imageGen.headers.session_id).toBe('string')
+    expect(KunConfigSchema.safeParse(parsed).success).toBe(true)
   })
 
   it('keeps the config stable across repeated syncs with imageGen configured', async () => {

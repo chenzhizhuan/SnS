@@ -1,7 +1,11 @@
 import { artifactDirOf } from './design-artifact-persistence'
 import { isDirectImageUrl } from './canvas/canvas-image-source'
 import { isHtmlFrame, type CanvasDocument, type CanvasShape } from './canvas/canvas-types'
-import { normalizeDesignTarget, type DesignTarget } from './design-context'
+import {
+  defaultFrameSizeForDesignTarget,
+  normalizeDesignTarget,
+  type DesignTarget
+} from './design-context'
 import type { DesignArtifact } from './design-types'
 
 export type DesignComposerContext = {
@@ -175,6 +179,94 @@ export function designTargetContextChip(input: {
     ...(input.detail ? { detail: input.detail } : {}),
     removable: false
   }
+}
+
+export function buildDesignTargetContextChip(input: {
+  designTarget?: DesignTarget
+  webLabel: string
+  appLabel: string
+  detail: (input: { width: number; height: number; target: DesignTarget }) => string
+}): DesignComposerContext {
+  const target = normalizeDesignTarget(input.designTarget)
+  const size = defaultFrameSizeForDesignTarget(target)
+  return designTargetContextChip({
+    designTarget: target,
+    label: target === 'app' ? input.appLabel : input.webLabel,
+    detail: input.detail({ ...size, target })
+  })
+}
+
+export function resolveDesignComposerContextViewTargets(input: {
+  route: string
+  artifacts: readonly DesignArtifact[]
+  activeArtifactId: string | null
+  canvasDocument: CanvasDocument
+  selectedIds: ReadonlySet<string>
+  suppressedIds?: ReadonlySet<string>
+  htmlElementContext?: DesignHtmlElementContext | null
+}): DesignComposerContextTarget[] {
+  if (input.route !== 'design') return []
+  const elementTarget = input.htmlElementContext
+    ? designHtmlElementContextTarget({
+        artifacts: input.artifacts,
+        element: input.htmlElementContext,
+        suppressedIds: input.suppressedIds
+      })
+    : null
+  const baseTargets = resolveDesignComposerContextTargets({
+    artifacts: input.artifacts,
+    activeArtifactId: input.activeArtifactId,
+    canvasDocument: input.canvasDocument,
+    selectedIds: input.selectedIds,
+    suppressedIds: input.suppressedIds
+  })
+  return elementTarget ? [elementTarget, ...baseTargets] : baseTargets
+}
+
+export function designComposerContextTargetsKey(
+  targets: readonly DesignComposerContextTarget[]
+): string {
+  return targets.map((target) => target.chip.id).join('|')
+}
+
+export function designContextChipsForRoute(input: {
+  route: string
+  targetChip: DesignComposerContext
+  targets: readonly DesignComposerContextTarget[]
+}): DesignComposerContext[] {
+  return input.route === 'design'
+    ? [input.targetChip, ...designComposerContextChips(input.targets)]
+    : []
+}
+
+export function isHtmlElementContextChipId(id: string): boolean {
+  return id.startsWith('html-element:')
+}
+
+export function nextSuppressedDesignContextIds(
+  current: ReadonlySet<string>,
+  id: string
+): Set<string> {
+  const next = new Set(current)
+  next.add(id)
+  return next
+}
+
+export function reconcileDesignHtmlElementContext(input: {
+  current: DesignHtmlElementContext | null
+  route: string
+  artifacts: readonly DesignArtifact[]
+  activeArtifactId: string | null
+}): DesignHtmlElementContext | null {
+  if (!input.current) return input.current
+  if (input.route !== 'design') return null
+  const active = input.artifacts.find((artifact) => artifact.id === input.activeArtifactId) ?? null
+  if (active?.kind === 'canvas') {
+    return input.artifacts.some((artifact) => artifact.id === input.current?.artifactId)
+      ? input.current
+      : null
+  }
+  return input.current.artifactId === input.activeArtifactId ? input.current : null
 }
 
 /**

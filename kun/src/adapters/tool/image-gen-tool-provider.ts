@@ -14,6 +14,11 @@ const ASPECT_RATIOS = new Set(['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'
 const SIZE_TIERS: Record<string, number> = { '1K': 1024, '2K': 2048 }
 const SIZE_STEP = 64
 const MIN_EDGE = 256
+const CODEX_IMAGE_RESPONSES_MODEL = 'gpt-5.5'
+const CODEX_IMAGE_INSTRUCTIONS = 'You are an image generation assistant.'
+const MAX_CODEX_IMAGE_SSE_BYTES = 64 * 1024 * 1024
+const MAX_CODEX_IMAGE_SSE_EVENTS = 512
+const MAX_CODEX_IMAGE_BASE64_CHARS = 64 * 1024 * 1024
 
 export type GeneratedImage = { data: Buffer; mimeType: string }
 
@@ -372,6 +377,26 @@ async function collectReferenceImages(
 }
 
 type ImagesApiPayload = { data?: { b64_json?: string; url?: string }[] }
+type CodexResponsesImageEvent = {
+  type?: string
+  item?: {
+    type?: string
+    result?: string
+    revised_prompt?: string
+  }
+  response?: {
+    output?: Array<{
+      type?: string
+      result?: string
+      revised_prompt?: string
+    }>
+  }
+  error?: {
+    code?: string
+    message?: string
+  }
+  message?: string
+}
 type MiniMaxImagePayload = {
   data?: {
     image_base64?: string[]
@@ -387,9 +412,13 @@ export function createImageGenClient(config: {
   protocol?: string
   baseUrl?: string
   apiKey?: string
+  headers?: Record<string, string>
 }): ImageGenClient {
   if (config.protocol === 'minimax-image') {
     return new MiniMaxImageClient(config.baseUrl!, config.apiKey!)
+  }
+  if (config.protocol === 'codex-responses-image') {
+    return new CodexResponsesImageClient(config.baseUrl!, config.apiKey!, config.headers)
   }
   return new OpenAiCompatImageClient(config.baseUrl!, config.apiKey!)
 }
@@ -420,6 +449,111 @@ export function openAiCompatImageUrl(
   const lastSegment = normalized.split('/').pop()?.toLowerCase() ?? ''
   if (isVersionSegment(lastSegment)) return `${normalized}/${path}`
   return `${normalized}/v1/${path}`
+}
+
+export function codexResponsesImageUrl(baseUrl: string): string {
+  const normalized = trimTrailingSlashes(baseUrl.trim())
+  if (!normalized) return '/responses'
+  if (normalized.toLowerCase().endsWith('/responses')) return normalized
+  return `${normalized}/responses`
+}
+
+function imageDataUrl(image: { mimeType: string; data: Buffer }): string {
+  const mimeType = image.mimeType.trim() || 'image/png'
+  return `data:${mimeType};base64,${image.data.toString('base64')}`
+}
+
+async function readLimitedResponseText(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) {
+    const text = await response.text()
+    if (Buffer.byteLength(text, 'utf8') > maxBytes) {
+      throw new Error('Codex image generation response exceeded size limit')
+    }
+    return text
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const chunks: string[] = []
+  let byteLength = 0
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (value) {
+        byteLength += value.byteLength
+        if (byteLength > maxBytes) {
+          await reader.cancel().catch(() => undefined)
+          throw new Error('Codex image generation response exceeded size limit')
+        }
+        chunks.push(decoder.decode(value, { stream: !done }))
+      }
+      if (done) {
+        const tail = decoder.decode()
+        if (tail) chunks.push(tail)
+        return chunks.join('')
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+function parseCodexResponsesImageEvents(body: string): CodexResponsesImageEvent[] {
+  const events: CodexResponsesImageEvent[] = []
+  for (const line of body.split(/\r?\n/)) {
+    if (!line.startsWith('data: ')) continue
+    const data = line.slice(6).trim()
+    if (!data || data === '[DONE]') continue
+    try {
+      events.push(JSON.parse(data) as CodexResponsesImageEvent)
+    } catch {
+      continue
+    }
+    if (events.length > MAX_CODEX_IMAGE_SSE_EVENTS) {
+      throw new Error('Codex image generation response exceeded event limit')
+    }
+  }
+  return events
+}
+
+function decodeCodexImagePayload(payload: string): Buffer {
+  if (payload.length > MAX_CODEX_IMAGE_BASE64_CHARS) {
+    throw new Error('Codex image generation result exceeded size limit')
+  }
+  return Buffer.from(payload, 'base64')
+}
+
+function codexImageFromResult(result: string | undefined): GeneratedImage | null {
+  if (!result) return null
+  return { data: decodeCodexImagePayload(result), mimeType: 'image/png' }
+}
+
+function extractCodexResponsesImage(body: string): GeneratedImage | null {
+  const events = parseCodexResponsesImageEvents(body)
+  const failure = events.find((event) => event.type === 'response.failed' || event.type === 'error')
+  if (failure) {
+    const message = failure.error?.message ??
+      failure.message ??
+      (failure.error?.code ? `Codex image generation failed (${failure.error.code})` : '')
+    throw new Error(message || 'Codex image generation failed')
+  }
+
+  for (const event of events) {
+    if (
+      event.type === 'response.output_item.done' &&
+      event.item?.type === 'image_generation_call'
+    ) {
+      const image = codexImageFromResult(event.item.result)
+      if (image) return image
+    }
+  }
+
+  const completed = events.find((event) => event.type === 'response.completed')
+  for (const item of completed?.response?.output ?? []) {
+    if (item.type !== 'image_generation_call') continue
+    const image = codexImageFromResult(item.result)
+    if (image) return image
+  }
+  return null
 }
 
 export class OpenAiCompatImageClient implements ImageGenClient {
@@ -519,6 +653,82 @@ export class OpenAiCompatImageClient implements ImageGenClient {
       return { data: Buffer.from(await download.arrayBuffer()), mimeType }
     }
     throw new Error('image provider returned no image data')
+  }
+}
+
+export class CodexResponsesImageClient implements ImageGenClient {
+  readonly id = 'codex-responses-image'
+  private readonly endpointUrl: string
+
+  constructor(
+    baseUrl: string,
+    private readonly apiKey: string,
+    private readonly headers: Record<string, string> = {}
+  ) {
+    this.endpointUrl = codexResponsesImageUrl(baseUrl)
+  }
+
+  async generate(request: ImageGenRequest): Promise<GeneratedImage> {
+    return this.requestImage(request, [])
+  }
+
+  async edit(request: ImageGenEditRequest): Promise<GeneratedImage> {
+    return this.requestImage(request, request.images)
+  }
+
+  private async requestImage(
+    request: ImageGenRequest,
+    inputImages: { name: string; mimeType: string; data: Buffer }[]
+  ): Promise<GeneratedImage> {
+    const signal = withTimeout(request.signal, request.timeoutMs)
+    const body = JSON.stringify({
+      model: CODEX_IMAGE_RESPONSES_MODEL,
+      input: [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: request.prompt },
+            ...inputImages.map((image) => ({
+              type: 'input_image',
+              image_url: imageDataUrl(image),
+              detail: 'auto'
+            }))
+          ]
+        }
+      ],
+      instructions: CODEX_IMAGE_INSTRUCTIONS,
+      tools: [
+        {
+          type: 'image_generation',
+          model: request.model,
+          ...(request.size ? { size: request.size } : {})
+        }
+      ],
+      tool_choice: { type: 'image_generation' },
+      stream: true,
+      store: false
+    })
+    let response: Response
+    try {
+      response = await fetch(this.endpointUrl, {
+        method: 'POST',
+        headers: {
+          ...this.headers,
+          Authorization: `Bearer ${this.apiKey}`,
+          Accept: 'text/event-stream',
+          'Content-Type': 'application/json'
+        },
+        body,
+        signal
+      })
+    } catch (error) {
+      throw imageFetchFailure(this.endpointUrl, error, request)
+    }
+    const text = await readLimitedResponseText(response, MAX_CODEX_IMAGE_SSE_BYTES)
+    if (!response.ok) throw new ImageGenHttpError(response.status, text)
+    const image = extractCodexResponsesImage(text)
+    if (!image) throw new Error('Codex image provider returned no image data')
+    return image
   }
 }
 

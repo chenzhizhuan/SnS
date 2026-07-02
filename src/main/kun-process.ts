@@ -3,7 +3,6 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
@@ -24,7 +23,7 @@ import {
   buildKunServeArgs,
   resolveKunExecutable
 } from './resolve-kun-binary'
-import { isCodexOAuthCredentials, parseCodexCredentials, type CodexOAuthCredentials } from './codex-auth'
+import { resolveCodexOAuthApiKey } from './codex-auth'
 import {
   KunConfigSchema,
   KunServeConfigSchema,
@@ -386,7 +385,7 @@ async function startKunChildOnce(
   // When the active provider is Codex, runtime.apiKey holds JSON-encoded OAuth
   // credentials; unwrap to the bare access token so the default client sends a
   // valid Bearer (the Codex headers are written to serve.headers in config).
-  const defaultClientApiKey = resolveOAuthDefaultClient(runtime.apiKey).apiKey
+  const defaultClientApiKey = resolveCodexOAuthApiKey(runtime.apiKey).apiKey
   // When the runtime's own (default) provider is the Claude subscription, tell
   // the runtime so its dispatch routes default-provider turns (thread.providerId
   // absent or equal to it) to the embedded SDK instead of the HTTP default.
@@ -539,7 +538,7 @@ export async function syncGuiManagedKunConfig(
   // client's serve.headers (the bare access token goes to DEEPSEEK_API_KEY).
   // Always set the key explicitly (undefined clears it) so switching away from
   // Codex doesn't leave stale headers carried over by the `...serve` spread.
-  const defaultClientHeaders = resolveOAuthDefaultClient(runtime.apiKey).headers
+  const defaultClientHeaders = resolveCodexOAuthApiKey(runtime.apiKey).headers
   const next = {
     serve: {
       ...serve,
@@ -877,51 +876,6 @@ function modelConfigProfilesFromProviderProfiles(
  * default client handles it identically, so duplicate entries are
  * idempotent.
  */
-// One stable Codex session id per app run. MUST NOT be regenerated per config
-// sync: a changing value would make syncGuiManagedKunConfig's deterministic
-// equality check fail every time, rewriting config.json on every sync (and
-// risking a restart loop). Generated once at module load.
-const CODEX_SESSION_ID = randomUUID()
-
-/**
- * HTTP headers the Codex backend requires alongside the OAuth Bearer token.
- * Shared by both the per-provider client (providersConfigForRuntime) and the
- * default client (resolveOAuthDefaultClient) so the two never drift.
- */
-function codexRequestHeaders(creds: CodexOAuthCredentials): Record<string, string> {
-  return {
-    // ChatGPT account ID is required by the Codex backend.
-    'ChatGPT-Account-Id': creds.accountId,
-    // The Codex backend tags requests by originator (Codex CLI sends
-    // 'codex_cli_rs'). Pairing this with the Codex-CLI User-Agent clears the
-    // Cloudflare bot challenge that otherwise returns the "Enable JavaScript
-    // and cookies" HTML page.
-    originator: 'codex_cli_rs',
-    // OpenAI Responses API is still flagged experimental for the Codex CLI
-    // endpoint; without this header the backend can reject tool calls.
-    'OpenAI-Beta': 'responses=experimental',
-    // A Codex-CLI-style User-Agent passes Cloudflare; a plain Node/Electron
-    // one trips the bot-detection challenge.
-    'User-Agent': 'codex_cli_rs/0.0.0 (deepseekgui)',
-    // Stable per app run (see CODEX_SESSION_ID) so config syncs stay
-    // deterministic.
-    session_id: CODEX_SESSION_ID
-  }
-}
-
-/**
- * Resolve the default-client API key + headers for the active runtime
- * provider. Codex stores OAuth credentials JSON-encoded in the apiKey field:
- * unwrap to the bare access token (used as the Bearer) and emit the provider's
- * required headers. Plain API keys pass through untouched.
- */
-function resolveOAuthDefaultClient(rawApiKey: string): { apiKey: string; headers?: Record<string, string> } {
-  const key = rawApiKey.trim()
-  const codex = isCodexOAuthCredentials(key) ? parseCodexCredentials(key) : null
-  if (codex) return { apiKey: codex.accessToken, headers: codexRequestHeaders(codex) }
-  return { apiKey: key }
-}
-
 function providersConfigForRuntime(settings: AppSettingsV1): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {}
   const runtimeProviderId = getKunRuntimeSettings(settings).providerId.trim()
@@ -942,7 +896,7 @@ function providersConfigForRuntime(settings: AppSettingsV1): Record<string, Reco
     const rawApiKey = provider.apiKey?.trim() ?? ''
     // Codex stores JSON OAuth creds in apiKey; unwrap to the bare token + the
     // headers the backend requires. Plain keys (and agent-sdk tokens) pass through.
-    const resolved = resolveOAuthDefaultClient(rawApiKey)
+    const resolved = resolveCodexOAuthApiKey(rawApiKey)
     out[id] = {
       apiKey: resolved.apiKey,
       ...(baseUrl ? { baseUrl } : {}),
@@ -1084,10 +1038,11 @@ function imageGenConfigForRuntime(
     enabled: imageGeneration.enabled,
     timeoutMs: imageGeneration.timeoutMs
   }
+  const resolvedApiKey = resolveCodexOAuthApiKey(imageGeneration.apiKey)
   const fields = {
     protocol: imageGeneration.protocol,
     baseUrl: imageGeneration.baseUrl,
-    apiKey: imageGeneration.apiKey,
+    apiKey: resolvedApiKey.apiKey,
     model: imageGeneration.model,
     defaultSize: imageGeneration.defaultSize
   }
@@ -1096,6 +1051,8 @@ function imageGenConfigForRuntime(
     if (trimmed) next[key] = trimmed
     else delete next[key]
   }
+  if (resolvedApiKey.headers) next.headers = resolvedApiKey.headers
+  else delete next.headers
   return next
 }
 

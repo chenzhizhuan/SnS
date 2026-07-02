@@ -10,6 +10,15 @@ export type ScreenCreationRequest = Rect & {
   devicePreset: DevicePreset
   targetFrameId?: string
   preparePreview?: boolean
+  /**
+   * How the requested width/height should be persisted:
+   * - 'manual-width-auto-height': explicit user width (e.g. drag-drawn frame);
+   *   board sync keeps it instead of resetting to the target's default device
+   *   size, while height stays content-driven.
+   * - 'manual': both dimensions locked.
+   * Defaults to 'auto'.
+   */
+  sizeMode?: 'auto' | 'manual' | 'manual-width-auto-height'
 }
 
 export type ScreenCreationResult = {

@@ -972,6 +972,33 @@ describe('legacy Kun defaults migration', () => {
     })
   })
 
+  it('preserves the Codex responses image protocol during normalization', () => {
+    const normalized = normalizeAppSettings({
+      ...settings(),
+      agents: {
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          imageGeneration: {
+            ...defaultKunRuntimeSettings().imageGeneration,
+            enabled: true,
+            providerId: 'custom',
+            protocol: 'codex-responses-image',
+            baseUrl: 'https://chatgpt.com/backend-api/codex',
+            apiKey: 'codex-access',
+            model: 'gpt-image-2'
+          }
+        }
+      }
+    })
+
+    expect(normalized.agents.kun.imageGeneration).toMatchObject({
+      protocol: 'codex-responses-image',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      apiKey: 'codex-access',
+      model: 'gpt-image-2'
+    })
+  })
+
   it('uses the current approval policy default for missing legacy local HTTP settings', () => {
     const migrated = migrateLegacyAppSettings({
       version: 1,

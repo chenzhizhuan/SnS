@@ -13,11 +13,6 @@ type WriteWorkspaceFileRequest = {
   content: string
 }
 
-type ReadWorkspaceFileRequest = {
-  path: string
-  workspaceRoot?: string
-}
-
 function artifact(id: string, kind: DesignArtifact['kind']): DesignArtifact {
   const relativePath =
     kind === 'canvas' ? `.kun-design/doc/${id}/canvas.json` : `.kun-design/doc/${id}/v1.html`
@@ -289,121 +284,6 @@ describe('design workspace store', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('duplicates a board-hidden HTML artifact as a visible board screen', async () => {
-    const sourceNode = {
-      x: 120,
-      y: 240,
-      width: 390,
-      height: 844,
-      sizeMode: 'auto' as const,
-      boardHidden: true
-    }
-    const source = {
-      ...artifact('hidden-screen', 'html'),
-      title: 'Hidden screen',
-      node: sourceNode
-    }
-    const canvas = artifact('canvas', 'canvas')
-    const doc: DesignDocument = {
-      id: 'doc',
-      title: 'Doc',
-      createdAt,
-      updatedAt: createdAt,
-      order: 0,
-      artifacts: [canvas, source],
-      activeArtifactId: canvas.id
-    }
-    const readWorkspaceFile = vi.fn(async (request: ReadWorkspaceFileRequest) =>
-      request.path.endsWith('/DESIGN.md')
-        ? { ok: true as const, content: '# Hidden screen notes' }
-        : { ok: true as const, content: '<html><body>Hidden</body></html>' }
-    )
-    vi.stubGlobal('window', { kunGui: { writeWorkspaceFile, readWorkspaceFile } })
-    useDesignWorkspaceStore.setState({
-      documents: [doc],
-      activeDocumentId: 'doc',
-      artifacts: doc.artifacts,
-      activeArtifactId: canvas.id
-    })
-
-    await useDesignWorkspaceStore.getState().duplicateArtifact(source.id)
-
-    const copy = useDesignWorkspaceStore
-      .getState()
-      .artifacts.find((item) => item.id !== source.id && item.title === 'Hidden screen copy')
-    expect(copy?.node).toMatchObject({
-      x: 164,
-      y: 284,
-      width: 390,
-      height: 844,
-      sizeMode: 'auto',
-      boardHidden: false
-    })
-    expect(readWorkspaceFile).toHaveBeenCalledWith(expect.objectContaining({
-      path: source.relativePath,
-      workspaceRoot: '/workspace'
-    }))
-    expect(writeWorkspaceFile).toHaveBeenCalledWith(expect.objectContaining({
-      path: expect.stringMatching(/^\.kun-design\/doc\/.+\/v1\.html$/),
-      workspaceRoot: '/workspace',
-      content: '<html><body>Hidden</body></html>'
-    }))
-    expect(writeWorkspaceFile).toHaveBeenCalledWith(expect.objectContaining({
-      path: expect.stringMatching(/^\.kun-design\/doc\/.+\/DESIGN\.md$/),
-      workspaceRoot: '/workspace',
-      content: '# Hidden screen notes'
-    }))
-    expect(writeWorkspaceFile).toHaveBeenCalledWith(expect.objectContaining({
-      path: expect.stringMatching(/^\.kun-design\/doc\/.+\/meta\.json$/),
-      content: expect.stringContaining('"boardHidden": false')
-    }))
-  })
-
-  it('still duplicates HTML artifacts when the source design notes are missing', async () => {
-    const source = {
-      ...artifact('screen-without-notes', 'html'),
-      title: 'No notes'
-    }
-    const canvas = artifact('canvas', 'canvas')
-    const doc: DesignDocument = {
-      id: 'doc',
-      title: 'Doc',
-      createdAt,
-      updatedAt: createdAt,
-      order: 0,
-      artifacts: [canvas, source],
-      activeArtifactId: canvas.id
-    }
-    const readWorkspaceFile = vi.fn(async (request: ReadWorkspaceFileRequest) =>
-      request.path.endsWith('/DESIGN.md')
-        ? { ok: false as const, error: 'missing' }
-        : { ok: true as const, content: '<html><body>No notes</body></html>' }
-    )
-    vi.stubGlobal('window', { kunGui: { writeWorkspaceFile, readWorkspaceFile } })
-    useDesignWorkspaceStore.setState({
-      documents: [doc],
-      activeDocumentId: 'doc',
-      artifacts: doc.artifacts,
-      activeArtifactId: canvas.id
-    })
-
-    await useDesignWorkspaceStore.getState().duplicateArtifact(source.id)
-
-    const copy = useDesignWorkspaceStore
-      .getState()
-      .artifacts.find((item) => item.id !== source.id && item.title === 'No notes copy')
-    expect(copy).toBeDefined()
-    expect(writeWorkspaceFile).toHaveBeenCalledWith(expect.objectContaining({
-      path: expect.stringMatching(/^\.kun-design\/doc\/.+\/v1\.html$/),
-      content: '<html><body>No notes</body></html>'
-    }))
-    expect(
-      writeWorkspaceFile.mock.calls.some(([request]) =>
-        (request as WriteWorkspaceFileRequest).path.endsWith('/DESIGN.md')
-      )
-    ).toBe(false)
   })
 
   it('uses app-target preview proportions for newly prepared HTML turns', () => {
@@ -693,6 +573,49 @@ describe('design workspace store', () => {
     expect(useDesignWorkspaceStore.getState().artifacts.map((a) => a.id).sort()).toEqual(['canvas', 'screen'])
     useDesignWorkspaceStore.getState().switchActiveDocument(second)
     expect(useDesignWorkspaceStore.getState().artifacts).toEqual([])
+  })
+
+  it('keeps a user-created empty 设计稿 when rehydration reads a stale index', async () => {
+    const second = useDesignWorkspaceStore.getState().createDocument('Second')
+    const documentsIndex = JSON.stringify({
+      version: 1,
+      activeDocumentId: 'doc',
+      documents: [
+        {
+          id: 'doc',
+          title: 'Doc',
+          order: 0,
+          createdAt,
+          updatedAt: createdAt,
+          activeArtifactId: 'canvas'
+        }
+      ]
+    })
+    const readWorkspaceFile = vi.fn((request: { path: string }) => {
+      if (request.path === '.kun-design/documents.json') {
+        return Promise.resolve({ ok: true as const, content: documentsIndex })
+      }
+      return Promise.resolve({ ok: false as const, error: 'missing' })
+    })
+    const listWorkspaceDirectory = vi.fn(async (request: { path: string }) => {
+      if (request.path === '.kun-design') {
+        return {
+          ok: true as const,
+          entries: [{ name: 'doc', type: 'directory' as const }]
+        }
+      }
+      return { ok: true as const, entries: [] as Array<{ name: string; type: 'file' | 'directory' }> }
+    })
+    vi.stubGlobal('window', {
+      kunGui: { writeWorkspaceFile, readWorkspaceFile, listWorkspaceDirectory }
+    })
+
+    await useDesignWorkspaceStore.getState().rehydrateArtifacts()
+
+    const state = useDesignWorkspaceStore.getState()
+    expect(state.documents.map((doc) => doc.id)).toContain(second)
+    expect(state.documents.find((doc) => doc.id === second)?.artifacts).toEqual([])
+    expect(state.activeDocumentId).toBe(second)
   })
 
   it('removeDocument drops it and falls back to a remaining 设计稿', () => {

@@ -6,6 +6,7 @@ import {
   codeCanvasArtifactId,
   codeCanvasThreadBaseDir,
   loadCodeCanvasDesignSystemForPrompt,
+  resolveCodeCanvasComposerRoute,
   resolveCodeCanvasWorkspaceRoot,
   shouldRouteCodePromptToCanvas,
   shouldRouteOpenCodeWhiteboardPrompt,
@@ -130,6 +131,53 @@ describe('shouldRouteCodePromptToCanvas', () => {
       whiteboardOpen: false
     })).toBe(false)
     expect(shouldRouteOpenCodeWhiteboardPrompt('Move this node to the right')).toBe(true)
+  })
+
+  it('resolves chat composer messages into code-canvas outbound context', () => {
+    expect(resolveCodeCanvasComposerRoute({
+      route: 'chat',
+      composerMode: 'agent',
+      userText: 'Draw a dependency graph',
+      preparedText: 'Draw a dependency graph',
+      emptyPrompt: 'Say something',
+      whiteboardOpen: false
+    })).toEqual({
+      baseText: 'Draw a dependency graph',
+      canvasBrief: 'Draw a dependency graph',
+      displayText: 'Draw a dependency graph'
+    })
+
+    expect(resolveCodeCanvasComposerRoute({
+      route: 'chat',
+      composerMode: 'agent',
+      userText: '',
+      preparedText: 'Image-only prompt',
+      preparedDisplayText: 'Image attached',
+      emptyPrompt: 'Say something',
+      whiteboardOpen: true,
+      hasSelection: true
+    })).toEqual({
+      baseText: 'Image-only prompt',
+      canvasBrief: 'Image attached',
+      displayText: 'Image attached'
+    })
+
+    expect(resolveCodeCanvasComposerRoute({
+      route: 'design',
+      composerMode: 'agent',
+      userText: 'Draw a graph',
+      preparedText: 'Draw a graph',
+      emptyPrompt: 'Say something',
+      whiteboardOpen: true
+    })).toBeNull()
+    expect(resolveCodeCanvasComposerRoute({
+      route: 'chat',
+      composerMode: 'plan',
+      userText: 'Draw a graph',
+      preparedText: 'Draw a graph',
+      emptyPrompt: 'Say something',
+      whiteboardOpen: true
+    })).toBeNull()
   })
 })
 

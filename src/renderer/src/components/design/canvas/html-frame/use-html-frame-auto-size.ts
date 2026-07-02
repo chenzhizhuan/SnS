@@ -28,20 +28,19 @@ type UseHtmlFrameAutoSizeOptions = {
   artifactKind: DesignArtifact['kind'] | undefined
   foundationRole: DesignArtifactFoundationRole | undefined
   autoResizeEnabled: boolean
+  /**
+   * The agent is still streaming HTML into this frame. While true, content
+   * measurements only drive scrollbar suppression — frame resizing is held so
+   * the drawn box stays stable and the page visibly "paints" inside it; the
+   * settle-time measurement then adapts the height once.
+   */
+  drawingActive: boolean
   previewWebviewUrl: string
   previewRevision: number
   webview: HtmlFrameWebviewEvents | null | undefined
   webviewMountNonce: number
+  currentRenderableContent: boolean
   executeScript: HtmlFrameScriptExecutor
-}
-
-type HtmlFrameMeasuredContentSize = {
-  width: number
-  height: number
-}
-
-type UseHtmlFrameAutoSizeResult = {
-  measuredContentSize: HtmlFrameMeasuredContentSize | null
 }
 
 export type HtmlFrameMeasurementEpoch = {
@@ -85,14 +84,17 @@ export function htmlFrameAutoSizeMeasurementCanWrite({
   artifactKind,
   sizeMode,
   previewStatus,
-  parallelStatus
+  parallelStatus,
+  currentRenderableContent
 }: {
   artifactKind: DesignArtifact['kind'] | undefined
-  sizeMode?: 'auto' | 'manual'
+  sizeMode?: 'auto' | 'manual' | 'manual-width-auto-height'
   previewStatus?: DesignArtifact['previewStatus']
   parallelStatus?: 'queued' | 'running' | 'done' | 'failed'
+  currentRenderableContent: boolean
 }): boolean {
   if (artifactKind !== 'html') return false
+  if (!currentRenderableContent) return false
   return shouldAutoResizeHtmlFrame({ sizeMode, previewStatus, parallelStatus })
 }
 
@@ -153,13 +155,16 @@ export function useHtmlFrameAutoSize({
   artifactKind,
   foundationRole,
   autoResizeEnabled,
+  drawingActive,
   previewWebviewUrl,
   previewRevision,
   webview,
   webviewMountNonce,
+  currentRenderableContent,
   executeScript
-}: UseHtmlFrameAutoSizeOptions): UseHtmlFrameAutoSizeResult {
+}: UseHtmlFrameAutoSizeOptions): void {
   const measurementTimersRef = useRef<number[]>([])
+  const drawingActiveRef = useRef(drawingActive)
   const currentMeasurementEpoch = useMemo<HtmlFrameMeasurementEpoch | null>(() => {
     if (!artifact?.id || artifactKind !== 'html' || !artifact.relativePath || !previewWebviewUrl) return null
     return {
@@ -180,7 +185,6 @@ export function useHtmlFrameAutoSize({
     webviewMountNonce
   ])
   const currentMeasurementEpochRef = useRef<HtmlFrameMeasurementEpoch | null>(currentMeasurementEpoch)
-  const [measuredContentSize, setMeasuredContentSize] = useState<HtmlFrameMeasuredContentSize | null>(null)
   const [suppressDocumentScrollbars, setSuppressDocumentScrollbars] = useState(false)
 
   useEffect(() => {
@@ -188,7 +192,10 @@ export function useHtmlFrameAutoSize({
   }, [currentMeasurementEpoch])
 
   useEffect(() => {
-    setMeasuredContentSize(null)
+    drawingActiveRef.current = drawingActive
+  }, [drawingActive])
+
+  useEffect(() => {
     setSuppressDocumentScrollbars(false)
   }, [artifact?.id, artifact?.relativePath, shape.id])
 
@@ -205,12 +212,17 @@ export function useHtmlFrameAutoSize({
 
   useEffect(() => {
     if (autoResizeEnabled) return
-    setMeasuredContentSize(null)
     setSuppressDocumentScrollbars(false)
   }, [autoResizeEnabled])
 
+  useEffect(() => {
+    if (currentRenderableContent) return
+    setSuppressDocumentScrollbars(false)
+  }, [currentRenderableContent])
+
   const measureContentSize = useCallback((): void => {
     if (!artifact?.id || artifactKind !== 'html') return
+    if (!currentRenderableContent) return
     const measurementEpoch = currentMeasurementEpochRef.current
     if (!measurementEpoch || measurementEpoch.artifactId !== artifact.id) return
     const measurement = executeScript(HTML_FRAME_CONTENT_SIZE_QUERY)
@@ -231,7 +243,8 @@ export function useHtmlFrameAutoSize({
           artifactKind: latestArtifact.kind,
           sizeMode: latestArtifact.node?.sizeMode,
           previewStatus: latestArtifact.previewStatus,
-          parallelStatus: latestParallelState?.status
+          parallelStatus: latestParallelState?.status,
+          currentRenderableContent
         })
         const { nextWidth, nextHeight, suppressScrollbars } = decision
         const shouldSuppressScrollbars = htmlFrameShouldApplyScrollbarSuppression({
@@ -242,11 +255,11 @@ export function useHtmlFrameAutoSize({
         void executeScript(
           buildHtmlFrameScrollbarSuppressionScript(shouldSuppressScrollbars)
         )?.catch(() => undefined)
-        if (!latestAutoResizeEnabled) {
-          setMeasuredContentSize(null)
-          return
-        }
-        setMeasuredContentSize({ width: nextWidth, height: nextHeight })
+        if (!latestAutoResizeEnabled) return
+        // While the agent is still painting this page, hold the drawn frame
+        // size: partial content would otherwise shrink/grow the box on every
+        // streamed write. The settle-time re-measure adapts the height once.
+        if (drawingActiveRef.current) return
         const widthChanged =
           htmlFrameAllowsWidthAutoGrow(foundationRole) &&
           Math.abs(nextWidth - current.width) > FRAME_AUTO_GROW_THRESHOLD
@@ -262,7 +275,10 @@ export function useHtmlFrameAutoSize({
           y: Math.round(current.y),
           width: widthChanged ? nextWidth : Math.round(current.width),
           height: heightChanged ? nextHeight : Math.round(current.height),
-          sizeMode: 'auto',
+          sizeMode:
+            latestArtifact.node?.sizeMode === 'manual-width-auto-height'
+              ? 'manual-width-auto-height'
+              : 'auto',
           viewMode: latestArtifact.node?.viewMode ?? 'preview'
         })
         maybeRefitPendingFrame(current, patch, latestArtifact)
@@ -272,6 +288,7 @@ export function useHtmlFrameAutoSize({
     artifact,
     artifactKind,
     currentMeasurementEpochRef,
+    currentRenderableContent,
     executeScript,
     foundationRole,
     shape.id
@@ -307,11 +324,18 @@ export function useHtmlFrameAutoSize({
     queueContentMeasurement,
     previewRevision,
     previewWebviewUrl,
+    currentRenderableContent,
     shape.height,
     shape.width,
     webview,
     webviewMountNonce
   ])
 
-  return { measuredContentSize }
+  // Frame resizing is held during streaming; once the turn settles, run the
+  // deferred measurement so the frame height adapts to the final content even
+  // if the last webview load event fired while drawing was still active.
+  useEffect(() => {
+    if (drawingActive || !previewWebviewUrl) return
+    queueContentMeasurement()
+  }, [drawingActive, previewWebviewUrl, queueContentMeasurement])
 }

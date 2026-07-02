@@ -62,6 +62,8 @@ export type DesignHtmlPreviewHostProps = {
   zoom?: number
   retryMissingFile?: boolean
   webpreferences?: string
+  /** See shouldRenderDesignHtmlPreviewWebview. Defaults to true. */
+  mountWhileSkeleton?: boolean
   onError?: (message: string) => void
   onRevision?: (revision: number) => void
   onRenderStateChange?: (state: DesignPreviewRenderState) => void
@@ -74,15 +76,22 @@ export type UseDesignHtmlPreviewOptions = Omit<DesignHtmlPreviewHostProps, 'chil
 export function shouldRenderDesignHtmlPreviewWebview({
   fileUrl,
   renderState,
-  hasRenderableContent
+  hasRenderableContent,
+  mountWhileSkeleton = true
 }: {
   fileUrl: string
   renderState: DesignPreviewRenderState
   hasRenderableContent: boolean
+  /**
+   * Surfaces that render their own generating placeholder (e.g. the canvas
+   * screen frames' brush-sketch overlay) pass false so the skeleton HTML file
+   * never paints; the webview then mounts only once real content exists.
+   */
+  mountWhileSkeleton?: boolean
 }): boolean {
   if (!fileUrl) return false
   if (hasRenderableContent) return true
-  return renderState === 'skeleton'
+  return mountWhileSkeleton && renderState === 'skeleton'
 }
 
 export function designHtmlPreviewWebviewZoomFactor(zoom: number): number {
@@ -118,6 +127,7 @@ export function useDesignHtmlPreview({
   zoom,
   retryMissingFile = true,
   webpreferences = 'contextIsolation=yes,nodeIntegration=no,sandbox=yes',
+  mountWhileSkeleton = true,
   onError,
   onRevision,
   onRenderStateChange,
@@ -239,7 +249,8 @@ export function useDesignHtmlPreview({
   const webviewUrl = shouldRenderDesignHtmlPreviewWebview({
     fileUrl,
     renderState,
-    hasRenderableContent
+    hasRenderableContent,
+    mountWhileSkeleton
   })
     ? designHtmlPreviewUrl(fileUrl, revision)
     : ''
