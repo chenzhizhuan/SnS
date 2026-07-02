@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { DesignArtifact, DesignDocument } from '../../design/design-types'
-import { getDesignSidebarDocumentScreenCount, getDesignSidebarVisibleArtifacts } from './DesignSidebar'
+import {
+  getDesignSidebarDocumentLabel,
+  getDesignSidebarDocumentScreenCount,
+  getDesignSidebarVisibleArtifacts
+} from './DesignSidebar'
 
 function artifact(id: string, kind: DesignArtifact['kind'], patch: Partial<DesignArtifact> = {}): DesignArtifact {
   const createdAt = '2026-06-20T00:00:00.000Z'
@@ -43,5 +47,9 @@ describe('DesignSidebar helpers', () => {
     }
 
     expect(getDesignSidebarDocumentScreenCount(doc)).toBe(1)
+  })
+
+  it('uses the document ID as the sidebar label', () => {
+    expect(getDesignSidebarDocumentLabel({ id: 'a1b2c3d4' })).toBe('a1b2c3d4')
   })
 })

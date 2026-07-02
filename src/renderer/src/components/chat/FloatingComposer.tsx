@@ -166,6 +166,7 @@ type Props = {
   contextChips?: DesignComposerContext[]
   fileReferenceEnabled?: boolean
   fileReferences?: ComposerFileReference[]
+  extraFileMentionCandidates?: ComposerFileReference[]
   webAccessAvailable?: boolean
   executionSettings?: ComposerExecutionSettings | null
   executionSettingsApplying?: boolean
@@ -192,6 +193,7 @@ type Props = {
   onAddFileReference?: (reference: ComposerFileReference) => void
   onPickFileReferences?: () => void
   onOpenFileReferencePicker?: () => void
+  onOpenDesignReferencePicker?: () => void
   onRemoveFileReference?: (relativePath: string) => void
   onSend: () => void
   onInterrupt: (options?: { discard?: boolean }) => void
@@ -497,6 +499,7 @@ export function FloatingComposer({
   contextChips = EMPTY_CONTEXT_CHIPS,
   fileReferenceEnabled = false,
   fileReferences = EMPTY_FILE_REFERENCES,
+  extraFileMentionCandidates = EMPTY_FILE_REFERENCES,
   executionSettings = null,
   executionSettingsApplying = false,
   changedFiles = EMPTY_CHANGED_FILES,
@@ -510,6 +513,7 @@ export function FloatingComposer({
   onAddFileReference,
   onPickFileReferences,
   onOpenFileReferencePicker,
+  onOpenDesignReferencePicker,
   onRemoveFileReference,
   onSend,
   onInterrupt,
@@ -631,6 +635,7 @@ export function FloatingComposer({
   )
   const canPickAttachment = canCompose && attachmentUploadEnabled && !attachmentUploadBusy
   const canPickFileReference = canCompose && fileReferenceEnabled && Boolean(effectiveWorkspaceRoot) && Boolean(onOpenFileReferencePicker)
+  const canPickDesignReference = canCompose && fileReferenceEnabled && Boolean(onOpenDesignReferencePicker)
   const canPickLocalFileReference = canCompose && fileReferenceEnabled && Boolean(onPickFileReferences)
   const showIntentToolbar = !compact && route === 'chat'
   const showComposerMenuButton = showIntentToolbar
@@ -640,7 +645,7 @@ export function FloatingComposer({
   const canRunReview = canCompose && route !== 'claw' && Boolean(onReviewCommand)
   const canToggleWorktreeMode = canCompose && route !== 'claw' && Boolean(onToggleWorktreeMode)
   const canOpenComposerMenu = showComposerMenuButton
-    && (canPickFileReference || canPickLocalFileReference || canTogglePlanMode || canCreateNewThread || canOpenGoalPanel || canRunReview || canToggleWorktreeMode)
+    && (canPickFileReference || canPickDesignReference || canPickLocalFileReference || canTogglePlanMode || canCreateNewThread || canOpenGoalPanel || canRunReview || canToggleWorktreeMode)
   const showToolbarStartControls = showComposerMenuButton
   const showExecutionSettingsPicker = showIntentToolbar
     && Boolean(executionSettings)
@@ -1076,10 +1081,11 @@ export function FloatingComposer({
       ])
         .then(([index, pathSuggestions]) => {
           if (cancelled) return
-          const candidates = mergeMentionCandidates(
-            [...index.directories, ...index.files],
-            pathSuggestions
+          const indexedCandidates = mergeMentionCandidates(
+            extraFileMentionCandidates,
+            [...index.directories, ...index.files]
           )
+          const candidates = mergeMentionCandidates(indexedCandidates, pathSuggestions)
           setFileMentionSuggestions(
             filterWorkspaceFileMentionSuggestions(candidates, query, fileReferences)
           )
@@ -1096,7 +1102,13 @@ export function FloatingComposer({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [activeFileMention, effectiveWorkspaceRoot, fileReferences, showFileMentionMenu])
+  }, [
+    activeFileMention,
+    effectiveWorkspaceRoot,
+    extraFileMentionCandidates,
+    fileReferences,
+    showFileMentionMenu
+  ])
 
   useEffect(() => {
     if (!composerMenuOpen && !goalPanelOpen) return
@@ -1292,6 +1304,13 @@ export function FloatingComposer({
     if (!canPickFileReference) return
     setComposerMenuOpen(false)
     onOpenFileReferencePicker?.()
+    draft.focusComposer()
+  }
+
+  const handleDesignReferenceMenuClick = (): void => {
+    if (!canPickDesignReference) return
+    setComposerMenuOpen(false)
+    onOpenDesignReferencePicker?.()
     draft.focusComposer()
   }
 
@@ -1711,6 +1730,17 @@ export function FloatingComposer({
               >
                 <Paperclip className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
                 <span className="min-w-0 flex-1 truncate">{t('composerBrowseWorkspaceFiles')}</span>
+              </button>
+            ) : null}
+            {fileReferenceEnabled ? (
+              <button
+                type="button"
+                disabled={!canPickDesignReference}
+                onClick={handleDesignReferenceMenuClick}
+                className="ds-no-drag flex h-8 w-full items-center gap-2 px-3 text-left transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-ds-muted"
+              >
+                <Folder className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+                <span className="min-w-0 flex-1 truncate">{t('composerBrowseDesignDocs')}</span>
               </button>
             ) : null}
             {attachmentUploadEnabled ? (

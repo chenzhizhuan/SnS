@@ -18,6 +18,13 @@ export function documentDirPath(docId: string): string {
   return `${DESIGN_DIR}/${docId}`
 }
 
+/** Best-effort creation of the physical `.kun-design/<docId>/` directory. */
+export async function ensureDocumentDir(workspaceRoot: string, docId: string): Promise<void> {
+  if (!workspaceRoot || !docId || typeof window.kunGui?.createWorkspaceDirectory !== 'function') return
+  await window.kunGui.createWorkspaceDirectory({ path: DESIGN_DIR, workspaceRoot }).catch(() => null)
+  await window.kunGui.createWorkspaceDirectory({ path: documentDirPath(docId), workspaceRoot }).catch(() => null)
+}
+
 /** Persisted per-设计稿 metadata (no artifacts — those live on disk by nesting). */
 export type DesignDocumentIndexEntry = {
   id: string

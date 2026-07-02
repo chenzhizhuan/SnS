@@ -53,6 +53,10 @@ export function getDesignSidebarDocumentScreenCount(doc: Pick<DesignDocument, 'a
   return getDesignSidebarVisibleArtifacts(doc.artifacts).filter((artifact) => artifact.kind === 'html').length
 }
 
+export function getDesignSidebarDocumentLabel(doc: Pick<DesignDocument, 'id'>): string {
+  return doc.id
+}
+
 /**
  * Design-mode left sidebar: mode tabs + a 设计稿 (design document) tree. Each
  * 设计稿 is a top-level container; its 画布 (artifacts) show nested under the
@@ -420,6 +424,7 @@ export function DesignSidebar({
   const renderDocument = (doc: DesignDocument): ReactElement => {
     const isActive = doc.id === activeDocumentId
     const screenCount = getDesignSidebarDocumentScreenCount(doc)
+    const documentLabel = getDesignSidebarDocumentLabel(doc)
     return (
       <li key={doc.id}>
         {editingDocId === doc.id ? (
@@ -440,8 +445,8 @@ export function DesignSidebar({
           <SidebarTreeRow
             active={isActive}
             onClick={() => handleSelectDocument(doc.id)}
-            onDoubleClick={() => beginRenameDoc(doc.id, doc.title)}
-            title={doc.title}
+            onDoubleClick={() => beginRenameDoc(doc.id, documentLabel)}
+            title={`@${documentLabel}`}
             className="min-h-[34px]"
             buttonClassName="items-center gap-2 px-2.5 py-2"
             trailing={
@@ -452,7 +457,7 @@ export function DesignSidebar({
             actions={
               <>
                 <SidebarIconButton
-                  onClick={() => beginRenameDoc(doc.id, doc.title)}
+                  onClick={() => beginRenameDoc(doc.id, documentLabel)}
                   title={t('designRenameDocument')}
                   ariaLabel={t('designRenameDocument')}
                   stopPropagation
@@ -476,7 +481,9 @@ export function DesignSidebar({
             ) : (
               <Folder className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.9} />
             )}
-            <span className="min-w-0 flex-1 truncate">{doc.title}</span>
+            <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+              <span className="min-w-0 truncate font-mono">{documentLabel}</span>
+            </span>
           </SidebarTreeRow>
         )}
         {isActive ? renderActiveDocBody() : null}

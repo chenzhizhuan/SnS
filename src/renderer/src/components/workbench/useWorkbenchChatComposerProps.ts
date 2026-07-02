@@ -35,6 +35,7 @@ type UseWorkbenchChatComposerPropsInput = {
   attachmentUploadError: string | null
   activeSddDraft: boolean
   composerFileReferences: ComposerProps['fileReferences']
+  extraFileMentionCandidates: ComposerProps['extraFileMentionCandidates']
   webAccessAvailable: boolean
   composerExecutionSettings: ComposerProps['executionSettings']
   composerExecutionApplying: boolean
@@ -47,6 +48,7 @@ type UseWorkbenchChatComposerPropsInput = {
   addComposerFileReference: NonNullable<ComposerProps['onAddFileReference']>
   pickComposerFileReferences: () => void | Promise<unknown>
   openFileTreeSidePanel: () => void
+  openDesignFileTreeSidePanel: () => void
   removeComposerFileReference: NonNullable<ComposerProps['onRemoveFileReference']>
   queuedMessages: ComposerProps['queuedMessages']
   removeQueuedMessage: ComposerProps['onRemoveQueuedMessage']
@@ -96,6 +98,7 @@ export function useWorkbenchChatComposerProps({
   attachmentUploadError,
   activeSddDraft,
   composerFileReferences,
+  extraFileMentionCandidates,
   webAccessAvailable,
   composerExecutionSettings,
   composerExecutionApplying,
@@ -108,6 +111,7 @@ export function useWorkbenchChatComposerProps({
   addComposerFileReference,
   pickComposerFileReferences,
   openFileTreeSidePanel,
+  openDesignFileTreeSidePanel,
   removeComposerFileReference,
   queuedMessages,
   removeQueuedMessage,
@@ -165,6 +169,7 @@ export function useWorkbenchChatComposerProps({
     attachmentUploadError,
     fileReferenceEnabled: route === 'chat' && !activeSddDraft,
     fileReferences: composerFileReferences,
+    extraFileMentionCandidates,
     webAccessAvailable,
     executionSettings: composerExecutionSettings,
     executionSettingsApplying: composerExecutionApplying,
@@ -178,6 +183,7 @@ export function useWorkbenchChatComposerProps({
     onAddFileReference: addComposerFileReference,
     onPickFileReferences: () => void pickComposerFileReferences(),
     onOpenFileReferencePicker: openFileTreeSidePanel,
+    onOpenDesignReferencePicker: openDesignFileTreeSidePanel,
     onRemoveFileReference: removeComposerFileReference,
     queuedMessages,
     onRemoveQueuedMessage: removeQueuedMessage,
@@ -215,6 +221,7 @@ export function useWorkbenchChatComposerProps({
     composerChangeSummary,
     composerExecutionApplying,
     composerExecutionSettings,
+    extraFileMentionCandidates,
     composerFileReferences,
     composerMode,
     composerModel,
@@ -232,6 +239,7 @@ export function useWorkbenchChatComposerProps({
     interrupt,
     lockVisionToTextModelSwitch,
     openChangesPanel,
+    openDesignFileTreeSidePanel,
     openFileTreeSidePanel,
     openProvidersSettings,
     openSideConversationDraft,

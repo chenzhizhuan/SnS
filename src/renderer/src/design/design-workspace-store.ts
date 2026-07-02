@@ -6,7 +6,12 @@ import {
   deleteArtifactDir,
   persistArtifactMeta
 } from './design-artifact-persistence'
-import { deleteDocumentDir, flushDocumentsIndex, persistDocumentsIndex } from './design-document-persistence'
+import {
+  deleteDocumentDir,
+  ensureDocumentDir,
+  flushDocumentsIndex,
+  persistDocumentsIndex
+} from './design-document-persistence'
 import { defaultPreviewNodeSizeForDesignTarget, hashDesignSystem, normalizeDesignTarget } from './design-context'
 import {
   createDesignDocumentId,
@@ -26,7 +31,6 @@ import {
   VIEWPORT_KEY,
   applyToActiveDoc,
   builtinDesignWorkspaceRoot,
-  defaultDocumentTitle,
   projectActiveDoc,
   readPersistedAiRailCollapsed,
   readPersistedAssistantModel,
@@ -126,7 +130,7 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
         const order = state.documents.reduce((max, d) => Math.max(max, d.order), -1) + 1
         const doc: DesignDocument = {
           id,
-          title: (title ?? '').trim() || defaultDocumentTitle(),
+          title: (title ?? '').trim() || id,
           createdAt,
           updatedAt: createdAt,
           order,
@@ -136,6 +140,7 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
         const documents = [...state.documents, doc]
         return { documents, activeDocumentId: id, ...projectActiveDoc(documents, id), fileError: null }
       })
+      void ensureDocumentDir(get().workspaceRoot, id)
       if (options?.transient) persistIndex()
       else persistIndexNow()
       return id

@@ -17,7 +17,7 @@ import {
   isComposerDirectoryReference,
   type ComposerFileContextEntry
 } from '../../lib/composer-file-references'
-import { filesUnderDirectory, loadWorkspaceFileIndex } from '../../lib/workspace-file-index'
+import { loadWorkspaceDirectoryContextFiles } from '../../lib/workspace-file-index'
 import { resolveCodeCanvasComposerRoute } from '../../design/canvas/code-canvas'
 import { useCanvasSelectionStore } from '../../design/canvas/canvas-selection-store'
 import {
@@ -192,14 +192,15 @@ export function useWorkbenchComposerSubmitController({
     for (const reference of references) {
       if (remainingChars <= 0) break
       if (isComposerDirectoryReference(reference)) {
-        const index = await loadWorkspaceFileIndex(workspace).catch(() => null)
-        const dirFiles = index
-          ? filesUnderDirectory(index.files, reference.relativePath)
-              .slice(0, COMPOSER_DIRECTORY_CONTEXT_MAX_FILES)
-          : []
+        const directoryWorkspace = reference.workspaceRoot || workspace
+        const dirFiles = await loadWorkspaceDirectoryContextFiles(
+          directoryWorkspace,
+          reference.relativePath,
+          COMPOSER_DIRECTORY_CONTEXT_MAX_FILES
+        ).catch(() => [])
         for (const file of dirFiles) {
           if (remainingChars <= 0) break
-          await appendFileEntry(file, false)
+          await appendFileEntry({ ...file, workspaceRoot: directoryWorkspace }, false)
         }
         continue
       }

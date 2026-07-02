@@ -11,6 +11,8 @@ import type { ChatFileTreeReference } from '../chat/ChatFileTreePanel'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { CODE_PANEL_PREFERRED } from '../workbench-layout'
 
+export type WorkbenchFileTreeSidePanelView = 'workspace' | 'design'
+
 export type WorkbenchFileTreeControllerOptions = {
   route: string
   threads: NormalizedThread[]
@@ -43,6 +45,8 @@ export function useWorkbenchFileTreeController({
 }: WorkbenchFileTreeControllerOptions) {
   const [composerFileReferences, setComposerFileReferences] = useState<ComposerFileReference[]>([])
   const [fileTreeSidePanelOpen, setFileTreeSidePanelOpen] = useState(false)
+  const [fileTreeSidePanelView, setFileTreeSidePanelView] =
+    useState<WorkbenchFileTreeSidePanelView>('workspace')
   const [openFilePreviewTargets, setOpenFilePreviewTargets] = useState<WorkspaceFileTarget[]>([])
   const fileTreeWorkspaceRoot = useMemo(
     () => normalizeWorkspaceRoot(threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot),
@@ -120,6 +124,12 @@ export function useWorkbenchFileTreeController({
   }
 
   function openFileTreeSidePanel(): void {
+    setFileTreeSidePanelView('workspace')
+    setFileTreeSidePanelOpen(true)
+  }
+
+  function openDesignFileTreeSidePanel(): void {
+    setFileTreeSidePanelView('design')
     setFileTreeSidePanelOpen(true)
   }
 
@@ -144,6 +154,7 @@ export function useWorkbenchFileTreeController({
   return {
     composerFileReferences,
     fileTreeSidePanelOpen,
+    fileTreeSidePanelView,
     openFilePreviewTargets,
     fileTreeWorkspaceRoot,
     clearComposerFileReferences,
@@ -156,6 +167,8 @@ export function useWorkbenchFileTreeController({
     addWorkspaceReferenceFromSidebar,
     toggleFileTreeSidePanel,
     openFileTreeSidePanel,
+    openDesignFileTreeSidePanel,
+    setFileTreeSidePanelView,
     clearFilePreviewTargets
   }
 }

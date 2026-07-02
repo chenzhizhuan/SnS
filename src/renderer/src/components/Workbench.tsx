@@ -39,6 +39,8 @@ import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import {
   relativeWorkspacePath,
 } from '../lib/composer-file-references'
+import { useDesignWorkspaceStore } from '../design/design-workspace-store'
+import { designDocumentComposerFileReferences } from '../design/design-document-file-reference'
 
 const FILE_TREE_SIDEBAR_WIDTH = 320
 
@@ -66,6 +68,7 @@ export function Workbench(): ReactElement {
   const [composerReasoningEffort, setComposerReasoningEffort] =
     useState<ComposerReasoningEffort>('max')
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
+  const designDocuments = useDesignWorkspaceStore((s) => s.documents)
   const { focusModeEnabled, runtimeLogPath, toggleTheme, uiModeCameosEnabled, updateFocusMode } =
     useWorkbenchUiRuntime()
   const {
@@ -99,6 +102,10 @@ export function Workbench(): ReactElement {
     composerModelGroups,
     setInput
   })
+  const designDocumentFileMentionCandidates = useMemo(() => {
+    const root = normalizeWorkspaceRoot(designWorkspaceRoot || workspaceRoot)
+    return root ? designDocumentComposerFileReferences(designDocuments, root) : []
+  }, [designDocuments, designWorkspaceRoot, workspaceRoot])
 
   useEffect(() => {
     busyRef.current = busy
@@ -153,11 +160,12 @@ export function Workbench(): ReactElement {
     writeAssistantOpen
   })
   const {
-    composerFileReferences, fileTreeSidePanelOpen, openFilePreviewTargets, fileTreeWorkspaceRoot,
+    composerFileReferences, fileTreeSidePanelOpen, fileTreeSidePanelView, openFilePreviewTargets, fileTreeWorkspaceRoot,
     clearComposerFileReferences, addComposerFileReference, pickComposerFileReferences,
     removeComposerFileReference, openWorkspaceFilePreviewTarget, previewWorkspaceFileFromSidebar,
     closeWorkspaceFilePreviewTarget, addWorkspaceReferenceFromSidebar, toggleFileTreeSidePanel,
-    openFileTreeSidePanel, clearFilePreviewTargets
+    openFileTreeSidePanel, openDesignFileTreeSidePanel, setFileTreeSidePanelView,
+    clearFilePreviewTargets
   } = useWorkbenchFileTreeController({
     route,
     threads,
@@ -395,10 +403,12 @@ export function Workbench(): ReactElement {
     composerModelGroups, composerReasoningEffort, setComposerReasoningEffort, lockVisionToTextModelSwitch,
     setClawChannelModel, setComposerModel, openProvidersSettings: () => openSettings('providers'), handleSend,
     composerAttachments, attachmentUploadEnabled, attachmentUploadBusy, attachmentUploadError,
-    activeSddDraft: Boolean(activeSddDraft), composerFileReferences, webAccessAvailable,
+    activeSddDraft: Boolean(activeSddDraft), composerFileReferences,
+    extraFileMentionCandidates: designDocumentFileMentionCandidates, webAccessAvailable,
     composerExecutionSettings, composerExecutionApplying, composerChangeSummary, runtimeSkills, disabledSkillIds,
     handlePickAttachments, handlePasteClipboardImage, removeComposerAttachment, addComposerFileReference,
-    pickComposerFileReferences, openFileTreeSidePanel, removeComposerFileReference, queuedMessages,
+    pickComposerFileReferences, openFileTreeSidePanel, openDesignFileTreeSidePanel,
+    removeComposerFileReference, queuedMessages,
     removeQueuedMessage, interrupt, handleGuiPlanCommand, useWorktreePool, worktreeBranch, setWorktreeBranch,
     setUseWorktreePool, createThread, activeSkillWorkspace, reviewActiveThread, updateComposerExecutionSettings,
     openChangesPanel: () => setRightPanelMode('changes'),
@@ -675,9 +685,14 @@ export function Workbench(): ReactElement {
           rightSidebarWidth,
           fileTree: {
             open: fileTreeSidePanelOpen,
+            view: fileTreeSidePanelView,
             width: FILE_TREE_SIDEBAR_WIDTH,
             workspaceRoot: fileTreeWorkspaceRoot,
+            designWorkspaceRoot: normalizeWorkspaceRoot(designWorkspaceRoot || workspaceRoot),
+            designDocuments,
+            activeDesignDocumentId: designActiveDocumentId,
             selectedTarget: filePreviewTarget,
+            onViewChange: setFileTreeSidePanelView,
             onPreviewFile: previewWorkspaceFileFromSidebar,
             onAddReference: addWorkspaceReferenceFromSidebar
           },

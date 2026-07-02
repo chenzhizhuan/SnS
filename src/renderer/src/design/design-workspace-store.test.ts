@@ -505,6 +505,30 @@ describe('design workspace store', () => {
     expect(state.activeArtifactId).toBeNull()
   })
 
+  it('uses the generated ID as the default new 设计稿 title', () => {
+    const id = useDesignWorkspaceStore.getState().createDocument()
+
+    expect(useDesignWorkspaceStore.getState().documents.find((doc) => doc.id === id)?.title).toBe(id)
+  })
+
+  it('creates the physical ID directory for a new 设计稿', async () => {
+    const createWorkspaceDirectory = vi.fn(async (request: { path: string; workspaceRoot: string }) => ({
+      ok: true as const,
+      path: request.path,
+      createdAt
+    }))
+    vi.stubGlobal('window', {
+      kunGui: { writeWorkspaceFile, createWorkspaceDirectory }
+    })
+
+    const id = useDesignWorkspaceStore.getState().createDocument('Second')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(createWorkspaceDirectory).toHaveBeenCalledWith({ path: '.kun-design', workspaceRoot: '/workspace' })
+    expect(createWorkspaceDirectory).toHaveBeenCalledWith({ path: `.kun-design/${id}`, workspaceRoot: '/workspace' })
+  })
+
   it('opens the canvas assistant by default unless the user collapsed it', async () => {
     const storage = new Map<string, string>()
     const localStorage = {
