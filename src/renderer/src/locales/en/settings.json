@@ -1272,6 +1272,8 @@
   "codexEnterCode": "Open the link below and enter the code to authorize:",
   "codexOpenBrowser": "Open in browser",
   "codexWaitingAuth": "Waiting for authorization...",
+  "codexPreparingDeviceLogin": "Preparing device-code sign-in...",
+  "codexLoginPortBusyFallback": "Port 1455 is in use, so device-code sign-in is ready instead.",
   "memoryDiscardConfirm": "Discard unsaved changes?",
   "memoryDiscardConfirmDetail": "Your edits will be lost.",
   "memoryDiscardConfirmAction": "Discard",

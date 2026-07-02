@@ -1272,6 +1272,8 @@
   "codexEnterCode": "打开下方链接并输入验证码以授权：",
   "codexOpenBrowser": "在浏览器中打开",
   "codexWaitingAuth": "等待授权中...",
+  "codexPreparingDeviceLogin": "正在准备验证码登录...",
+  "codexLoginPortBusyFallback": "1455 端口被占用，已切换到验证码登录。",
   "memoryDiscardConfirm": "放弃未保存的更改？",
   "memoryDiscardConfirmDetail": "您的修改将会丢失。",
   "memoryDiscardConfirmAction": "放弃",

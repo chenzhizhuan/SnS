@@ -240,9 +240,10 @@ export type CodexOAuthCredentials = {
 export type CodexAuthPollResult =
   | { done: true; credentials: CodexOAuthCredentials }
   | { done: false; error?: string }
+export type CodexBrowserAuthErrorCode = 'port_in_use'
 export type CodexBrowserAuthResult =
   | { ok: true; credentials: CodexOAuthCredentials }
-  | { ok: false; message: string }
+  | { ok: false; message: string; code?: CodexBrowserAuthErrorCode }
 export type ClawImTelegramConnectErrorCode = 'invalid_format' | 'rejected' | 'network' | 'unknown'
 export type ClawImTelegramConnectResult =
   | { ok: true; botId: number; botUsername: string; botFirstName: string }

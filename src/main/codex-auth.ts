@@ -28,9 +28,21 @@ export type CodexAuthPollResult =
   | { done: true; credentials: CodexOAuthCredentials }
   | { done: false; error?: string }
 
+export type CodexBrowserAuthErrorCode = 'port_in_use'
+
 export type CodexBrowserAuthResult =
   | { ok: true; credentials: CodexOAuthCredentials }
-  | { ok: false; message: string }
+  | { ok: false; message: string; code?: CodexBrowserAuthErrorCode }
+
+class CodexBrowserAuthError extends Error {
+  constructor(
+    message: string,
+    readonly code: CodexBrowserAuthErrorCode
+  ) {
+    super(message)
+    this.name = 'CodexBrowserAuthError'
+  }
+}
 
 function parseJwtClaims(token: string): Record<string, unknown> | undefined {
   const part = token.split('.')[1]
@@ -340,13 +352,15 @@ export async function startCodexBrowserAuth(
       })
 
       server.on('error', (err: NodeJS.ErrnoException) => {
-        clearTimeout(timeout)
         const message =
           err.code === 'EADDRINUSE'
             ? `端口 ${CODEX_OAUTH_PORT} 被占用，无法完成登录回调`
             : err.message
-        cleanup()
-        reject(new Error(message))
+        settleReject(
+          err.code === 'EADDRINUSE'
+            ? new CodexBrowserAuthError(message, 'port_in_use')
+            : new Error(message)
+        )
       })
 
       server.listen(CODEX_OAUTH_PORT, () => {
@@ -358,7 +372,10 @@ export async function startCodexBrowserAuth(
     return { ok: true, credentials }
   } catch (error) {
     cleanup()
-    return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    const message = error instanceof Error ? error.message : String(error)
+    return error instanceof CodexBrowserAuthError
+      ? { ok: false, message, code: error.code }
+      : { ok: false, message }
   }
 }
 
