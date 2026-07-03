@@ -152,6 +152,7 @@ export function formatHtmlElementContextLines(element: DesignHtmlElementContext 
     `- Tag: <${element.tagName.toLowerCase()}>`,
     ...(text ? [`- Current text: ${text.slice(0, 700)}`] : []),
     ...(html ? [`- HTML excerpt: ${html.slice(0, 1200)}`] : []),
+    ...(text ? ['- If the brief asks to change copy, wording, labels, or text, edit this element text directly and preserve its surrounding structure/classes.'] : []),
     '- Treat this selected element as the binding target for wording like "this", "here", "这个", "这里", or "选中的". Prefer focused edits to this element and its local styling/children unless the user asks for broader layout changes.'
   ]
 }

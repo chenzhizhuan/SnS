@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Brush } from 'lucide-react'
+import { Brush, Check, X } from 'lucide-react'
 import type { CanvasShape } from '../../../../design/canvas/canvas-types'
 import type { DesignHtmlElementContext } from '../../../../design/design-composer-context'
 import { inferDesignArtifactFoundationRole } from '../../../../design/design-types'
@@ -8,6 +8,7 @@ import { useChatStore } from '../../../../store/chat-store'
 import {
   type DesignRuntimeQualityPayload
 } from '../../../../design/design-html-quality'
+import { replaceHtmlElementTextInSource } from '../../../../design/design-html-element-edit'
 import { useDesignHtmlPreview } from '../../DesignHtmlPreviewHost'
 import { HtmlFrameAiCursorOverlay } from './HtmlFrameAiCursorOverlay'
 import { HtmlFrameChrome } from './HtmlFrameChrome'
@@ -182,7 +183,12 @@ function ScreenOverlayInner({
     },
     [shape.id, onDoubleClick]
   )
-  const { selectedElementRect, selectElementAt } = useHtmlFrameElementSelection({
+  const {
+    selectedElementRect,
+    selectedElementContext,
+    selectElementAt,
+    updateSelectedElementText
+  } = useHtmlFrameElementSelection({
     artifact,
     canvasWidth,
     canvasHeight,
@@ -194,6 +200,75 @@ function ScreenOverlayInner({
     setLocalPreviewError,
     onUseElementAsContext
   })
+  const [elementTextDraft, setElementTextDraft] = useState('')
+  const [elementTextStatus, setElementTextStatus] =
+    useState<{ kind: 'idle' | 'saving' | 'saved' | 'error'; message?: string }>({ kind: 'idle' })
+
+  useEffect(() => {
+    setElementTextDraft(selectedElementContext?.text ?? '')
+    setElementTextStatus({ kind: 'idle' })
+  }, [selectedElementContext?.artifactId, selectedElementContext?.selector, selectedElementContext?.text])
+
+  const commitSelectedElementText = useCallback((): void => {
+    if (!artifact || artifact.kind !== 'html' || !artifact.relativePath || !selectedElementContext) return
+    if (!workspaceRoot.trim()) {
+      setElementTextStatus({ kind: 'error', message: 'Workspace root is missing.' })
+      return
+    }
+    if (
+      typeof window.kunGui?.readWorkspaceFile !== 'function' ||
+      typeof window.kunGui?.writeWorkspaceFile !== 'function'
+    ) {
+      setElementTextStatus({ kind: 'error', message: 'Workspace file editing is unavailable.' })
+      return
+    }
+
+    setElementTextStatus({ kind: 'saving' })
+    void (async () => {
+      const read = await window.kunGui.readWorkspaceFile({
+        path: artifact.relativePath,
+        workspaceRoot
+      })
+      if (!read.ok) throw new Error(read.message)
+      if (read.truncated) throw new Error('HTML file is too large to edit directly.')
+
+      const replaced = replaceHtmlElementTextInSource(read.content, selectedElementContext, elementTextDraft)
+      if (!replaced.ok) throw new Error(replaced.message)
+
+      if (replaced.content !== read.content) {
+        setArtifactPreviewStatus(artifact.id, 'pending')
+        const write = await window.kunGui.writeWorkspaceFile({
+          path: artifact.relativePath,
+          workspaceRoot,
+          content: replaced.content
+        })
+        if (!write.ok) throw new Error(write.message)
+      }
+
+      const nextElementHtml = replaceHtmlElementTextInSource(
+        selectedElementContext.html,
+        selectedElementContext,
+        elementTextDraft
+      )
+      updateSelectedElementText(
+        elementTextDraft,
+        nextElementHtml.ok ? nextElementHtml.content : selectedElementContext.html
+      )
+      setElementTextStatus({ kind: 'saved' })
+    })().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error)
+      setElementTextStatus({ kind: 'error', message })
+      setFileError(message)
+    })
+  }, [
+    artifact,
+    elementTextDraft,
+    selectedElementContext,
+    setArtifactPreviewStatus,
+    setFileError,
+    updateSelectedElementText,
+    workspaceRoot
+  ])
   const aiCursor = useHtmlFrameAiCursor({
     executeScript,
     previewAsyncEpochRef,
@@ -258,6 +333,17 @@ function ScreenOverlayInner({
   const showChrome = screenWidth > 92 && screenHeight > 42
   const placeholderPreview = !preview.hasRenderableContent && preview.renderState !== 'renderable'
   const transparentGeneratingSurface = placeholderPreview || drawingActive
+  const elementTextChanged = selectedElementContext ? elementTextDraft !== selectedElementContext.text : false
+  const elementTextSaving = elementTextStatus.kind === 'saving'
+  const elementEditorStyle = selectedElementRect
+    ? {
+        left: Math.max(8, Math.min(screenWidth - 236, selectedElementRect.left * zoom)),
+        top: Math.max(8, Math.min(
+          screenHeight - 116,
+          (selectedElementRect.top + selectedElementRect.height) * zoom + 8
+        ))
+      }
+    : undefined
   return (
     <div
       className="absolute overflow-visible"
@@ -385,6 +471,59 @@ function ScreenOverlayInner({
                 height: selectedElementRect.height * zoom
               }}
             />
+          ) : null}
+          {selectedElementContext && selectedElementRect && editing && !interactive && elementEditorStyle ? (
+            <div
+              className="absolute z-10 w-[228px] rounded-[8px] border border-ds-border bg-white/96 p-2 shadow-[0_16px_36px_rgba(15,23,42,0.18)] backdrop-blur dark:bg-[#171b22]/96"
+              style={elementEditorStyle}
+              onPointerDown={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+            >
+              <textarea
+                value={elementTextDraft}
+                onChange={(event) => {
+                  setElementTextDraft(event.target.value)
+                  if (elementTextStatus.kind !== 'idle') setElementTextStatus({ kind: 'idle' })
+                }}
+                className="h-16 w-full resize-none rounded-[6px] border border-ds-border bg-ds-hover/20 px-2 py-1.5 text-[11.5px] leading-4 text-ds-ink outline-none transition focus:border-accent/50 focus:bg-white dark:bg-white/5 dark:focus:bg-white/10"
+                aria-label="HTML text"
+                spellCheck
+              />
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1 truncate text-[10.5px] text-ds-faint">
+                  {elementTextStatus.kind === 'error'
+                    ? elementTextStatus.message
+                    : elementTextStatus.kind === 'saved'
+                      ? 'Saved'
+                      : selectedElementContext.tagName.toLowerCase()}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    title="Reset text"
+                    aria-label="Reset text"
+                    onClick={() => {
+                      setElementTextDraft(selectedElementContext.text)
+                      setElementTextStatus({ kind: 'idle' })
+                    }}
+                    disabled={elementTextSaving || !elementTextChanged}
+                    className="flex h-6 w-6 items-center justify-center rounded-[6px] text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Save text"
+                    aria-label="Save text"
+                    onClick={commitSelectedElementText}
+                    disabled={elementTextSaving || !elementTextChanged}
+                    className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-accent text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : null}
           <HtmlFrameAiCursorOverlay
             cursor={aiCursor}

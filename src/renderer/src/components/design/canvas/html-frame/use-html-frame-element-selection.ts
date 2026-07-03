@@ -37,9 +37,13 @@ export function useHtmlFrameElementSelection({
   onUseElementAsContext
 }: HtmlFrameElementSelectionOptions): {
   selectedElementRect: SelectedElementRect | null
+  selectedElementContext: DesignHtmlElementContext | null
   selectElementAt: (event: React.PointerEvent<HTMLDivElement>) => void
+  updateSelectedElementText: (text: string, html?: string) => void
 } {
   const [selectedElementRect, setSelectedElementRect] = useState<SelectedElementRect | null>(null)
+  const [selectedElementContext, setSelectedElementContext] =
+    useState<DesignHtmlElementContext | null>(null)
   const latestEditingRef = useRef(editing)
   const onUseElementAsContextRef = useRef(onUseElementAsContext)
 
@@ -126,6 +130,7 @@ export function useHtmlFrameElementSelection({
           if (!result.ok) {
             if (typeof result.message === 'string') setLocalPreviewError(result.message)
             setSelectedElementRect(null)
+            setSelectedElementContext(null)
             onUseElementAsContext?.(null)
             return
           }
@@ -145,7 +150,7 @@ export function useHtmlFrameElementSelection({
           }
           setLocalPreviewError('')
           setSelectedElementRect(resultRect)
-          onUseElementAsContext?.({
+          const context = {
             artifactId: artifact.id,
             artifactTitle: artifact.title,
             artifactRelativePath: artifact.relativePath,
@@ -153,7 +158,9 @@ export function useHtmlFrameElementSelection({
             tagName: result.tagName,
             text: result.text,
             html: result.html
-          })
+          }
+          setSelectedElementContext(context)
+          onUseElementAsContext?.(context)
         })
         .catch((error: unknown) => {
           const message = error instanceof Error ? error.message : String(error)
@@ -177,6 +184,7 @@ export function useHtmlFrameElementSelection({
   useEffect(() => {
     setLocalPreviewError('')
     setSelectedElementRect(null)
+    setSelectedElementContext(null)
   }, [artifact?.id, artifact?.relativePath, setLocalPreviewError, shapeId])
 
   useEffect(() => {
@@ -184,8 +192,18 @@ export function useHtmlFrameElementSelection({
     latestEditingRef.current = editing
     if (!htmlFrameShouldClearElementContextOnEditingChange({ wasEditing, editing })) return
     setSelectedElementRect(null)
+    setSelectedElementContext(null)
     onUseElementAsContextRef.current?.(null)
   }, [editing])
+
+  const updateSelectedElementText = useCallback((text: string, html?: string): void => {
+    setSelectedElementContext((current) => {
+      if (!current) return current
+      const next = { ...current, text, ...(html !== undefined ? { html } : {}) }
+      onUseElementAsContextRef.current?.(next)
+      return next
+    })
+  }, [])
 
   useEffect(
     () => () => {
@@ -194,5 +212,5 @@ export function useHtmlFrameElementSelection({
     []
   )
 
-  return { selectedElementRect, selectElementAt }
+  return { selectedElementRect, selectedElementContext, selectElementAt, updateSelectedElementText }
 }
