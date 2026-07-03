@@ -469,6 +469,8 @@ export class TurnService {
       | 'injectedMemoryIds'
       | 'injectedMemorySummaries'
       | 'skillInjectionBytes'
+      | 'injectedInstructionSources'
+      | 'instructionInjectionBytes'
       | 'toolCatalogFingerprint'
       | 'toolCatalogToolCount'
       | 'toolCatalogDrift'
@@ -486,6 +488,12 @@ export class TurnService {
                 ? { injectedMemorySummaries: [...patch.injectedMemorySummaries] }
                 : {}),
               ...(patch.skillInjectionBytes !== undefined ? { skillInjectionBytes: patch.skillInjectionBytes } : {}),
+              ...(patch.injectedInstructionSources
+                ? { injectedInstructionSources: [...patch.injectedInstructionSources] }
+                : {}),
+              ...(patch.instructionInjectionBytes !== undefined
+                ? { instructionInjectionBytes: patch.instructionInjectionBytes }
+                : {}),
               ...(patch.toolCatalogFingerprint ? { toolCatalogFingerprint: patch.toolCatalogFingerprint } : {}),
               ...(patch.toolCatalogToolCount !== undefined ? { toolCatalogToolCount: patch.toolCatalogToolCount } : {}),
               ...(patch.toolCatalogDrift !== undefined ? { toolCatalogDrift: patch.toolCatalogDrift } : {})

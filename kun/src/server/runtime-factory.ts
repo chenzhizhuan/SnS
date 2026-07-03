@@ -87,6 +87,7 @@ import {
   type ModelEndpointFormat
 } from '../contracts/model-endpoint-format.js'
 import { SkillRuntime } from '../skills/skill-runtime.js'
+import { InstructionRuntime } from '../instructions/instruction-runtime.js'
 import { resolveConfiguredHooks, type HooksConfig } from '../hooks/hook-config.js'
 import { FileMemoryStore } from '../memory/memory-store.js'
 import { DelegationRuntime, FileDelegationStore } from '../delegation/delegation-runtime.js'
@@ -223,6 +224,7 @@ export async function createKunServeRuntime(
     SkillRuntime.create(activeOptions.capabilities?.skills),
     seedUsageCarryover({ threadStore, sessionStore, usageService })
   ])
+  const instructionRuntime = new InstructionRuntime(activeOptions.capabilities?.instructions)
   const turnService = new TurnService({
     threadStore,
     sessionStore,
@@ -376,6 +378,7 @@ export async function createKunServeRuntime(
 	          sandboxMode: activeOptions.sandboxMode,
 	          modelCapabilities,
 	          skillRuntime,
+	          instructionRuntime,
 	          tokenEconomy,
           // Persist the child as a hidden `side` thread on the shared stores +
           // event bus so its session is loadable and streams live in the GUI.
@@ -416,6 +419,11 @@ export async function createKunServeRuntime(
 	      configuredRoots: activeOptions.capabilities?.skills.roots.length,
       discoveredSkills: skillRuntime.count(),
       reason: skillRuntime.diagnostics().validationErrors[0]?.message
+    },
+    instructions: {
+      available: instructionRuntime.enabled(),
+      lastSourceCount: instructionRuntime.diagnostics().lastInjection?.sources.length ?? 0,
+      lastInjectedBytes: instructionRuntime.diagnostics().lastInjection?.injectedBytes ?? 0
     },
     attachments: {
       available: Boolean(attachmentStore)
@@ -519,6 +527,7 @@ export async function createKunServeRuntime(
 	      defaultIsAgentSdk,
 	      defaultToken: activeOptions.apiKey,
 	      skillRuntime,
+	      instructionRuntime,
 	      userInputGate,
 	      nowIso,
 	      ...(attachmentStore ? { attachmentStore } : {}),
@@ -548,6 +557,7 @@ export async function createKunServeRuntime(
     nowIso,
 	    modelCapabilities,
 	    skillRuntime,
+	    instructionRuntime,
 	    tokenEconomy,
 	    contextCompaction: activeOptions.contextCompaction,
 	    ...(activeOptions.roles ? { roles: activeOptions.roles } : {}),
@@ -596,6 +606,11 @@ export async function createKunServeRuntime(
 	      configuredRoots: activeOptions.capabilities?.skills.roots.length,
 	      discoveredSkills: skillRuntime.count(),
 	      reason: skillRuntime.diagnostics().validationErrors[0]?.message
+	    },
+	    instructions: {
+	      available: instructionRuntime.enabled(),
+	      lastSourceCount: instructionRuntime.diagnostics().lastInjection?.sources.length ?? 0,
+	      lastInjectedBytes: instructionRuntime.diagnostics().lastInjection?.injectedBytes ?? 0
 	    },
 	    attachments: {
 	      available: Boolean(attachmentStore)
@@ -770,6 +785,7 @@ export async function createKunServeRuntime(
 	    agentSdkSignature = nextAgentSdkSignature
 	    modelClient.replace(buildModelClientRouterInput(activeOptions, modelCapabilities, llmDebug))
 	    skillRuntime.replaceWith(nextSkillRuntime)
+	    instructionRuntime.replaceConfig(activeOptions.capabilities?.instructions)
 	    mcpProviders = nextMcpProviders
 	    webProviders = nextWebProviders
 	    attachmentStore = nextAttachmentStore
@@ -792,6 +808,7 @@ export async function createKunServeRuntime(
 	      sdkRuntimeDeps.defaultModel = activeOptions.model
 	      sdkRuntimeDeps.defaultToken = activeOptions.apiKey
 	      sdkRuntimeDeps.skillRuntime = skillRuntime
+	      sdkRuntimeDeps.instructionRuntime = instructionRuntime
 	      if (attachmentStore) {
 	        sdkRuntimeDeps.attachmentStore = attachmentStore
 	      } else {
@@ -819,6 +836,7 @@ export async function createKunServeRuntime(
 	    loopOptions.tokenEconomy = tokenEconomy
 	    loopOptions.contextCompaction = activeOptions.contextCompaction
 	    loopOptions.roles = activeOptions.roles
+	    loopOptions.instructionRuntime = instructionRuntime
 	    loopOptions.toolStorm = activeOptions.runtime?.toolStorm
 	    loopOptions.toolArgumentRepair = activeOptions.runtime?.toolArgumentRepair
 	    loopOptions.hooks = resolvedHooks
@@ -909,7 +927,7 @@ export async function createKunServeRuntime(
           heapTotalBytes: memory.heapTotal,
           externalBytes: memory.external
         },
-        capabilities
+        capabilities: rebuildCapabilities()
       }
     },
 	    toolDiagnostics: async () => ({
@@ -919,6 +937,7 @@ export async function createKunServeRuntime(
       mcpSearch: mcpProviders.search,
       webProviders: webProviders.diagnostics,
       skills: skillRuntime.diagnostics(),
+      instructions: instructionRuntime.diagnostics(),
       attachments: attachmentStore
         ? await attachmentStore.diagnostics()
         : { enabled: false, rootDir: '', count: 0, totalBytes: 0 },

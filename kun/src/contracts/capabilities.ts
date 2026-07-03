@@ -219,6 +219,12 @@ export const SkillsCapabilityConfig = CapabilityToggleConfig.extend({
 }).strict()
 export type SkillsCapabilityConfig = z.infer<typeof SkillsCapabilityConfig>
 
+export const InstructionsCapabilityConfig = CapabilityToggleConfig.extend({
+  maxFileBytes: z.number().int().positive().default(64 * 1024),
+  maxTotalBytes: z.number().int().positive().default(96 * 1024)
+}).strict()
+export type InstructionsCapabilityConfig = z.infer<typeof InstructionsCapabilityConfig>
+
 export const SubagentToolPolicy = z.enum(['readOnly', 'inherit'])
 export type SubagentToolPolicy = z.infer<typeof SubagentToolPolicy>
 
@@ -427,6 +433,7 @@ export const KunCapabilitiesConfig = z
   .object({
     mcp: McpCapabilityConfig.default(() => McpCapabilityConfig.parse({})),
     web: WebCapabilityConfig.default(() => WebCapabilityConfig.parse({})),
+    instructions: InstructionsCapabilityConfig.default(() => InstructionsCapabilityConfig.parse({ enabled: true })),
     skills: SkillsCapabilityConfig.default(() => SkillsCapabilityConfig.parse({})),
     subagents: SubagentsCapabilityConfig.default(() => SubagentsCapabilityConfig.parse({})),
     attachments: AttachmentsCapabilityConfig.default(() => AttachmentsCapabilityConfig.parse({})),
@@ -476,6 +483,10 @@ export const RuntimeCapabilityManifest = z
     skills: RuntimeCapabilityState.extend({
       configuredRoots: z.number().int().nonnegative(),
       discoveredSkills: z.number().int().nonnegative()
+    }).strict(),
+    instructions: RuntimeCapabilityState.extend({
+      lastSourceCount: z.number().int().nonnegative(),
+      lastInjectedBytes: z.number().int().nonnegative()
     }).strict(),
     subagents: RuntimeCapabilityState.extend({
       maxParallel: z.number().int().nonnegative(),
@@ -553,6 +564,12 @@ export function buildRuntimeCapabilityManifest(input: {
     discoveredSkills?: number
     reason?: string
   }
+  instructions?: {
+    available?: boolean
+    reason?: string
+    lastSourceCount?: number
+    lastInjectedBytes?: number
+  }
   attachments?: {
     available?: boolean
     reason?: string
@@ -607,6 +624,12 @@ export function buildRuntimeCapabilityManifest(input: {
   const configuredSkillRoots = input.skills?.configuredRoots ?? config.skills.roots.length
   const discoveredSkills = input.skills?.discoveredSkills ?? 0
   const skillsState = skillsCapabilityState(config.skills.enabled, discoveredSkills, input.skills?.reason)
+  const instructionsState = providerCapabilityState(
+    config.instructions.enabled,
+    'instructions are disabled by config',
+    input.instructions?.available !== false,
+    input.instructions?.reason ?? 'instructions runtime is unavailable'
+  )
   return RuntimeCapabilityManifest.parse({
     contractVersion: RUNTIME_CAPABILITY_CONTRACT_VERSION,
     model: input.model,
@@ -639,6 +662,11 @@ export function buildRuntimeCapabilityManifest(input: {
       ...skillsState,
       configuredRoots: configuredSkillRoots,
       discoveredSkills
+    },
+    instructions: {
+      ...instructionsState,
+      lastSourceCount: input.instructions?.lastSourceCount ?? 0,
+      lastInjectedBytes: input.instructions?.lastInjectedBytes ?? 0
     },
     subagents: {
       ...providerCapabilityState(

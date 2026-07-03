@@ -569,6 +569,7 @@ describe('syncGuiManagedKunConfig', () => {
     expect(parsed.runtime.toolArgumentRepair).toMatchObject({ maxStringBytes: 524288 })
     expect(parsed.capabilities.attachments).toMatchObject({ enabled: true })
     expect(parsed.capabilities.memory).toMatchObject({ enabled: false })
+    expect(parsed.capabilities.instructions).toMatchObject({ enabled: true })
     // Subagents have no GUI enable toggle: they default ON so delegate_task + the
     // built-in profiles are always offered. maxParallel/maxChildRuns must be >=1 or
     // DelegationRuntime can never run a child. This locks the default against regressions.
@@ -642,6 +643,20 @@ describe('syncGuiManagedKunConfig', () => {
 
     const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
     expect(parsed.capabilities.memory).toMatchObject({ enabled: true })
+  })
+
+  it('writes the instructions capability from the GUI instructions toggle', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, {
+      ...defaultKunRuntimeSettings(),
+      instructions: { enabled: false }
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.capabilities.instructions).toMatchObject({ enabled: false })
   })
 
   it('writes the image generation capability and omits cleared fields', async () => {

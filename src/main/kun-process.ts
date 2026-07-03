@@ -39,6 +39,7 @@ import {
   AttachmentsCapabilityConfig,
   ComputerUseCapabilityConfig,
   ImageGenCapabilityConfig,
+  InstructionsCapabilityConfig,
   McpCapabilityConfig,
   McpServerConfig,
   MemoryCapabilityConfig,
@@ -478,6 +479,7 @@ export async function syncGuiManagedKunConfig(
     | 'computerUse'
     | 'modelProfiles'
     | 'memoryEnabled'
+    | 'instructions'
     | 'quality'
     | 'subagents'
     | 'smallModel'
@@ -517,6 +519,7 @@ export async function syncGuiManagedKunConfig(
   const search = objectValue(mcp.search)
   const attachments = objectValue(capabilities.attachments)
   const memory = objectValue(capabilities.memory)
+  const instructions = objectValue(capabilities.instructions)
   const web = objectValue(capabilities.web)
   const skills = objectValue(capabilities.skills)
   const imageGen = objectValue(capabilities.imageGen)
@@ -578,6 +581,10 @@ export async function syncGuiManagedKunConfig(
       memory: {
         ...memory,
         enabled: runtime.memoryEnabled
+      },
+      instructions: {
+        ...instructions,
+        enabled: runtime.instructions?.enabled ?? true
       },
       subagents: subagentProfilesForRuntime(runtime.subagents ?? { enabled: true, profiles: [] }),
       mcp: {
@@ -1282,6 +1289,9 @@ function sanitizeKunCapabilitiesConfig(value: unknown): Record<string, unknown> 
   const next: Record<string, unknown> = {}
   if ('mcp' in raw) next.mcp = parseKunConfigSection(McpCapabilityConfig, raw.mcp)
   if ('web' in raw) next.web = parseKunConfigSection(WebCapabilityConfig, raw.web)
+  if ('instructions' in raw) {
+    next.instructions = parseKunConfigSection(InstructionsCapabilityConfig, raw.instructions)
+  }
   if ('skills' in raw) next.skills = parseKunConfigSection(SkillsCapabilityConfig, raw.skills)
   if ('subagents' in raw) {
     next.subagents = parseKunConfigSection(SubagentsCapabilityConfig, raw.subagents)

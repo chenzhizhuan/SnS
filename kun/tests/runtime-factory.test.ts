@@ -126,18 +126,22 @@ describe('runtime factory usage carryover', () => {
     })
 
     try {
+      expect(runtime.info().capabilities.instructions.enabled).toBe(true)
       const applied = await runtime.applyConfig({
         serve: { model: 'model-after' },
         capabilities: KunCapabilitiesConfig.parse({
-          web: { enabled: true, fetchEnabled: true }
+          web: { enabled: true, fetchEnabled: true },
+          instructions: { enabled: false }
         })
       })
 
       expect(applied).toEqual({ ok: true })
       expect(runtime.info().model).toBe('model-after')
       expect(runtime.info().capabilities.web.fetch.available).toBe(true)
+      expect(runtime.info().capabilities.instructions).toMatchObject({ enabled: false, status: 'disabled' })
       const diagnostics = await runtime.toolDiagnostics?.()
       expect(diagnostics?.providers.some((provider) => provider.id === 'web')).toBe(true)
+      expect(diagnostics?.instructions?.enabled).toBe(false)
     } finally {
       await runtime.shutdown?.()
     }

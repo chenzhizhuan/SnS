@@ -225,6 +225,8 @@ export class KunRuntimeProvider implements AgentProvider {
         injectedMemoryIds: turn.injectedMemoryIds,
         injectedMemorySummaries: turn.injectedMemorySummaries,
         skillInjectionBytes: turn.skillInjectionBytes,
+        injectedInstructionSources: turn.injectedInstructionSources,
+        instructionInjectionBytes: turn.instructionInjectionBytes,
         workspaceCheckpointId: item.workspaceCheckpointId ?? turn.workspaceCheckpointId
       }))
     )

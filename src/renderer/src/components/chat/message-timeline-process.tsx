@@ -949,6 +949,20 @@ function readMetaStringArray(meta: Record<string, unknown> | undefined, key: str
   return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
 }
 
+function readMetaInstructionSources(meta: Record<string, unknown> | undefined): Array<{ path: string; scope: string }> {
+  const value = meta?.injectedInstructionSources
+  if (!Array.isArray(value)) return []
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null
+      const raw = entry as Record<string, unknown>
+      const path = typeof raw.path === 'string' && raw.path.trim() ? raw.path.trim() : ''
+      const scope = typeof raw.scope === 'string' && raw.scope.trim() ? raw.scope.trim() : ''
+      return path ? { path, scope } : null
+    })
+    .filter((entry): entry is { path: string; scope: string } => entry !== null)
+}
+
 function readMetaSources(meta: Record<string, unknown> | undefined): Array<{ title?: string; url?: string }> {
   const value = meta?.sources
   if (!Array.isArray(value)) return []
@@ -977,6 +991,7 @@ function RuntimeMetaBadges({
   const attachmentIds = showTurnDisclosure ? readMetaStringArray(meta, 'attachmentIds') : []
   const activeSkillIds = showTurnDisclosure ? readMetaStringArray(meta, 'activeSkillIds') : []
   const injectedMemoryIds = showTurnDisclosure ? readMetaStringArray(meta, 'injectedMemoryIds') : []
+  const injectedInstructionSources = showTurnDisclosure ? readMetaInstructionSources(meta) : []
   const child = meta.child && typeof meta.child === 'object' ? meta.child as Record<string, unknown> : null
   const childLabel =
     typeof child?.childLabel === 'string' && child.childLabel.trim()
@@ -991,6 +1006,7 @@ function RuntimeMetaBadges({
     attachmentIds.length === 0 &&
     activeSkillIds.length === 0 &&
     injectedMemoryIds.length === 0 &&
+    injectedInstructionSources.length === 0 &&
     !childLabel
   ) {
     return null
@@ -1011,6 +1027,11 @@ function RuntimeMetaBadges({
       ) : null}
       {injectedMemoryIds.length > 0 ? (
         <InjectedMemoryMetaChip meta={meta} memoryIds={injectedMemoryIds} chipClass={chipClass} />
+      ) : null}
+      {injectedInstructionSources.length > 0 ? (
+        <span className={chipClass} title={injectedInstructionSources.map((source) => `${source.scope}: ${source.path}`).join('\n')}>
+          {t('toolInjectedInstructions')} {injectedInstructionSources.length}
+        </span>
       ) : null}
       {attachmentIds.length > 0 ? (
         <span className={chipClass} title={attachmentIds.join(', ')}>

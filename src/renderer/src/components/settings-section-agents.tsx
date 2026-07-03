@@ -532,6 +532,17 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     maxImageDimension: 1280,
     maxActionsPerTurn: 40
   }
+  const instructions = kun.instructions ?? {
+    enabled: true
+  }
+  const updateInstructions = (patch: Record<string, unknown>): void => {
+    updateKun({
+      instructions: {
+        ...instructions,
+        ...patch
+      }
+    })
+  }
   const updateComputerUse = (patch: Record<string, unknown>): void => {
     updateKun({
       computerUse: {
@@ -746,6 +757,23 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                             )}
                           </div>
                         ) : null}
+                      </div>
+                    }
+                  />
+                  <SettingRow
+                    title={t('kunInstructions')}
+                    description={t('kunInstructionsDesc')}
+                    control={
+                      <div className="flex min-w-0 flex-col items-start gap-2 sm:items-end">
+                        <Toggle
+                          checked={instructions.enabled}
+                          onChange={(enabled) => updateInstructions({ enabled })}
+                        />
+                        <div className="max-w-full rounded-lg border border-ds-border-muted bg-ds-main/40 px-2.5 py-1.5 text-[12px] leading-5 text-ds-muted">
+                          {t('kunInstructionsDiagnostics', {
+                            count: toolDiagnostics?.instructions?.lastInjection?.sources?.length ?? runtimeInfo?.capabilities?.instructions?.lastSourceCount ?? 0
+                          })}
+                        </div>
                       </div>
                     }
                   />
@@ -1658,6 +1686,7 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                           {[
                             ['MCP', runtimeInfo?.capabilities?.mcp?.status],
                             ['Web', runtimeInfo?.capabilities?.web?.status],
+                            ['Instructions', runtimeInfo?.capabilities?.instructions?.status],
                             ['Skills', runtimeInfo?.capabilities?.skills?.status],
                             ['Subagents', runtimeInfo?.capabilities?.subagents?.status],
                             ['Images', runtimeInfo?.capabilities?.attachments?.status],
@@ -1684,6 +1713,9 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                           </div>
                           <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
                             Web: <span className="font-mono text-ds-ink">{runtimeInfo?.capabilities?.web?.provider ?? 'none'}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            Instructions: <span className="font-mono text-ds-ink">{toolDiagnostics?.instructions?.lastInjection?.sources?.length ?? runtimeInfo?.capabilities?.instructions?.lastSourceCount ?? 0}</span>
                           </div>
                           {runtimeInfo?.capabilities?.subagents?.enabled ? (
                             <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">

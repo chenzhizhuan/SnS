@@ -32,6 +32,7 @@ export function createTurnRecord(input: {
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedInstructionSources: [],
     ...(model ? { model } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),
     ...(input.guiPlan ? { guiPlan: input.guiPlan } : {}),

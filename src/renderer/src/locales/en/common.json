@@ -2537,6 +2537,7 @@
   "toolChildAgent": "Child agent",
   "toolActiveSkills": "Skills",
   "toolInjectedMemories": "Memories",
+  "toolInjectedInstructions": "Instructions",
   "toolAttachments": "Attachments",
   "generatedFilesTitle": "Generated files",
   "generatedFilePreviewUnavailable": "Preview unavailable",

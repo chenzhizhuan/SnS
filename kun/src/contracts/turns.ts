@@ -56,6 +56,14 @@ export const InjectedMemorySummarySchema = z.object({
 })
 export type InjectedMemorySummary = z.infer<typeof InjectedMemorySummarySchema>
 
+export const InjectedInstructionSourceSchema = z.object({
+  scope: z.enum(['global', 'workspace']),
+  path: z.string().min(1),
+  bytes: z.number().int().nonnegative(),
+  truncated: z.boolean().default(false)
+})
+export type InjectedInstructionSource = z.infer<typeof InjectedInstructionSourceSchema>
+
 export const TurnSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
@@ -74,6 +82,8 @@ export const TurnSchema = z.object({
   injectedMemoryIds: z.array(z.string().min(1)).default([]),
   injectedMemorySummaries: z.array(InjectedMemorySummarySchema).default([]),
   skillInjectionBytes: z.number().int().nonnegative().optional(),
+  injectedInstructionSources: z.array(InjectedInstructionSourceSchema).default([]),
+  instructionInjectionBytes: z.number().int().nonnegative().optional(),
   workspaceCheckpointId: z.string().min(1).optional(),
   toolCatalogFingerprint: z.string().optional(),
   toolCatalogToolCount: z.number().int().nonnegative().optional(),

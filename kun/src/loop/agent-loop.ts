@@ -62,6 +62,7 @@ import type { TurnItem } from '../contracts/items.js'
 import type { ThreadGoal, ThreadTodoList } from '../contracts/threads.js'
 import { modelCapabilitiesForModel, type ContextCompactionConfig } from './model-context-profile.js'
 import type { SkillRuntime } from '../skills/skill-runtime.js'
+import type { InstructionRuntime } from '../instructions/instruction-runtime.js'
 import type { AttachmentContent, AttachmentStore } from '../attachments/attachment-store.js'
 import { detectImage } from '../attachments/attachment-store.js'
 import type { ModelDocumentAttachment, ModelInputAttachment, ModelTextAttachmentFallback } from '../ports/model-client.js'
@@ -680,6 +681,7 @@ export type AgentLoopOptions = {
   nowMs?: () => number
   modelCapabilities?: (model: string) => ModelCapabilityMetadata
   skillRuntime?: SkillRuntime
+  instructionRuntime?: InstructionRuntime
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
   artifactStore?: ArtifactStore
@@ -1411,6 +1413,13 @@ export class AgentLoop {
       instructions: [],
       injectedBytes: 0
     }
+    const instructionResolution = await this.opts.instructionRuntime?.resolveTurn({
+      workspace: thread?.workspace ?? ''
+    }) ?? {
+      instruction: undefined,
+      sources: [],
+      injectedBytes: 0
+    }
     const memories = await this.retrieveMemories({
       prompt: turn?.prompt ?? '',
       workspace: thread?.workspace ?? ''
@@ -1502,6 +1511,8 @@ export class AgentLoop {
           id: memory.id,
           content: memoryPreview(memory.content)
         })),
+        injectedInstructionSources: instructionResolution.sources,
+        instructionInjectionBytes: instructionResolution.injectedBytes,
         toolCatalogFingerprint: toolCatalog.fingerprint,
         toolCatalogToolCount: toolCatalog.toolCount,
         toolCatalogDrift: toolCatalogDrift.kind !== 'none'
@@ -1559,6 +1570,7 @@ export class AgentLoop {
     const toolPreferenceInstruction = buildToolPreferenceInstruction(tools)
     const contextInstructions = [
       ...(runtimeContextInstruction ? [runtimeContextInstruction] : []),
+      ...(instructionResolution.instruction ? [instructionResolution.instruction] : []),
       ...(activeGoalInstruction ? [activeGoalInstruction] : []),
       ...(goalRecoveryInstruction && (this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0) > 0
         ? [goalRecoveryInstruction]

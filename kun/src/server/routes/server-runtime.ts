@@ -30,6 +30,7 @@ import type {
   VideoGenDiagnostic
 } from '../../adapters/tool/media-gen-tool-provider.js'
 import type { SkillRuntimeDiagnostics } from '../../skills/skill-runtime.js'
+import type { InstructionRuntimeDiagnostics } from '../../instructions/instruction-runtime.js'
 import type { AttachmentDiagnostics } from '../../contracts/attachments.js'
 import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type { MemoryDiagnostics } from '../../contracts/memory.js'
@@ -49,6 +50,7 @@ export type RuntimeToolDiagnostics = {
   mcpSearch?: McpSearchRuntimeDiagnostic
   webProviders: WebProviderDiagnostic[]
   skills: SkillRuntimeDiagnostics
+  instructions?: InstructionRuntimeDiagnostics
   attachments: AttachmentDiagnostics
   memory: MemoryDiagnostics
   imageGen?: ImageGenDiagnostic[]

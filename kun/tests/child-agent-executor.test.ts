@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { CapabilityRegistry } from '../src/adapters/tool/capability-registry.js'
 import { createDesignCanvasTool } from '../src/adapters/tool/design-canvas-tool.js'
@@ -7,7 +10,9 @@ import { InMemoryEventBus } from '../src/adapters/in-memory-event-bus.js'
 import { InMemorySessionStore } from '../src/adapters/in-memory-session-store.js'
 import { InMemoryThreadStore } from '../src/adapters/in-memory-thread-store.js'
 import { createImmutablePrefix } from '../src/cache/immutable-prefix.js'
+import { KunCapabilitiesConfig } from '../src/contracts/capabilities.js'
 import { createChildAgentExecutor } from '../src/delegation/child-agent-executor.js'
+import { InstructionRuntime } from '../src/instructions/instruction-runtime.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../src/ports/model-client.js'
 import { RuntimeEventRecorder } from '../src/services/runtime-event-recorder.js'
 
@@ -86,6 +91,46 @@ describe('child agent executor', () => {
       ]
     })
     expect(seen[0]?.tools).toEqual([])
+  })
+
+  it('injects AGENTS.md instructions into child AgentLoop requests', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-child-instructions-'))
+    try {
+      const home = join(root, 'home')
+      const workspace = join(root, 'workspace')
+      await mkdir(workspace, { recursive: true })
+      await writeFile(join(workspace, 'AGENTS.md'), 'Child workspace rule.', 'utf8')
+      const instructionRuntime = new InstructionRuntime(
+        KunCapabilitiesConfig.parse({ instructions: { enabled: true } }).instructions,
+        { homeDir: home }
+      )
+      const seen: ModelRequest[] = []
+      const executor = createChildAgentExecutor({
+        model: model([
+          { kind: 'assistant_text_delta', text: 'ok' },
+          { kind: 'completed', stopReason: 'stop' }
+        ], seen),
+        toolHost: new LocalToolHost({ registry: new CapabilityRegistry([]) }),
+        prefix: createImmutablePrefix({ systemPrompt: 'child system' }),
+        defaultModel: 'child-test',
+        instructionRuntime,
+        nowIso: () => '2026-06-03T00:00:00.000Z'
+      })
+
+      await executor({
+        childId: 'child_agents',
+        parentThreadId: 'thr_parent',
+        parentTurnId: 'turn_parent',
+        prompt: 'Check project rules',
+        workspace,
+        toolPolicy: 'inherit',
+        signal: new AbortController().signal
+      })
+
+      expect(seen[0]?.contextInstructions?.join('\n')).toContain('Child workspace rule.')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('returns bounded tool evidence when the contract requests it', async () => {

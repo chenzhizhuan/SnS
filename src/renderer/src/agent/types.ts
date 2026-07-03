@@ -84,6 +84,8 @@ export type RuntimeDisclosureMetadata = {
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
+  injectedInstructionSources?: Array<{ scope: 'global' | 'workspace'; path: string; bytes: number; truncated?: boolean }>
+  instructionInjectionBytes?: number
   child?: RuntimeChildMetadata
   sources?: WebCitationSource[]
 }

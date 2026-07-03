@@ -332,6 +332,8 @@ export type KunRuntimeSettingsV1 = {
   modelProfiles: Record<string, ModelProviderModelProfileV1>
   /** Whether long-term memory is enabled in the Kun runtime. */
   memoryEnabled: boolean
+  /** Native Kun AGENTS.md instructions injected into every turn. */
+  instructions: KunInstructionSettingsV1
   /** Host computer-use (screenshot + mouse/keyboard control) settings. */
   computerUse: KunComputerUseSettingsV1
   /** First-party design-quality linter applied to frontend output. */
@@ -360,6 +362,10 @@ export type KunRuntimeSettingsV1 = {
   summaryReasoningEffort?: ModelReasoningEffort
   /** Reasoning depth for the code-review subagent model call. Default 'off'. */
   codeReviewReasoningEffort?: ModelReasoningEffort
+}
+
+export type KunInstructionSettingsV1 = {
+  enabled: boolean
 }
 
 export function kunToolPermissionModeSettings(
@@ -607,7 +613,7 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'musicGeneration' | 'videoGeneration' | 'computerUse' | 'quality' | 'modelProfiles'
+    'mcpSearch' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'quality' | 'modelProfiles'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
@@ -621,6 +627,7 @@ export type KunRuntimeSettingsPatchV1 = Partial<
   textToSpeech?: Partial<KunTextToSpeechSettingsV1>
   musicGeneration?: Partial<KunMusicGenerationSettingsV1>
   videoGeneration?: Partial<KunVideoGenerationSettingsV1>
+  instructions?: Partial<KunInstructionSettingsV1>
   computerUse?: Partial<KunComputerUseSettingsV1>
   quality?: Partial<KunDesignQualitySettingsV1>
   modelProfiles?: Record<string, ModelProviderModelProfilePatchV1 | null>

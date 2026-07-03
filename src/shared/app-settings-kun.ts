@@ -25,6 +25,7 @@ import {
   type KunDesignQualityStrictness,
   type KunHistoryHygieneSettingsV1,
   type KunImageGenerationSettingsV1,
+  type KunInstructionSettingsV1,
   type ImageGenerationQuality,
   type KunMcpSearchSettingsV1,
   type KunMusicGenerationSettingsV1,
@@ -156,8 +157,15 @@ export function defaultKunRuntimeSettings(
     videoGeneration: defaultKunVideoGenerationSettings(),
     modelProfiles: {},
     memoryEnabled: false,
+    instructions: defaultKunInstructionSettings(),
     computerUse: defaultKunComputerUseSettings(),
     quality: defaultKunQualitySettings()
+  }
+}
+
+export function defaultKunInstructionSettings(): KunInstructionSettingsV1 {
+  return {
+    enabled: true
   }
 }
 
@@ -451,6 +459,9 @@ export function mergeKunRuntimeSettings(
       : {})
   })
   const nextModelProfiles = normalizeKunModelProfiles(current.modelProfiles, patch?.modelProfiles)
+  const nextInstructions = {
+    enabled: patch?.instructions?.enabled ?? current.instructions?.enabled ?? true
+  }
   const nextPort = normalizeKunLocalPort(patch?.port ?? current.port, DEFAULT_KUN_PORT)
   // Optional role/small-model slots (agents.kun.*). Patch wins when the key is
   // present (even as empty string => clear); otherwise inherit current. Empty/
@@ -483,6 +494,7 @@ export function mergeKunRuntimeSettings(
     videoGeneration: nextVideoGeneration,
     modelProfiles: nextModelProfiles,
     memoryEnabled: patch?.memoryEnabled ?? current.memoryEnabled ?? false,
+    instructions: nextInstructions,
     computerUse: nextComputerUse,
     quality: nextQuality,
     ...(patch?.subagents !== undefined
