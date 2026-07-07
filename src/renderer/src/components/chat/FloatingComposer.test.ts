@@ -784,10 +784,27 @@ describe('FloatingComposer capability controls', () => {
       })
     )
 
-    expect(html).toContain('Workspace write')
-    expect(html).toContain('Can modify the workspace')
+    expect(html).toContain('Ask in workspace')
+    expect(html).toContain('Asks before workspace file changes')
     expect(html).toContain('aria-label="Tool permission"')
     expect(html).toContain('lucide-folder-pen')
+  })
+
+  it('renders the trusted workspace permission mode in the execution picker', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingComposerExecutionPicker, {
+        value: {
+          approvalPolicy: 'auto',
+          sandboxMode: 'workspace-write'
+        },
+        onChange: () => undefined
+      })
+    )
+
+    expect(html).toContain('Trusted workspace')
+    expect(html).toContain('Workspace file changes run without prompts')
+    expect(html).toContain('aria-label="Tool permission"')
+    expect(html).toContain('lucide-shield-check')
   })
 
   it('renders the sensitive-ask permission mode in the execution picker', () => {
