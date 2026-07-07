@@ -5,6 +5,7 @@ import {
   FloatingComposer,
   buildResearchPrompt,
   calculateComposerMenuScrollTop,
+  calculateContextCapacityPopoverPlacement,
   formatGoalElapsedSeconds,
   handleComposerImagePaste,
   imageFilesFromTransfer,
@@ -383,6 +384,33 @@ describe('FloatingComposer model controls', () => {
 
     expect(placement.left).toBe(712)
     expect(placement.top).toBe(633)
+  })
+
+  it('keeps the context capacity popover inside the viewport', () => {
+    const placement = calculateContextCapacityPopoverPlacement({
+      anchorRect: { top: 760, right: 970, bottom: 792 },
+      popoverHeight: 252,
+      viewportHeight: 900,
+      viewportWidth: 1000
+    })
+
+    expect(placement.left).toBe(670)
+    expect(placement.top).toBe(500)
+    expect(placement.width).toBe(300)
+  })
+
+  it('keeps the context capacity popover anchored when the app UI is zoomed', () => {
+    const placement = calculateContextCapacityPopoverPlacement({
+      anchorRect: { top: 608, right: 776, bottom: 633.6 },
+      popoverHeight: 252,
+      viewportHeight: 720,
+      viewportWidth: 800,
+      coordinateScale: 0.8
+    })
+
+    expect(placement.left).toBe(670)
+    expect(placement.top).toBe(500)
+    expect(placement.width).toBe(300)
   })
 
   it('keeps execution menus anchored when the app UI is zoomed', () => {
@@ -769,6 +797,58 @@ describe('FloatingComposer image transfer helpers', () => {
 })
 
 describe('FloatingComposer capability controls', () => {
+  it('hides the default slash footer hint but keeps status hints', async () => {
+    const previousLanguage = i18n.language
+    await i18n.changeLanguage('en')
+    useChatStore.setState({
+      activeThreadId: null,
+      activeThreadGoal: null,
+      route: 'chat',
+      runtimeConnection: 'ready',
+      workspaceRoot: '/workspace/deepseek-gui',
+      threads: []
+    })
+
+    const baseProps = {
+      input: '',
+      setInput: () => undefined,
+      workspaceRootOverride: '/workspace/deepseek-gui',
+      mode: 'agent' as const,
+      setMode: () => undefined,
+      busy: false,
+      hasActiveThread: false,
+      composerModel: '',
+      composerPickList: [],
+      onComposerModelChange: () => undefined,
+      queuedMessages: [],
+      onRemoveQueuedMessage: () => undefined,
+      onSend: () => undefined,
+      onInterrupt: () => undefined,
+      attachmentUploadEnabled: false,
+      webAccessAvailable: false
+    }
+
+    try {
+      const readyHtml = renderToStaticMarkup(
+        createElement(FloatingComposer, {
+          ...baseProps,
+          runtimeReady: true
+        })
+      )
+      const offlineHtml = renderToStaticMarkup(
+        createElement(FloatingComposer, {
+          ...baseProps,
+          runtimeReady: false
+        })
+      )
+
+      expect(readyHtml).not.toContain('Type / for commands')
+      expect(offlineHtml).toContain('Reconnect the runtime before sending another message.')
+    } finally {
+      await i18n.changeLanguage(previousLanguage)
+    }
+  })
+
   it('renders localized execution values in Chinese without visible category prefixes', async () => {
     const previousLanguage = i18n.language
     await i18n.changeLanguage('zh')
