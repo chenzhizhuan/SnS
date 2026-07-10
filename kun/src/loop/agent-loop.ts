@@ -104,9 +104,17 @@ import { ToolStormBreaker, type ToolStormBreakerOptions } from './tool-storm-bre
 import { healLoadedHistoryItems } from './history-healing.js'
 import { LoopTelemetry } from './loop-telemetry.js'
 import { ModelRoundEngine } from './model-round-engine.js'
+import { modelClientDiagnostics, sanitizeProviderBaseUrl } from './model-client-diagnostics.js'
+import { memoryInstructions } from './memory-instructions.js'
 import { InteractiveToolBridge } from './interactive-tool-bridge.js'
 import { TurnContextResolver, resolveTurnModeContext } from './turn-context-resolver.js'
 import { TurnFinalizer, type TurnFinalizationRequest } from './turn-finalizer.js'
+import { canUpgradeThreadTitle } from './thread-title-policy.js'
+import { normalizeTurnLimits, type TurnLimitsConfig } from './turn-limits.js'
+import {
+  svgArtifactCompletionState,
+  type SvgArtifactCompletionState
+} from './svg-artifact-completion.js'
 import { createToolExecutionContext } from './tool-context-factory.js'
 import { ToolExecutionService } from './tool-execution-service.js'
 import { ToolCallDispatcher } from './tool-call-dispatcher.js'
@@ -163,58 +171,12 @@ export {
   buildRuntimeContextInstruction,
   shouldInjectInitialRuntimeContext
 } from './runtime-context.js'
-
-export type SvgArtifactCompletionState = {
-  mutationSucceeded: boolean
-  validationAfterMutation: boolean
-  mutationRevision?: string
-  validationRevision?: string
-}
-
-/**
- * Dedicated SVG turns are not complete until a structured mutation succeeded
- * and a later validation succeeded. A validation before the last mutation is
- * stale and must not satisfy the gate.
- */
-export function svgArtifactCompletionState(
-  items: readonly TurnItem[],
-  turnId: string
-): SvgArtifactCompletionState {
-  let lastMutation = -1
-  let lastValidation = -1
-  let mutationRevision = ''
-  let validationRevision = ''
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index]
-    if (
-      item?.turnId !== turnId ||
-      item.kind !== 'tool_result' ||
-      item.status !== 'completed' ||
-      item.isError === true
-    ) continue
-    const output = item.output && typeof item.output === 'object' && !Array.isArray(item.output)
-      ? item.output as Record<string, unknown>
-      : null
-    const revision = typeof output?.revision === 'string' ? output.revision : ''
-    if (output?.ok !== true || !revision) continue
-    if (item.toolName === DESIGN_SVG_EDIT_TOOL_NAME || item.toolName === DESIGN_SVG_ANIMATE_TOOL_NAME) {
-      lastMutation = index
-      mutationRevision = revision
-    } else if (item.toolName === DESIGN_SVG_VALIDATE_TOOL_NAME) {
-      lastValidation = index
-      validationRevision = revision
-    }
-  }
-  return {
-    mutationSucceeded: lastMutation >= 0,
-    validationAfterMutation:
-      lastMutation >= 0 &&
-      lastValidation > lastMutation &&
-      validationRevision === mutationRevision,
-    ...(mutationRevision ? { mutationRevision } : {}),
-    ...(validationRevision ? { validationRevision } : {})
-  }
-}
+export {
+  svgArtifactCompletionState,
+  type SvgArtifactCompletionState
+} from './svg-artifact-completion.js'
+export { canUpgradeThreadTitle } from './thread-title-policy.js'
+export { memoryInstructions } from './memory-instructions.js'
 export {
   goalContinuationInstruction,
   todoContinuationInstruction
@@ -257,43 +219,6 @@ const GOAL_RESUME_PROMPT = [
  */
 function goalResumeKey(threadId: string, goal: ThreadGoal): string {
   return `${threadId}::${goal.createdAt}::${goal.objective}`
-}
-
-/**
- * Placeholder titles the GUI assigns to a fresh thread. When a thread still
- * carries one of these (or an empty title), the title is considered
- * auto-generatable; a user-set title never matches and is preserved. Mirrors
- * the renderer's `shouldAutoTitleThread` placeholder set so backend title
- * generation only fills in genuinely-default titles.
- */
-const PLACEHOLDER_THREAD_TITLES = new Set(['New Thread', '新会话', 'Untitled', '未命名'])
-const CODEX_PLACEHOLDER_TITLE = /^__codex_[a-z0-9_]+__$/i
-
-function isAutoTitleableThreadTitle(title: string | null | undefined): boolean {
-  const raw = title?.trim() ?? ''
-  if (!raw) return true
-  if (PLACEHOLDER_THREAD_TITLES.has(raw)) return true
-  if (CODEX_PLACEHOLDER_TITLE.test(raw)) return true
-  return false
-}
-
-/**
- * Whether the backend LLM titler may (re)generate a thread's title.
- *
- * - `titleAuto === false` → user renamed it manually; never overwrite.
- * - `titleAuto === true`  → client set a provisional first-message title; upgrade it.
- * - absent (legacy)       → only upgrade placeholder titles, never a real one.
- */
-export function canUpgradeThreadTitle(thread: { title?: string | null; titleAuto?: boolean }): boolean {
-  if (thread.titleAuto === false) return false
-  if (thread.titleAuto === true) return true
-  return isAutoTitleableThreadTitle(thread.title)
-}
-type ModelClientDiagnostics = {
-  provider?: string
-  providerBaseUrl?: string
-  endpointFormat?: string
-  configuredModel?: string
 }
 
 const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
@@ -346,12 +271,7 @@ export type AgentLoopOptions = {
   /** Internal-LLM role model routing (smallModel slot + title/summary/codeReview overrides). */
   roles?: RolesConfig
   toolStorm?: ToolStormBreakerOptions & { enabled?: boolean }
-  turnLimits?: {
-    maxSteps?: number
-    maxWallTimeMs?: number
-    /** Maximum completed tool calls accepted from one model response. */
-    maxToolCallsPerStep?: number
-  }
+  turnLimits?: TurnLimitsConfig
   toolArgumentRepair?: {
     maxStringBytes?: number
   }
@@ -877,28 +797,6 @@ export class AgentLoop {
   private rememberTurnFailure(turnId: string, failure: TurnExecutionFailure): void {
     if (!failure.error.trim()) return
     this.turnFailures.set(turnId, failure)
-  }
-
-  private modelClientDiagnostics(providerId?: string): ModelClientDiagnostics {
-    const client = this.opts.model as ModelClient & {
-      config?: {
-        baseUrl?: string
-        endpointFormat?: string
-        model?: string
-      }
-      configFor?: (providerId?: string) => {
-        baseUrl?: string
-        endpointFormat?: string
-        model?: string
-      } | undefined
-    }
-    const config = client.configFor?.(providerId) ?? client.config
-    return {
-      provider: client.provider,
-      ...(config?.baseUrl ? { providerBaseUrl: sanitizeProviderBaseUrl(config.baseUrl) } : {}),
-      ...(config?.endpointFormat ? { endpointFormat: config.endpointFormat } : {}),
-      ...(config?.model ? { configuredModel: config.model } : {})
-    }
   }
 
   private nowMs(): number {
@@ -1506,11 +1404,11 @@ export class AgentLoop {
         sentInputTokens: estimateModelRequestInputTokens(request)
       })
     }
-    const modelClientDiagnostics = this.modelClientDiagnostics(request.providerId)
+    const clientDiagnostics = modelClientDiagnostics(this.opts.model, request.providerId)
     const cacheSignature: CacheRequestSignature = {
       model: request.model,
-      providerId: request.providerId?.trim() || modelClientDiagnostics.provider || 'default',
-      endpointFormat: modelClientDiagnostics.endpointFormat || 'unknown',
+      providerId: request.providerId?.trim() || clientDiagnostics.provider || 'default',
+      endpointFormat: clientDiagnostics.endpointFormat || 'unknown',
       prefixFingerprint: this.opts.prefix.fingerprint,
       toolCatalogFingerprint: toolCatalog.fingerprint,
       activeSkillIds: skillResolution.activeSkillIds
@@ -1528,7 +1426,7 @@ export class AgentLoop {
       cacheSignature,
       preSendDetails: {
         model: request.model,
-        ...modelClientDiagnostics,
+        ...clientDiagnostics,
         historyItems: request.history.length,
         toolCount: request.tools.length,
         ...(request.requiredToolName ? { requiredToolName: request.requiredToolName } : {}),
@@ -1542,7 +1440,7 @@ export class AgentLoop {
       },
       postSendDetails: {
         model: request.model,
-        ...modelClientDiagnostics
+        ...clientDiagnostics
       },
       writeGeneratedImage: async ({ imageBase64 }) => {
         const imgDir = '.deepseekgui-images'
@@ -2578,50 +2476,12 @@ function normalizeRequestedReasoningEffort(effort: string | undefined): string |
   return normalized && normalized !== 'auto' ? normalized : undefined
 }
 
-function sanitizeProviderBaseUrl(baseUrl: string): string {
-  try {
-    const url = new URL(baseUrl)
-    url.username = ''
-    url.password = ''
-    url.search = ''
-    url.hash = ''
-    return url.toString().replace(/\/$/, '')
-  } catch {
-    return baseUrl
-      .replace(/(^|\/\/)[^/?#@\s]*@/, '$1')
-      .replace(/[?#].*$/, '')
-      .replace(/\/+$/, '')
-  }
-}
-
 function autoModelRouteKey(threadId: string, turnId: string): string {
   return `${threadId}:${turnId}`
 }
 
 function activeTurnRunKey(threadId: string, turnId: string): string {
   return `${threadId}\u0000${turnId}`
-}
-
-function normalizeTurnLimits(input: AgentLoopOptions['turnLimits']): {
-  maxSteps: number
-  maxWallTimeMs: number
-  maxToolCallsPerStep: number
-} {
-  return {
-    maxSteps: Math.max(1, Math.floor(input?.maxSteps ?? 64)),
-    maxWallTimeMs: Math.max(1, Math.floor(input?.maxWallTimeMs ?? 15 * 60_000)),
-    maxToolCallsPerStep: Math.max(1, Math.floor(input?.maxToolCallsPerStep ?? 32))
-  }
-}
-
-export function memoryInstructions(memories: ReadonlyArray<{ id: string; content: string; scope: string }>): string[] {
-  if (memories.length === 0) return []
-  return [
-    [
-      'Relevant long-term memories for this turn:',
-      ...memories.map((memory) => `- [${memory.id}] (${memory.scope}) ${memory.content}`)
-    ].join('\n')
-  ]
 }
 
 function prefixVolatilityStageDetails(
