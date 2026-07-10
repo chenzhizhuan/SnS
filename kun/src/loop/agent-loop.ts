@@ -220,6 +220,7 @@ export function canUpgradeThreadTitle(thread: { title?: string | null; titleAuto
   return isAutoTitleableThreadTitle(thread.title)
 }
 const MAX_TOOL_CATALOG_SNAPSHOTS = 256
+const MAX_HYDRATED_PRESSURE_THREADS = 512
 
 type TurnFailure = {
   error: string
@@ -556,6 +557,7 @@ export class AgentLoop {
       this.goalResumeSuppressedByTurn.delete(turnId)
       this.emptyPostToolRecoveryStepsByTurn.delete(turnId)
       this.turnFailures.delete(turnId)
+      this.promptTokenPressure.delete(threadId)
       await this.runTurnEndHooks(threadId, turnId, finalStatus ?? 'failed', finalError)
     }
   }
@@ -2512,9 +2514,11 @@ export class AgentLoop {
     if (!threadId) return
     if (this.promptTokenPressure.has(threadId)) return
     if (this.hydratedPressureThreads.has(threadId)) return
-    this.hydratedPressureThreads.add(threadId)
     const loadUsageRecords = this.opts.sessionStore.loadUsageRecords
-    if (typeof loadUsageRecords !== 'function') return
+    if (typeof loadUsageRecords !== 'function') {
+      this.rememberHydratedPressureThread(threadId)
+      return
+    }
     try {
       const records = await loadUsageRecords.call(this.opts.sessionStore, { threadId })
       let restored: { model: string; promptTokens: number } | undefined
@@ -2528,8 +2532,18 @@ export class AgentLoop {
       if (restored && !this.promptTokenPressure.has(threadId)) {
         this.promptTokenPressure.set(threadId, restored)
       }
+      this.rememberHydratedPressureThread(threadId)
     } catch {
       // Best-effort restore; the estimator + overhead floor still applies.
+    }
+  }
+
+  private rememberHydratedPressureThread(threadId: string): void {
+    this.hydratedPressureThreads.delete(threadId)
+    this.hydratedPressureThreads.add(threadId)
+    if (this.hydratedPressureThreads.size > MAX_HYDRATED_PRESSURE_THREADS) {
+      const oldest = this.hydratedPressureThreads.values().next().value
+      if (oldest !== undefined) this.hydratedPressureThreads.delete(oldest)
     }
   }
 

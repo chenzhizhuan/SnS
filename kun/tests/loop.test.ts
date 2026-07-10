@@ -48,6 +48,22 @@ describe('AgentLoop', () => {
     expect(h.inflight.size()).toBe(0)
   })
 
+  it('bounds cached prompt-pressure hydration markers', () => {
+    const h = makeHarness(makeSilentModel())
+    const loop = h.loop as unknown as {
+      rememberHydratedPressureThread(threadId: string): void
+      hydratedPressureThreads: Set<string>
+    }
+
+    for (let index = 0; index <= 512; index += 1) {
+      loop.rememberHydratedPressureThread(`thread_${index}`)
+    }
+
+    expect(loop.hydratedPressureThreads).toHaveLength(512)
+    expect(loop.hydratedPressureThreads.has('thread_0')).toBe(false)
+    expect(loop.hydratedPressureThreads.has('thread_512')).toBe(true)
+  })
+
   it('injects the current shell runtime when bash is available', async () => {
     let observedRequest: ModelRequest | null = null
     const h = makeHarness({
