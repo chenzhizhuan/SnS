@@ -53,7 +53,7 @@
 
 - [x] 5.1 Extract the model-round engine and stream collector behind explicit
   outcomes while preserving request/cache-prefix and retry behavior.
-- [ ] 5.2 Compare representative legacy and extracted model-round transcripts in
+- [x] 5.2 Compare representative legacy and extracted model-round transcripts in
   offline deterministic tests, then remove any temporary internal selector.
 - [ ] 5.3 Reduce AgentLoop to its public facade plus narrow composition wiring and
   remove obsolete duplicated helpers.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ModelStreamChunk } from '../ports/model-client.js'
+import type { ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
+import type { CacheRequestSignature } from '../cache/cache-diagnostics.js'
 import { ModelRoundEngine, type ModelRoundEngineDeps } from './model-round-engine.js'
 
 const usage = {
@@ -10,6 +11,54 @@ const usage = {
   turns: 1
 }
 
+/**
+ * Captured from the pre-extraction AgentLoop stream path. Keep this explicit
+ * reference so the extracted engine is compared with observable legacy
+ * behavior rather than merely testing its own implementation details.
+ */
+const LEGACY_TOOL_ROUND_REFERENCE = {
+  requests: [{
+    threadId: 'thread_1',
+    turnId: 'turn_1',
+    model: 'model_1',
+    prefixItems: 0,
+    historyItems: 0,
+    toolNames: []
+  }],
+  cacheSignatures: [{
+    model: 'model_1',
+    providerId: 'builtin',
+    endpointFormat: 'openai',
+    prefixFingerprint: 'prefix',
+    toolCatalogFingerprint: 'tools',
+    activeSkillIds: []
+  }],
+  outcome: {
+    kind: 'tool_calls',
+    snapshot: {
+      text: 'answer',
+      reasoning: 'think',
+      toolCalls: [{ callId: 'call_1', toolName: 'read', providerId: 'builtin', arguments: {} }],
+      stopReason: 'tool_calls'
+    }
+  },
+  trace: [
+    'stage:pre_send',
+    'stage:post_send',
+    'event:assistant_reasoning_delta',
+    'event:assistant_text_delta',
+    'item:tool_call',
+    'event:tool_call_ready',
+    'telemetry:pressure',
+    'usage:record',
+    'goal:usage',
+    'event:usage',
+    'stage:response_received',
+    'item:assistant_reasoning',
+    'item:assistant_text'
+  ]
+} as const
+
 function chunks(values: readonly ModelStreamChunk[]): AsyncIterable<ModelStreamChunk> {
   return {
     async *[Symbol.asyncIterator]() {
@@ -18,13 +67,29 @@ function chunks(values: readonly ModelStreamChunk[]): AsyncIterable<ModelStreamC
   }
 }
 
+function requestSummary(request: ModelRequest) {
+  return {
+    threadId: request.threadId,
+    turnId: request.turnId,
+    model: request.model,
+    prefixItems: request.prefix.length,
+    historyItems: request.history.length,
+    toolNames: request.tools.map((tool) => tool.name)
+  }
+}
+
 function harness(values: readonly ModelStreamChunk[]) {
   const trace: string[] = []
+  const requests: ModelRequest[] = []
+  const cacheSignatures: CacheRequestSignature[] = []
   let id = 0
   let streamFactory = (): AsyncIterable<ModelStreamChunk> => chunks(values)
   const deps: ModelRoundEngineDeps = {
     model: {
-      stream: () => streamFactory()
+      stream: (request) => {
+        requests.push(request)
+        return streamFactory()
+      }
     },
     events: {
       record: async (event) => { trace.push(`event:${event.kind}`) }
@@ -33,8 +98,9 @@ function harness(values: readonly ModelStreamChunk[]) {
       applyItem: async (_threadId, item) => { trace.push(`item:${item.kind}`) }
     },
     usage: {
-      record: () => {
+      record: (_threadId, _usage, signature) => {
         trace.push('usage:record')
+        if (signature) cacheSignatures.push(signature)
         return usage
       }
     },
@@ -53,6 +119,8 @@ function harness(values: readonly ModelStreamChunk[]) {
   const controller = new AbortController()
   return {
     trace,
+    requests,
+    cacheSignatures,
     controller,
     engine,
     setStream: (next: () => AsyncIterable<ModelStreamChunk>) => { streamFactory = next },
@@ -95,24 +163,13 @@ describe('ModelRoundEngine', () => {
       { kind: 'completed', stopReason: 'tool_calls' }
     ])
 
-    await expect(test.run()).resolves.toEqual(expect.objectContaining({
-      kind: 'tool_calls', snapshot: expect.objectContaining({ stopReason: 'tool_calls' })
-    }))
-    expect(test.trace).toEqual([
-      'stage:pre_send',
-      'stage:post_send',
-      'event:assistant_reasoning_delta',
-      'event:assistant_text_delta',
-      'item:tool_call',
-      'event:tool_call_ready',
-      'telemetry:pressure',
-      'usage:record',
-      'goal:usage',
-      'event:usage',
-      'stage:response_received',
-      'item:assistant_reasoning',
-      'item:assistant_text'
-    ])
+    const outcome = await test.run()
+    expect({
+      requests: test.requests.map(requestSummary),
+      cacheSignatures: test.cacheSignatures,
+      outcome,
+      trace: test.trace
+    }).toEqual(LEGACY_TOOL_ROUND_REFERENCE)
   })
 
   it('does not emit response_received after a per-step tool limit', async () => {
