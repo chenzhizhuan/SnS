@@ -108,7 +108,7 @@ import {
 } from './auto-model-router.js'
 import { ToolStormBreaker, type ToolStormBreakerOptions } from './tool-storm-breaker.js'
 import { healLoadedHistoryItems } from './history-healing.js'
-import { repairDispatchToolArguments } from './tool-call-repair.js'
+import { ModelStreamCollector } from './model-stream-collector.js'
 import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
 import {
   DESIGN_SVG_ANIMATE_TOOL_NAME,
@@ -305,27 +305,6 @@ type TurnFailure = {
   code?: string
   details?: unknown
   severity?: RuntimeErrorSeverity
-}
-
-/**
- * Model providers commonly emit token-sized deltas. Accumulating those with
- * `text += delta` copies the whole response on every chunk; retain pieces and
- * materialize one string only when a downstream operation actually needs it.
- */
-class StreamTextAccumulator {
-  private readonly parts: string[] = []
-  private joined: string | undefined
-
-  append(text: string): void {
-    if (!text) return
-    this.parts.push(text)
-    this.joined = undefined
-  }
-
-  get value(): string {
-    if (this.joined === undefined) this.joined = this.parts.join('')
-    return this.joined
-  }
 }
 
 type ModelClientDiagnostics = {
@@ -1330,6 +1309,9 @@ export class AgentLoop {
     const toolProviderMetadata = new Map(
       tools.map((tool) => [tool.name, { providerId: tool.providerId, providerKind: tool.providerKind }])
     )
+    const streamToolMetadata = new Map(
+      tools.map((tool) => [tool.name, { providerId: tool.providerId, toolKind: tool.toolKind }])
+    )
     const toolCatalog = buildToolCatalogFingerprint(toolSpecs)
     const toolCatalogDrift = this.recordToolCatalogFingerprint({
       threadId,
@@ -1546,12 +1528,15 @@ export class AgentLoop {
         sentInputTokens: estimateModelRequestInputTokens(request)
       })
     }
-    const textAccumulator = new StreamTextAccumulator()
-    const reasoningAccumulator = new StreamTextAccumulator()
+    const streamCollector = new ModelStreamCollector({
+      maxToolCallsPerStep,
+      toolMetadata: streamToolMetadata,
+      ...(this.opts.toolArgumentRepair?.maxStringBytes !== undefined
+        ? { maxToolArgumentStringBytes: this.opts.toolArgumentRepair.maxStringBytes }
+        : {})
+    })
     let textItemId = ''
     let reasoningItemId = ''
-    const completedToolCalls: ToolCallLike[] = []
-    let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' = 'stop'
     const modelClientDiagnostics = this.modelClientDiagnostics(request.providerId)
     const cacheSignature: CacheRequestSignature = {
       model: request.model,
@@ -1564,7 +1549,7 @@ export class AgentLoop {
     let persistedReasoning = false
     let persistedText = false
     const persistAccumulatedResponse = async (): Promise<void> => {
-      if (!persistedReasoning && reasoningAccumulator.value) {
+      if (!persistedReasoning && streamCollector.reasoning) {
         persistedReasoning = true
         const itemId = reasoningItemId || this.opts.ids.next('item_reasoning')
         await this.opts.turns.applyItem(
@@ -1573,12 +1558,12 @@ export class AgentLoop {
             id: itemId,
             turnId,
             threadId,
-            text: reasoningAccumulator.value,
+            text: streamCollector.reasoning,
             status: 'completed'
           })
         )
       }
-      if (!persistedText && textAccumulator.value) {
+      if (!persistedText && streamCollector.text) {
         persistedText = true
         const itemId = textItemId || this.opts.ids.next('item_text')
         await this.opts.turns.applyItem(
@@ -1587,7 +1572,7 @@ export class AgentLoop {
             id: itemId,
             turnId,
             threadId,
-            text: textAccumulator.value,
+            text: streamCollector.text,
             status: 'completed'
           })
         )
@@ -1616,10 +1601,22 @@ export class AgentLoop {
         await persistAccumulatedResponse()
         return 'aborted'
       }
-      switch (chunk.kind) {
+      const reduction = streamCollector.reduce(chunk)
+      if (reduction.terminal) {
+        const message = reduction.terminal.message
+        this.rememberTurnFailure(turnId, {
+          error: message,
+          code: 'tool_call_limit_exceeded',
+          severity: 'warning'
+        })
+        await this.recordTurnLimitExceeded(threadId, turnId, 'tool_call_limit_exceeded', message)
+        await persistAccumulatedResponse()
+        return 'failed'
+      }
+      for (const intent of reduction.intents) {
+        switch (intent.kind) {
         case 'assistant_text_delta':
           textItemId ||= this.opts.ids.next('item_text')
-          textAccumulator.append(chunk.text)
           await this.opts.events.record({
             kind: 'assistant_text_delta',
             threadId,
@@ -1629,14 +1626,13 @@ export class AgentLoop {
               id: textItemId,
               turnId,
               threadId,
-              text: chunk.text,
+              text: intent.text,
               status: 'running'
             })
           })
           break
         case 'assistant_reasoning_delta':
           reasoningItemId ||= this.opts.ids.next('item_reasoning')
-          reasoningAccumulator.append(chunk.text)
           await this.opts.events.record({
             kind: 'assistant_reasoning_delta',
             threadId,
@@ -1646,65 +1642,36 @@ export class AgentLoop {
               id: reasoningItemId,
               turnId,
               threadId,
-              text: chunk.text,
+              text: intent.text,
               status: 'running'
             })
           })
-          break
-        case 'tool_call_delta':
           break
         case 'retrying':
           await this.opts.events.record({
             kind: 'model_request_retry',
             threadId,
             turnId,
-            status: chunk.status,
-            attempt: chunk.attempt,
-            maxAttempts: chunk.maxAttempts,
-            delayMs: chunk.delayMs
+            status: intent.status,
+            attempt: intent.attempt,
+            maxAttempts: intent.maxAttempts,
+            delayMs: intent.delayMs
           })
           break
-        case 'tool_call_complete': {
-          if (completedToolCalls.length >= maxToolCallsPerStep) {
-            const message = `model response exceeded ${maxToolCallsPerStep} tool calls`
-            this.rememberTurnFailure(turnId, {
-              error: message,
-              code: 'tool_call_limit_exceeded',
-              severity: 'warning'
-            })
-            await this.recordTurnLimitExceeded(threadId, turnId, 'tool_call_limit_exceeded', message)
-            await persistAccumulatedResponse()
-            return 'failed'
-          }
-          const provider = toolProviderMetadata.get(chunk.toolName)
-          const toolKind = toolKinds.get(chunk.toolName)
-          const repaired = repairDispatchToolArguments(chunk.arguments, {
-            toolName: chunk.toolName,
-            ...(toolKind ? { toolKind } : {}),
-            ...(this.opts.toolArgumentRepair?.maxStringBytes !== undefined
-              ? { maxStringBytes: this.opts.toolArgumentRepair.maxStringBytes }
-              : {})
-          })
-          completedToolCalls.push({
-            callId: chunk.callId,
-            toolName: chunk.toolName,
-            ...(provider?.providerId ? { providerId: provider.providerId } : {}),
-            toolKind,
-            arguments: repaired.arguments
-          })
-          const itemId = `item_tool_${turnId}_${chunk.callId}`
+        case 'tool_call_ready': {
+          const itemId = `item_tool_${turnId}_${intent.call.callId}`
           await this.opts.turns.applyItem(
             threadId,
             makeToolCallItem({
               id: itemId,
               turnId,
               threadId,
-              callId: chunk.callId,
-              toolName: chunk.toolName,
-              toolKind,
-              arguments: repaired.arguments,
-              ...(repaired.notes.length
-                ? { summary: `Repaired tool arguments: ${repaired.notes.join('; ')}` }
+              callId: intent.call.callId,
+              toolName: intent.call.toolName,
+              toolKind: intent.call.toolKind,
+              arguments: intent.call.arguments,
+              ...(intent.repairNotes.length
+                ? { summary: `Repaired tool arguments: ${intent.repairNotes.join('; ')}` }
                 : {})
             })
           )
@@ -1713,13 +1680,13 @@ export class AgentLoop {
             threadId,
             turnId,
             itemId,
-            callId: chunk.callId,
-            toolName: chunk.toolName,
-            readyCount: completedToolCalls.length
+            callId: intent.call.callId,
+            toolName: intent.call.toolName,
+            readyCount: streamCollector.toolCallCount
           })
           break
         }
-        case 'image_generation_complete': {
+        case 'generated_image': {
           const imgDir = '.deepseekgui-images'
           const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14)
           const fileName = `img-${stamp}-${randomBytes(2).toString('hex')}.png`
@@ -1731,10 +1698,10 @@ export class AgentLoop {
           const absolutePath = (await resolveWorkspacePath(relativePath, toolContext, {
             enforceWorkspaceBoundary: true
           })).absolutePath
-          await writeFile(absolutePath, Buffer.from(chunk.imageBase64, 'base64'))
+          await writeFile(absolutePath, Buffer.from(intent.imageBase64, 'base64'))
           const imageMarkdown = `\n![generated image](${relativePath})\n`
+          const textIntent = streamCollector.appendAssistantText(imageMarkdown)
           textItemId ||= this.opts.ids.next('item_text')
-          textAccumulator.append(imageMarkdown)
           await this.opts.events.record({
             kind: 'assistant_text_delta',
             threadId,
@@ -1744,16 +1711,16 @@ export class AgentLoop {
               id: textItemId,
               turnId,
               threadId,
-              text: imageMarkdown,
+              text: textIntent.text,
               status: 'running'
             })
           })
           break
         }
         case 'usage': {
-          this.recordPromptPressure(threadId, request.model, chunk.usage.promptTokens)
-          const usage = this.opts.usage.record(threadId, chunk.usage, cacheSignature)
-          await this.recordGoalUsage(threadId, chunk.usage.totalTokens)
+          this.recordPromptPressure(threadId, request.model, intent.usage.promptTokens)
+          const usage = this.opts.usage.record(threadId, intent.usage, cacheSignature)
+          await this.recordGoalUsage(threadId, intent.usage.totalTokens)
           await this.opts.events.record({
             kind: 'usage',
             threadId,
@@ -1763,37 +1730,36 @@ export class AgentLoop {
           })
           break
         }
-        case 'completed':
-          if (stopReason !== 'error') stopReason = chunk.stopReason
-          break
-        case 'error':
+        case 'model_error':
           this.rememberTurnFailure(turnId, {
-            error: chunk.message,
-            ...(chunk.code ? { code: chunk.code } : {}),
+            error: intent.message,
+            ...(intent.code ? { code: intent.code } : {}),
             severity: 'error'
           })
           await this.opts.events.record({
             kind: 'error',
             threadId,
             turnId,
-            message: chunk.message,
-            code: chunk.code,
+            message: intent.message,
+            code: intent.code,
             severity: 'error'
           })
-          stopReason = 'error'
           break
+        }
       }
     }
     if (signal.aborted) {
       await persistAccumulatedResponse()
       return 'aborted'
     }
+    const streamSnapshot = streamCollector.snapshot()
     await this.recordPipelineStage(threadId, turnId, 'response_received', {
-      stopReason,
-      toolCallCount: completedToolCalls.length
+      stopReason: streamSnapshot.stopReason,
+      toolCallCount: streamSnapshot.toolCalls.length
     })
     await persistAccumulatedResponse()
-    if (stopReason === 'error') return 'failed'
+    if (streamSnapshot.stopReason === 'error') return 'failed'
+    const completedToolCalls = [...streamSnapshot.toolCalls]
     if (completedToolCalls.length === 0) {
       if (svgCompletion && !svgCompletion.validationAfterMutation) {
         return this.recoverRequiredSvgCompletion(threadId, turnId, svgCompletion)
@@ -1801,13 +1767,13 @@ export class AgentLoop {
       if (request.requiredToolName) {
         if (
           request.requiredToolName === CREATE_PLAN_TOOL_NAME &&
-          textAccumulator.value.trim()
+          streamCollector.text.trim()
         ) {
           // The model asked the user to decide instead of producing a plan
           // (ambiguous request). Don't materialize a question into a bogus
           // plan — end the turn so the user can answer; the next plan turn
           // produces a real plan once the scope is settled.
-          if (isPlanClarifyingQuestion(textAccumulator.value)) {
+          if (isPlanClarifyingQuestion(streamCollector.text)) {
             return 'stop'
           }
           const callId = this.opts.ids.next('call_plan')
@@ -1819,7 +1785,7 @@ export class AgentLoop {
             ''
           const argumentsForFallback: Record<string, unknown> = activePlanContext
             ? {
-                markdown: textAccumulator.value.trim(),
+                markdown: streamCollector.text.trim(),
                 operation: activePlanContext.operation,
                 plan_id: activePlanContext.planId,
                 plan_relative_path: activePlanContext.relativePath,
@@ -1827,7 +1793,7 @@ export class AgentLoop {
                 ...(activePlanContext.title ? { title: activePlanContext.title } : {})
               }
             : {
-                markdown: textAccumulator.value.trim(),
+                markdown: streamCollector.text.trim(),
                 operation: 'draft',
                 ...(sourceRequest ? { source_request: sourceRequest } : {})
               }
@@ -1912,8 +1878,8 @@ export class AgentLoop {
           item.toolName !== CREATE_PLAN_TOOL_NAME
       )
       if (
-        stopReason === 'stop' &&
-        !textAccumulator.value.trim() &&
+        streamSnapshot.stopReason === 'stop' &&
+        !streamCollector.text.trim() &&
         hasCurrentTurnFileChange
       ) {
         const recoverySteps = (this.emptyPostToolRecoveryStepsByTurn.get(turnId) ?? 0) + 1
@@ -1950,13 +1916,13 @@ export class AgentLoop {
         )
         return 'failed'
       }
-      if (stopReason === 'stop' && activeGoalInstruction) {
+      if (streamSnapshot.stopReason === 'stop' && activeGoalInstruction) {
         const previousText = this.lastNoToolTextByTurn.get(turnId)
-        if (isRepeatedNoToolAssistantText(previousText, textAccumulator.value)) {
+        if (isRepeatedNoToolAssistantText(previousText, streamCollector.text)) {
           const recoverySteps = (this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0) + 1
           if (recoverySteps <= GOAL_NO_TOOL_REPEAT_MAX_RECOVERY_STEPS) {
             this.goalNoToolRecoveryStepsByTurn.set(turnId, recoverySteps)
-            this.lastNoToolTextByTurn.set(turnId, textAccumulator.value)
+            this.lastNoToolTextByTurn.set(turnId, streamCollector.text)
             return 'continue'
           }
           const message =
@@ -1994,10 +1960,10 @@ export class AgentLoop {
           return 'stop'
         }
         this.goalNoToolRecoveryStepsByTurn.delete(turnId)
-        this.lastNoToolTextByTurn.set(turnId, textAccumulator.value)
+        this.lastNoToolTextByTurn.set(turnId, streamCollector.text)
         return 'continue'
       }
-      if (stopReason === 'length') {
+      if (streamSnapshot.stopReason === 'length') {
         // The model hit its output-token ceiling and was cut off without a tool
         // call. Don't report this as a clean completion — surface a warning so
         // the truncation is visible instead of looking like the model "gave up".
