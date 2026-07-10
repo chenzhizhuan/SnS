@@ -559,6 +559,7 @@ export async function createKunServeRuntime(
 	      defaultIsAgentSdk,
 	      defaultToken: activeOptions.apiKey,
 	      turnLimits: activeOptions.runtime?.turnLimits,
+	      approvalGate,
 	      skillRuntime,
 	      instructionRuntime,
 	      userInputGate,

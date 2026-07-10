@@ -109,7 +109,8 @@ export interface SdkRuntimeDeps {
     threadId: string,
     turnId: string,
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    signal?: AbortSignal
   ): Promise<ToolApprovalDecision>
   /** Persist + publish a runtime event (recorder.record). */
   recordEvent(draft: RuntimeEventDraft): Promise<void>
@@ -193,7 +194,7 @@ export class AgentSdkRuntime {
         canUseTool: buildCanUseTool((name, input) => {
           const sandboxDecision = decideSdkBuiltinSandbox(name, input, ctx)
           if (sandboxDecision) return sandboxDecision
-          return this.deps.decideToolApproval(threadId, turnId, name, input)
+          return this.deps.decideToolApproval(threadId, turnId, name, input, abort.signal)
         }),
         baseEnv: this.deps.baseEnv(),
         oauthToken: ctx.oauthToken,

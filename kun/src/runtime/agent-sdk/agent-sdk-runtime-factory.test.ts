@@ -148,6 +148,57 @@ describe('createAgentSdkRuntime handlesProvider', () => {
 })
 
 describe('createAgentSdkRuntime turn context', () => {
+  test('uses the thread approval policy to gate SDK built-in tools', async () => {
+    const events: Array<{ kind: string; approvalPolicy?: string }> = []
+    const runtime = createAgentSdkRuntime({
+      registry: {} as never,
+      turns: {} as never,
+      sessionStore: {} as never,
+      threadStore: { get: async () => threadWith({ approvalPolicy: 'always' }) } as never,
+      events: { record: async (event: { kind: string; approvalPolicy?: string }) => { events.push(event) } } as never,
+      ids: { next: (prefix) => `${prefix}_1` },
+      prefix: { systemPrompt: '' },
+      providerConfigs: {},
+      agentSdkProviderIds: new Set(),
+      defaultApprovalPolicy: 'auto',
+      approvalGate: {
+        request: async () => 'allow', decide: () => false, pending: () => [], get: () => undefined
+      } as never
+    })
+    const deps = (runtime as unknown as {
+      deps: {
+        decideToolApproval(threadId: string, turnId: string, toolName: string, input: Record<string, unknown>): Promise<{ allow: boolean }>
+      }
+    }).deps
+
+    await expect(deps.decideToolApproval('th', 'tn', 'Bash', { command: 'pwd' })).resolves.toEqual({ allow: true })
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'approval_requested', approvalPolicy: 'always' }))
+  })
+
+  test('denies SDK built-in tools under a thread never policy', async () => {
+    const runtime = createAgentSdkRuntime({
+      registry: {} as never,
+      turns: {} as never,
+      sessionStore: {} as never,
+      threadStore: { get: async () => threadWith({ approvalPolicy: 'never' }) } as never,
+      events: {} as never,
+      ids: { next: (prefix) => `${prefix}_1` },
+      prefix: { systemPrompt: '' },
+      providerConfigs: {},
+      agentSdkProviderIds: new Set(),
+      defaultApprovalPolicy: 'auto'
+    })
+    const deps = (runtime as unknown as {
+      deps: {
+        decideToolApproval(threadId: string, turnId: string, toolName: string, input: Record<string, unknown>): Promise<{ allow: boolean; message?: string }>
+      }
+    }).deps
+
+    await expect(deps.decideToolApproval('th', 'tn', 'Bash', { command: 'pwd' })).resolves.toMatchObject({
+      allow: false, message: expect.stringContaining('never')
+    })
+  })
+
   test('does not duplicate an HTTP-recorded user input resolution event', async () => {
     const events: Array<{ kind: string; inputId?: string }> = []
     const runtime = createAgentSdkRuntime({

@@ -38,6 +38,8 @@ import type {
   UserInputResolution
 } from '../../ports/user-input-gate.js'
 import type { TurnItem } from '../../contracts/items.js'
+import type { ApprovalGate } from '../../ports/approval-gate.js'
+import { createApprovalRequest, type ApprovalRequest } from '../../domain/approval.js'
 import { makeUserInputItem } from '../../domain/item.js'
 import {
   buildHistoryTranscript,
@@ -74,6 +76,8 @@ export interface AgentSdkRuntimeFactoryDeps {
   memoryStore?: MemoryStore
   /** Interactive-input gate — lets the bridged `user_input` tool surface kun's GUI panel. */
   userInputGate?: UserInputGate
+  /** GUI approval gate shared with native tool execution. Missing means deny closed. */
+  approvalGate?: ApprovalGate
   /** Clock for stamping item timestamps (falls back to Date when absent). */
   nowIso?: () => string
   /** Cap for the replayed history transcript (bytes); defaults to the assembler's. */
@@ -224,6 +228,43 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
     }
   }
 
+  const makeAwaitApproval = (
+    approvalPolicy: ApprovalPolicy,
+    sandboxMode: SandboxMode | undefined,
+    signal: AbortSignal
+  ): ((approval: ApprovalRequest) => Promise<'allow' | 'deny'>) => async (approval) => {
+    if (approvalPolicy === 'never' || !deps.approvalGate) return 'deny'
+    await deps.events.record({
+      kind: 'approval_requested',
+      threadId: approval.threadId,
+      turnId: approval.turnId,
+      approvalId: approval.id,
+      toolName: approval.toolName,
+      status: 'pending',
+      approvalPolicy,
+      sandboxMode: sandboxMode ?? DEFAULT_SANDBOX_MODE,
+      summary: approval.summary
+    })
+    const pending = deps.approvalGate.request(approval)
+    if (signal.aborted) {
+      deps.approvalGate.expire?.(approval.id, 'turn aborted while awaiting approval')
+      return 'deny'
+    }
+    return new Promise<'allow' | 'deny'>((resolve) => {
+      const onAbort = () => {
+        cleanup()
+        deps.approvalGate?.expire?.(approval.id, 'turn aborted while awaiting approval')
+        resolve('deny')
+      }
+      const cleanup = () => signal.removeEventListener('abort', onAbort)
+      signal.addEventListener('abort', onAbort, { once: true })
+      pending.then(
+        (decision) => { cleanup(); resolve(decision) },
+        () => { cleanup(); resolve('deny') }
+      )
+    })
+  }
+
   const toolContext = (
     threadId: string,
     turnId: string,
@@ -232,24 +273,27 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
       planMode?: boolean
       guiPlan?: GuiPlanContext
       sandboxMode?: SandboxMode
+      approvalPolicy?: ApprovalPolicy
+      signal?: AbortSignal
       awaitUserInput?: ToolHostContext['awaitUserInput']
+      awaitApproval?: ToolHostContext['awaitApproval']
     }
   ): ToolHostContext => ({
     threadId,
     turnId,
     workspace,
-    approvalPolicy: deps.defaultApprovalPolicy,
+    approvalPolicy: opts?.approvalPolicy ?? deps.defaultApprovalPolicy,
     sandboxMode: opts?.sandboxMode ?? deps.defaultSandboxMode ?? DEFAULT_SANDBOX_MODE,
-    abortSignal: new AbortController().signal,
+    abortSignal: opts?.signal ?? new AbortController().signal,
     // Expose plan state so `create_plan` is advertised (listTools) and executable
     // (executeKunTool) on plan turns — both are gated on it.
     ...(opts?.planMode ? { threadMode: 'plan' as const } : {}),
     ...(opts?.guiPlan ? { guiPlan: opts.guiPlan } : {}),
     // Wire interactive input to kun's GUI panel (advertises `user_input`).
     ...(opts?.awaitUserInput ? { awaitUserInput: opts.awaitUserInput } : {}),
-    // The SDK gates every call via canUseTool, so the bridged execution path
-    // itself does not re-prompt; this stub keeps the context type satisfied.
-    awaitApproval: async () => 'allow'
+    // Execution supplies the real GUI approval callback; listing contexts stay
+    // deny-closed because no tool may execute through them.
+    awaitApproval: opts?.awaitApproval ?? (async () => 'deny')
   })
 
   const resolveImages = async (
@@ -370,7 +414,7 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
         workspace: thread.workspace,
         userText,
         threadPersona: thread.systemPrompt?.trim() || undefined,
-        approvalPolicy: deps.defaultApprovalPolicy,
+        approvalPolicy: thread.approvalPolicy ?? deps.defaultApprovalPolicy,
         sandboxMode: thread.sandboxMode,
         planMode,
         // Claude Code only accepts Anthropic models; coerce a thread's non-Claude
@@ -389,11 +433,17 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
       const thread = await deps.threadStore.get(threadId)
       // Re-resolve plan context so create_plan can write to its reserved path.
       const plan = thread ? resolveTurnPlanContext(thread, turnId) : undefined
+      const approvalPolicy = thread?.approvalPolicy ?? deps.defaultApprovalPolicy
+      const sandboxMode = thread?.sandboxMode ?? deps.defaultSandboxMode
+      const toolSignal = signal ?? new AbortController().signal
       // Real per-call signal so an interactive user_input cancels on turn abort.
       const ctx = toolContext(threadId, turnId, thread?.workspace ?? process.cwd(), {
         ...(plan ?? {}),
-        ...(thread?.sandboxMode ? { sandboxMode: thread.sandboxMode } : {}),
-        awaitUserInput: makeAwaitUserInput(threadId, turnId, signal ?? new AbortController().signal)
+        ...(sandboxMode ? { sandboxMode } : {}),
+        approvalPolicy,
+        signal: toolSignal,
+        awaitApproval: makeAwaitApproval(approvalPolicy, sandboxMode, toolSignal),
+        awaitUserInput: makeAwaitUserInput(threadId, turnId, toolSignal)
       })
       try {
         const record = deps.registry.resolveTool(toolName, ctx)
@@ -404,13 +454,31 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
       }
     },
 
-    // MVP permission posture: honor 'never' (block all); otherwise allow. Routing
-    // 'always'/'on-request' to the GUI approval panel is a follow-up.
-    async decideToolApproval(): Promise<ToolApprovalDecision> {
-      if (deps.defaultApprovalPolicy === 'never') {
+    async decideToolApproval(threadId, turnId, toolName, input, signal): Promise<ToolApprovalDecision> {
+      // Bridged Kun tools perform their own per-tool policy check through the
+      // LocalToolHost context above; asking here too would create two prompts.
+      if (toolName.startsWith('mcp__kun__')) return { allow: true }
+      const thread = await deps.threadStore.get(threadId)
+      const approvalPolicy = thread?.approvalPolicy ?? deps.defaultApprovalPolicy
+      if (approvalPolicy === 'never') {
         return { allow: false, message: 'tools are disabled for this turn (policy: never)' }
       }
-      return { allow: true }
+      if (approvalPolicy === 'auto') return { allow: true }
+      const approval = createApprovalRequest({
+        id: deps.ids.next('appr'),
+        threadId,
+        turnId,
+        toolName,
+        summary: `Run ${toolName}(${JSON.stringify(input).slice(0, 4_000)})`
+      })
+      const decision = await makeAwaitApproval(
+        approvalPolicy,
+        thread?.sandboxMode ?? deps.defaultSandboxMode,
+        signal ?? new AbortController().signal
+      )(approval)
+      return decision === 'allow'
+        ? { allow: true }
+        : { allow: false, message: 'Tool call was denied by the approval policy or user.' }
     },
 
     async recordEvent(draft): Promise<void> {
