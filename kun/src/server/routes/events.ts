@@ -29,11 +29,9 @@ export function buildEventStreamResponse(input: {
   threadId: string
   eventBus: EventBus
   sessionStore: SessionStore
+  sinceSeq?: number
 }): Response {
-  const url = new URL(input.request.url)
-  const sinceSeqFromQuery = Number(url.searchParams.get('since_seq') ?? '0') || 0
-  const sinceSeqFromHeader = Number(input.request.headers.get('Last-Event-ID') ?? '0') || 0
-  const sinceSeq = sinceSeqFromQuery || sinceSeqFromHeader
+  const sinceSeq = input.sinceSeq ?? parseEventCursor(input.request) ?? 0
   const encoder = new TextEncoder()
   let unsubscribe: (() => void) | undefined
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined
@@ -133,4 +131,15 @@ export function buildEventStreamResponse(input: {
       connection: 'keep-alive'
     }
   })
+}
+
+/** Query cursor takes precedence over Last-Event-ID, including an explicit 0. */
+export function parseEventCursor(request: Request): number | null {
+  const url = new URL(request.url)
+  const query = url.searchParams.get('since_seq')
+  const raw = query === null ? request.headers.get('Last-Event-ID') : query
+  if (raw === null || raw.trim() === '') return 0
+  if (!/^\d+$/.test(raw.trim())) return null
+  const value = Number(raw)
+  return Number.isSafeInteger(value) && value >= 0 ? value : null
 }

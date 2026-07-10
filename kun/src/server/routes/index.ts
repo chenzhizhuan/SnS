@@ -25,7 +25,7 @@ import {
   steerTurn
 } from './turns.js'
 import { startReview } from './review.js'
-import { buildEventStreamResponse } from './events.js'
+import { buildEventStreamResponse, parseEventCursor } from './events.js'
 import { decideApproval } from './approvals.js'
 import { resolveUserInput } from './user-inputs.js'
 import { resumeSession } from './sessions.js'
@@ -299,13 +299,19 @@ export function buildRouter(runtime: ServerRuntime): Router {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return compactTurn(runtime.turnService, ctx.params.id, request)
   })
-  router.add('GET', '/v1/threads/:id/events', (request, ctx) => {
+  router.add('GET', '/v1/threads/:id/events', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const sinceSeq = parseEventCursor(request)
+    if (sinceSeq === null) return ERRORS.validation('since_seq must be a non-negative safe integer')
+    if (!await runtime.threadService.get(ctx.params.id)) {
+      return ERRORS.notFound(`thread not found: ${ctx.params.id}`)
+    }
     return buildEventStreamResponse({
       request,
       threadId: ctx.params.id,
       eventBus: runtime.eventBus,
-      sessionStore: runtime.sessionStore
+      sessionStore: runtime.sessionStore,
+      sinceSeq
     })
   })
   router.add('POST', '/v1/approvals/:id', async (request, ctx) => {

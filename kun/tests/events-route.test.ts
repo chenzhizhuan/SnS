@@ -2,9 +2,16 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeEvent } from '../src/contracts/events.js'
 import type { EventBus } from '../src/ports/event-bus.js'
 import type { SessionStore } from '../src/ports/session-store.js'
-import { buildEventStreamResponse } from '../src/server/routes/events.js'
+import { buildEventStreamResponse, parseEventCursor } from '../src/server/routes/events.js'
 
 describe('event stream replay', () => {
+  it('accepts only non-negative safe integer cursors', () => {
+    expect(parseEventCursor(new Request('http://localhost/events?since_seq=0', { headers: { 'Last-Event-ID': '9' } }))).toBe(0)
+    expect(parseEventCursor(new Request('http://localhost/events?since_seq=-1'))).toBeNull()
+    expect(parseEventCursor(new Request('http://localhost/events?since_seq=Infinity'))).toBeNull()
+    expect(parseEventCursor(new Request('http://localhost/events?since_seq=9007199254740992'))).toBeNull()
+  })
+
   it('delivers an event published between subscription and persisted replay', async () => {
     let subscriber: ((event: RuntimeEvent) => void) | undefined
     const live: RuntimeEvent = {
