@@ -45,6 +45,7 @@ import {
 } from './compat-request-codecs.js'
 import { decodeChatCompletionsStreamPayload } from './chat-completions-stream-decoder.js'
 import { decodeResponsesStreamPayload } from './responses-stream-decoder.js'
+import { decodeAnthropicMessagesStreamPayload } from './anthropic-messages-stream-decoder.js'
 
 export { redactUrlForLog } from './compat-http-diagnostics.js'
 
@@ -1128,91 +1129,16 @@ export class CompatModelClient implements ModelClient {
     model: string,
     budget: ModelStreamResourceBudget
   ): StreamPayloadResult {
-    const chunks: ModelStreamChunk[] = []
-    let sawText = sawTextDelta
-    let finishReason: string | null = null
-    let usage: UsageSnapshot | null = null
-    const type = recordString(payload, 'type')
-    const index = numericIndex(payload.index)
-
-    if (type === 'message_start') {
-      const message = recordValue(payload, 'message')
-      const usagePayload = message ? recordValue(message, 'usage') : null
-      if (usagePayload) usage = this.mapUsage(usagePayload, model)
-    } else if (type === 'content_block_start') {
-      const block = recordValue(payload, 'content_block')
-      if (block && recordString(block, 'type') === 'tool_use') {
-        const callId = recordString(block, 'id') || indexFallbackCallId(index, pendingArguments)
-        const existing = budget.pendingCall(pendingArguments, callId, index)
-        if (index !== undefined) {
-          budget.bindPendingIndex(pendingByIndex, index, callId)
-        }
-        const name = recordString(block, 'name')
-        if (name) existing.name = name
-        const input = recordValue(block, 'input')
-        if (input && Object.keys(input).length > 0) budget.replaceArguments(existing, JSON.stringify(input))
-      }
-    } else if (type === 'content_block_delta') {
-      const delta = recordValue(payload, 'delta')
-      const deltaType = delta ? recordString(delta, 'type') : ''
-      if (deltaType === 'text_delta') {
-        const value = recordString(delta, 'text')
-        if (value) {
-          sawText = true
-          chunks.push({ kind: 'assistant_text_delta', text: value })
-        }
-      } else if (deltaType === 'thinking_delta') {
-        const value = recordString(delta, 'thinking')
-        if (value) {
-          chunks.push({ kind: 'assistant_reasoning_delta', text: value })
-        }
-      } else if (deltaType === 'input_json_delta') {
-        const callId = anthropicStreamCallId(index, pendingArguments, pendingByIndex)
-        const existing = budget.pendingCall(pendingArguments, callId, index)
-        const value = recordString(delta, 'partial_json')
-        if (index !== undefined) {
-          budget.bindPendingIndex(pendingByIndex, index, callId)
-        }
-        if (value) {
-          budget.appendArguments(existing, value)
-          chunks.push({
-            kind: 'tool_call_delta',
-            callId,
-            toolName: existing.name,
-            argumentsDelta: value
-          })
-        }
-      }
-    } else if (type === 'content_block_stop') {
-      const callId = index === undefined ? undefined : pendingByIndex.get(index)
-      const pending = callId ? pendingArguments.get(callId) : undefined
-      if (callId && pending?.name) {
-        const argumentsRaw = budget.pendingArguments(pending)
-        budget.completeToolCall(argumentsRaw)
-        chunks.push({
-          kind: 'tool_call_complete',
-          callId,
-          toolName: pending.name,
-          arguments: this.parseToolArguments(argumentsRaw || '{}')
-        })
-        completedToolCalls.add(callId)
-        budget.removePendingCall(pendingArguments, callId)
-        if (index !== undefined) pendingByIndex.delete(index)
-      }
-    } else if (type === 'message_delta') {
-      const delta = recordValue(payload, 'delta')
-      const stopReason = delta ? recordString(delta, 'stop_reason') : ''
-      const mappedStopReason = anthropicStopReason(stopReason)
-      if (mappedStopReason) finishReason = mappedStopReason
-      const usagePayload = recordValue(payload, 'usage')
-      if (usagePayload) usage = this.mapUsage(usagePayload, model)
-    } else if (type === 'message_stop') {
-      finishReason = finishReason ?? 'stop'
-    } else if (type === 'error') {
-      chunks.push({ kind: 'error', message: responseErrorMessage(payload), code: 'messages_stream_error' })
-      finishReason = 'error'
-    }
-    return { chunks, sawTextDelta: sawText, finishReason, usage }
+    return decodeAnthropicMessagesStreamPayload({
+      payload,
+      pendingArguments,
+      pendingByIndex,
+      completedToolCalls,
+      sawTextDelta,
+      budget,
+      normalizeUsage: (usage) => this.mapUsage(usage, model),
+      parseToolArguments: (raw) => this.parseToolArguments(raw)
+    })
   }
 
   private *materializeNonStreaming(
