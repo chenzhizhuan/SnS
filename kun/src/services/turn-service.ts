@@ -69,6 +69,18 @@ export class TurnCapacityError extends Error {
   }
 }
 
+export type TerminalTurnStatus = Extract<TurnStatus, 'completed' | 'failed' | 'aborted'>
+
+/**
+ * Authoritative result of attempting to persist a terminal state. Callers
+ * must use this rather than assuming their requested status won a race with
+ * interrupt, delete, or another execution owner.
+ */
+export type TurnSettlement =
+  | { kind: 'applied'; status: TerminalTurnStatus; error?: string }
+  | { kind: 'already_terminal'; status: TerminalTurnStatus; error?: string }
+  | { kind: 'missing' }
+
 /** Finite by default so a burst of threads cannot exhaust one serve process. */
 export const DEFAULT_MAX_CONCURRENT_TURNS = 4
 
@@ -528,19 +540,26 @@ export class TurnService {
   async finishTurn(input: {
     threadId: string
     turnId: string
-    status: Extract<TurnStatus, 'completed' | 'failed' | 'aborted'>
+    status: TerminalTurnStatus
     error?: string
     code?: string
     details?: unknown
     severity?: RuntimeErrorSeverity
-  }): Promise<void> {
-    let transitioned: boolean
+  }): Promise<TurnSettlement> {
+    let settlement: TurnSettlement
     try {
-      transitioned = await this.withThreadMutation(input.threadId, async () => {
+      settlement = await this.withThreadMutation(input.threadId, async () => {
         const current = await this.deps.threadStore.get(input.threadId)
-        if (!current) return false
+        if (!current) return { kind: 'missing' }
         const turn = current.turns.find((candidate) => candidate.id === input.turnId)
-        if (!turn || !isActiveTurn(turn)) return false
+        if (!turn) return { kind: 'missing' }
+        if (!isActiveTurn(turn)) {
+          return {
+            kind: 'already_terminal',
+            status: terminalStatus(turn.status),
+            ...(turn.error ? { error: turn.error } : {})
+          }
+        }
         const turns = current.turns.map((candidate) => {
           if (candidate.id !== input.turnId) return candidate
           const finished = this.finalizeOpenItems(finishTurn(candidate, input.status), input.status)
@@ -552,7 +571,11 @@ export class TurnService {
           status: threadStatusAfterTurnTransition(current.status, turns),
           updatedAt: this.deps.nowIso()
         })
-        return true
+        return {
+          kind: 'applied',
+          status: input.status,
+          ...(input.error ? { error: input.error } : {})
+        }
       })
     } catch (error) {
       // The model loop has already settled. Do not keep its in-process slot
@@ -560,11 +583,11 @@ export class TurnService {
       this.clearRuntimeTurnState(input.threadId, input.turnId)
       throw error
     }
-    if (!transitioned) {
+    if (settlement.kind !== 'applied') {
       // A thread can disappear while a loop is unwinding. It no longer has a
       // durable turn to update, but its in-process admission must not leak.
       this.clearRuntimeTurnState(input.threadId, input.turnId)
-      return
+      return settlement
     }
 
     this.clearRuntimeTurnState(input.threadId, input.turnId)
@@ -593,6 +616,7 @@ export class TurnService {
     if (errorItem) {
       await this.appendItem(input.threadId, errorItem)
     }
+    return settlement
   }
 
   getAbortController(turnId: string): AbortSignal | undefined {
@@ -896,8 +920,19 @@ export class TurnService {
 
 }
 
-function isActiveTurn(turn: Turn): boolean {
+function isActiveTurn(turn: Turn): turn is Turn & { status: 'queued' | 'running' } {
   return turn.status === 'queued' || turn.status === 'running'
+}
+
+function terminalStatus(status: TurnStatus): TerminalTurnStatus {
+  switch (status) {
+    case 'completed':
+    case 'failed':
+    case 'aborted':
+      return status
+    default:
+      throw new Error(`expected terminal turn status, got ${status}`)
+  }
 }
 
 function threadStatusFromTurns(turns: Turn[]): ThreadStatus {

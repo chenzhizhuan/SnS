@@ -71,6 +71,9 @@ describe('AgentLoop transcript characterization', () => {
       'usage',
       'turn_completed'
     ]))
+    expect(terminalEvents(transcript.events)).toEqual([
+      expect.objectContaining({ kind: 'turn_completed' })
+    ])
     expect(transcript.usage).toMatchObject({
       promptTokens: 11,
       completionTokens: 7,
@@ -155,6 +158,38 @@ describe('AgentLoop transcript characterization', () => {
     expect(transcript.turn).toMatchObject({ status: 'completed' })
   })
 
+  it('shares one owned model run when a caller submits the same turn twice', async () => {
+    let markStarted: (() => void) | undefined
+    let release: (() => void) | undefined
+    const started = new Promise<void>((resolve) => { markStarted = resolve })
+    const continueRun = new Promise<void>((resolve) => { release = resolve })
+    const model = new ScriptedCapturingModel([
+      async function *(): AsyncIterable<ModelStreamChunk> {
+        markStarted?.()
+        await continueRun
+        yield { kind: 'assistant_text_delta', text: 'Only one runner.' }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    ])
+    const harness = makeHarness(model, { tools: [] })
+    await bootstrapThread(harness, { request: { prompt: 'Run once.', model: 'transcript-model' } })
+
+    const first = harness.loop.runTurn(harness.threadId, harness.turnId)
+    const second = harness.loop.runTurn(harness.threadId, harness.turnId)
+    expect(second).toBe(first)
+    await started
+    release?.()
+    const status = await first
+    await expect(second).resolves.toBe('completed')
+    const transcript = await captureTranscript({ harness, model, status })
+
+    expect(transcript.modelRequests).toHaveLength(1)
+    expect(transcript.toolExecutionOrder).toEqual([])
+    expect(terminalEvents(transcript.events)).toEqual([
+      expect.objectContaining({ kind: 'turn_completed' })
+    ])
+  })
+
   it('replays an interrupt without timers and preserves the abort lifecycle contract', async () => {
     let markModelWaiting: (() => void) | undefined
     const modelWaiting = new Promise<void>((resolve) => {
@@ -186,6 +221,9 @@ describe('AgentLoop transcript characterization', () => {
       'turn_aborted'
     ]))
     expect(transcript.events.some((event) => event.kind === 'turn_completed')).toBe(false)
+    expect(terminalEvents(transcript.events)).toEqual([
+      expect.objectContaining({ kind: 'turn_aborted' })
+    ])
     expect(transcript.sessionItems).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'assistant_text', text: 'Partial response.' })
     ]))
@@ -344,6 +382,9 @@ describe('AgentLoop transcript characterization', () => {
       expect.objectContaining({ kind: 'error', code: 'upstream_unavailable', message: 'upstream unavailable' }),
       expect.objectContaining({ kind: 'turn_failed' })
     ]))
+    expect(terminalEvents(transcript.events)).toEqual([
+      expect.objectContaining({ kind: 'turn_failed' })
+    ])
     expect(transcript.turn).toMatchObject({ status: 'failed' })
     expect(transcript.toolExecutionOrder).toEqual([])
   })
@@ -406,6 +447,12 @@ describe('AgentLoop transcript characterization', () => {
     })
   })
 })
+
+function terminalEvents(events: Array<{ kind: string }>): Array<{ kind: string }> {
+  return events.filter((event) =>
+    event.kind === 'turn_completed' || event.kind === 'turn_failed' || event.kind === 'turn_aborted'
+  )
+}
 
 function waitForAbort(request: ModelRequest): Promise<void> {
   return new Promise((resolve) => {

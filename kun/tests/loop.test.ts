@@ -74,6 +74,26 @@ describe('AgentLoop', () => {
     expect(events).toContainEqual(expect.objectContaining({ kind: 'pipeline_stage', stage: 'post_start' }))
   })
 
+  it('uses the durable terminal winner when an SDK turn is interrupted first', async () => {
+    let h!: ReturnType<typeof makeHarness>
+    const sdkRuntime = {
+      handlesProvider: () => true,
+      runTurn: async (threadId: string, turnId: string) => {
+        await h.turns.interruptTurn({ threadId, turnId })
+        // Simulate a stale SDK completion reported after the interrupt won.
+        return 'completed' as const
+      }
+    }
+    h = makeHarness(makeSilentModel(), { sdkRuntime: sdkRuntime as never })
+    await bootstrapThread(h)
+
+    await expect(h.loop.runTurn(h.threadId, h.turnId)).resolves.toBe('aborted')
+    const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
+    expect(events.filter((event) =>
+      event.kind === 'turn_completed' || event.kind === 'turn_failed' || event.kind === 'turn_aborted'
+    )).toEqual([expect.objectContaining({ kind: 'turn_aborted' })])
+  })
+
   it('bounds cached prompt-pressure hydration markers', () => {
     const telemetry = new LoopTelemetry({} as unknown as SessionStore) as unknown as {
       rememberHydratedPressureThread(threadId: string): void

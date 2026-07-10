@@ -397,7 +397,7 @@ describe('TurnService startTurn', () => {
     expect(service.getAbortController(started.turnId)?.aborted).toBe(false)
 
     await service.interruptTurn({ threadId: 'thr_owner_b', turnId: started.turnId })
-    await service.finishTurn({
+    const lateSettlement = await service.finishTurn({
       threadId: 'thr_owner_b',
       turnId: started.turnId,
       status: 'completed'
@@ -405,6 +405,7 @@ describe('TurnService startTurn', () => {
 
     const turn = await service.getTurn('thr_owner_b', started.turnId)
     expect(turn?.status).toBe('aborted')
+    expect(lateSettlement).toEqual({ kind: 'already_terminal', status: 'aborted' })
     const events = await sessionStore.loadEventsSince('thr_owner_b', 0)
     expect(events.filter((event) => event.kind === 'turn_aborted')).toHaveLength(1)
     expect(events.some((event) => event.kind === 'turn_completed')).toBe(false)

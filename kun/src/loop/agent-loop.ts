@@ -16,7 +16,7 @@ import type { SessionStore } from '../ports/session-store.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { UserInputGate } from '../ports/user-input-gate.js'
 import type { UsageService } from '../services/usage-service.js'
-import { TurnCapacityError, type TurnService } from '../services/turn-service.js'
+import { TurnCapacityError, type TurnService, type TurnSettlement } from '../services/turn-service.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { rewriteItemHistoryWithRetry } from '../services/history-commit-coordinator.js'
 import { withThreadStoreMutation } from '../services/thread-mutation-coordinator.js'
@@ -106,6 +106,7 @@ import { LoopTelemetry } from './loop-telemetry.js'
 import { ModelRoundEngine } from './model-round-engine.js'
 import { InteractiveToolBridge } from './interactive-tool-bridge.js'
 import { TurnContextResolver, resolveTurnModeContext } from './turn-context-resolver.js'
+import { TurnFinalizer, type TurnFinalizationRequest } from './turn-finalizer.js'
 import { createToolExecutionContext } from './tool-context-factory.js'
 import { ToolExecutionService } from './tool-execution-service.js'
 import { ToolCallDispatcher } from './tool-call-dispatcher.js'
@@ -446,6 +447,8 @@ export class AgentLoop {
   private readonly emptyPostToolRecoveryStepsByTurn = new Map<string, number>()
   private readonly svgCompletionRecoveryStepsByTurn = new Map<string, number>()
   private readonly turnFailures = new Map<string, TurnExecutionFailure>()
+  /** One owned runner per turn; duplicate callers share its terminal result. */
+  private readonly activeTurnRuns = new Map<string, Promise<TurnExecutionStatus>>()
   /** Turns that executed at least one real (non-goal-status) tool call. */
   private readonly turnMadeProgress = new Set<string>()
   /**
@@ -551,16 +554,38 @@ export class AgentLoop {
    * Run a turn end-to-end. The loop returns the final turn status
    * (completed, failed, or aborted). All errors are caught and
    * surfaced through the `error` runtime event.
-   */
-  async runTurn(threadId: string, turnId: string): Promise<TurnExecutionStatus> {
+  */
+  runTurn(threadId: string, turnId: string): Promise<TurnExecutionStatus> {
+    const key = activeTurnRunKey(threadId, turnId)
+    const existing = this.activeTurnRuns.get(key)
+    if (existing) return existing
+    const run = this.runTurnOwned(threadId, turnId)
+    this.activeTurnRuns.set(key, run)
+    void run.then(
+      () => { if (this.activeTurnRuns.get(key) === run) this.activeTurnRuns.delete(key) },
+      () => { if (this.activeTurnRuns.get(key) === run) this.activeTurnRuns.delete(key) }
+    )
+    return run
+  }
+
+  private async runTurnOwned(threadId: string, turnId: string): Promise<TurnExecutionStatus> {
+    const finalizer = new TurnFinalizer(this.opts.turns)
+    const settle = (input: Omit<TurnFinalizationRequest, 'threadId' | 'turnId'>) =>
+      finalizer.settle({ threadId, turnId, ...input })
+    const statusFromSettlement = (
+      settlement: TurnSettlement,
+      fallback: TurnExecutionStatus
+    ): TurnExecutionStatus => settlement.kind === 'missing' ? fallback : settlement.status
+    const errorFromSettlement = (settlement: TurnSettlement): string | undefined =>
+      settlement.kind === 'missing' ? undefined : settlement.error
     const signal = this.opts.turns.getAbortController(turnId)
     if (!signal) {
-      await this.failTurn(threadId, turnId, 'no abort controller for turn')
-      return 'failed'
+      const settlement = await settle({ status: 'failed', error: 'no abort controller for turn' })
+      return statusFromSettlement(settlement, 'failed')
     }
     if (signal.aborted) {
-      await this.opts.turns.finishTurn({ threadId, turnId, status: 'aborted' })
-      return 'aborted'
+      const settlement = await settle({ status: 'aborted' })
+      return statusFromSettlement(settlement, 'aborted')
     }
     // Subscription engine dispatch: if a Claude Agent SDK runtime owns this
     // thread's provider, delegate the whole turn to it (the SDK runs the loop on
@@ -595,7 +620,7 @@ export class AgentLoop {
     let goalTimer: GoalElapsedTimer | null = null
     let finalStatus: 'completed' | 'failed' | 'aborted' | undefined
     let finalError: string | undefined
-    const failWallTimeLimit = async (): Promise<'failed'> => {
+    const failWallTimeLimit = async (): Promise<TurnExecutionStatus> => {
       const message = `turn exceeded ${maxWallTimeMs}ms wall time`
       this.rememberTurnFailure(turnId, {
         error: message,
@@ -603,17 +628,15 @@ export class AgentLoop {
         severity: 'warning'
       })
       await this.recordTurnLimitExceeded(threadId, turnId, 'turn_wall_time_limit', message)
-      await this.opts.turns.finishTurn({
-        threadId,
-        turnId,
+      const settlement = await settle({
         status: 'failed',
         error: message,
         code: 'turn_wall_time_limit',
         severity: 'warning'
       })
-      finalStatus = 'failed'
-      finalError = message
-      return 'failed'
+      finalStatus = statusFromSettlement(settlement, 'failed')
+      finalError = errorFromSettlement(settlement)
+      return finalStatus
     }
     try {
       goalTimer = await this.startGoalElapsedTimer(threadId)
@@ -643,38 +666,38 @@ export class AgentLoop {
             severity: 'error'
           })
         )
-        await this.opts.turns.finishTurn({ threadId, turnId, status: 'failed', error: denial })
-        finalStatus = 'failed'
-        finalError = denial
-        return 'failed'
+        const settlement = await settle({ status: 'failed', error: denial })
+        finalStatus = statusFromSettlement(settlement, 'failed')
+        finalError = errorFromSettlement(settlement)
+        return finalStatus
       }
       await this.drainSteering(threadId, turnId, signal)
       await this.recordPipelineStage(threadId, turnId, 'post_start')
       if (delegatedSdkRuntime) {
-        const status = await delegatedSdkRuntime.runTurn(threadId, turnId, signal)
-        finalStatus = status
-        if (status === 'completed') {
+        const reportedStatus = await delegatedSdkRuntime.runTurn(threadId, turnId, signal)
+        const settlement = await finalizer.observeExternal({ threadId, turnId })
+        finalStatus = statusFromSettlement(settlement, reportedStatus)
+        finalError = errorFromSettlement(settlement)
+        if (finalStatus === 'completed') {
           void this.maybeGenerateThreadTitle(threadId, turnId, signal).catch(() => {})
         }
-        return status
+        return finalStatus
       }
       const status = await this.loop(threadId, turnId, signal)
       if (wallTimeExceeded) return failWallTimeLimit()
       const failure = status === 'failed' ? this.turnFailures.get(turnId) : undefined
-      await this.opts.turns.finishTurn({
-        threadId,
-        turnId,
+      const settlement = await settle({
         status,
         ...(failure ?? {})
       })
-      finalStatus = status
-      finalError = failure?.error
-      if (status === 'completed') {
+      finalStatus = statusFromSettlement(settlement, status)
+      finalError = errorFromSettlement(settlement)
+      if (finalStatus === 'completed') {
         // Fire-and-forget: generate an LLM title after the FIRST assistant
         // reply completes, only when the thread still has a default title.
         void this.maybeGenerateThreadTitle(threadId, turnId, signal).catch(() => {})
       }
-      return status
+      return finalStatus
     } catch (error) {
       if (wallTimeExceeded) return failWallTimeLimit()
       const raw = error instanceof Error ? error.message : String(error)
@@ -697,32 +720,38 @@ export class AgentLoop {
         `error=${raw}`,
         stack ? `stack=${stack}` : ''
       ].filter(Boolean).join(' ')
-      await this.failTurn(threadId, turnId, message)
-      finalStatus = 'failed'
-      finalError = message
-      return 'failed'
+      const settlement = await settle({ status: 'failed', error: message })
+      finalStatus = statusFromSettlement(settlement, 'failed')
+      finalError = errorFromSettlement(settlement)
+      return finalStatus
     } finally {
       if (deadline !== undefined) clearTimeout(deadline)
-      await this.finishGoalElapsedTimer(threadId, goalTimer)
-      // Decide cross-turn goal resume before clearing the per-turn progress
-      // marker it reads.
-      await this.evaluateGoalResume(threadId, turnId, finalStatus ?? 'failed')
-      this.autoModelRoutes.delete(autoModelRouteKey(threadId, turnId))
-      this.toolStormBreakers.delete(turnId)
-      this.lastNoToolTextByTurn.delete(turnId)
-      this.goalNoToolRecoveryStepsByTurn.delete(turnId)
-      this.turnMadeProgress.delete(turnId)
-      this.goalResumeSuppressedByTurn.delete(turnId)
-      this.emptyPostToolRecoveryStepsByTurn.delete(turnId)
-      this.svgCompletionRecoveryStepsByTurn.delete(turnId)
-      this.turnFailures.delete(turnId)
-      this.telemetry.clearPromptPressure(threadId)
-      await runTurnEndLifecycleHooks(this.lifecycleHookDeps(), {
-        threadId,
-        turnId,
-        status: finalStatus ?? 'failed',
-        ...(finalError ? { error: finalError } : {})
-      })
+      try {
+        // Accounting/resume are post-settlement conveniences. A late store or
+        // event failure must not hide an already durable terminal outcome, nor
+        // skip the unconditional transient-state cleanup below.
+        await this.finishGoalElapsedTimer(threadId, goalTimer).catch(() => undefined)
+        // Decide cross-turn goal resume before clearing the per-turn progress
+        // marker it reads.
+        await this.evaluateGoalResume(threadId, turnId, finalStatus ?? 'failed').catch(() => undefined)
+      } finally {
+        this.autoModelRoutes.delete(autoModelRouteKey(threadId, turnId))
+        this.toolStormBreakers.delete(turnId)
+        this.lastNoToolTextByTurn.delete(turnId)
+        this.goalNoToolRecoveryStepsByTurn.delete(turnId)
+        this.turnMadeProgress.delete(turnId)
+        this.goalResumeSuppressedByTurn.delete(turnId)
+        this.emptyPostToolRecoveryStepsByTurn.delete(turnId)
+        this.svgCompletionRecoveryStepsByTurn.delete(turnId)
+        this.turnFailures.delete(turnId)
+        this.telemetry.clearPromptPressure(threadId)
+        await runTurnEndLifecycleHooks(this.lifecycleHookDeps(), {
+          threadId,
+          turnId,
+          status: finalStatus ?? 'failed',
+          ...(finalError ? { error: finalError } : {})
+        })
+      }
     }
   }
 
@@ -735,10 +764,6 @@ export class AgentLoop {
       ids: this.opts.ids,
       nowIso: this.opts.nowIso
     }
-  }
-
-  private async failTurn(threadId: string, turnId: string, message: string): Promise<void> {
-    await this.opts.turns.finishTurn({ threadId, turnId, status: 'failed', error: message })
   }
 
   private async recoverRequiredSvgCompletion(
@@ -2571,6 +2596,10 @@ function sanitizeProviderBaseUrl(baseUrl: string): string {
 
 function autoModelRouteKey(threadId: string, turnId: string): string {
   return `${threadId}:${turnId}`
+}
+
+function activeTurnRunKey(threadId: string, turnId: string): string {
+  return `${threadId}\u0000${turnId}`
 }
 
 function normalizeTurnLimits(input: AgentLoopOptions['turnLimits']): {
