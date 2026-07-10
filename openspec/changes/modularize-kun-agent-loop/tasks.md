@@ -1,0 +1,59 @@
+## 1. Baseline and regression guardrails
+
+- [x] 1.1 Record the current targeted Kun build/test baseline and isolate any
+  failures caused by concurrent work from the agent-loop baseline.
+- [x] 1.2 Correct the sandbox expectation in the existing shell-runtime test by
+  making its intentionally unsafe fixture explicit.
+- [ ] 1.3 Add deterministic transcript fixture utilities that normalize unstable
+  values and collect model requests, events, history, thread state, usage, and
+  tool invocation order.
+- [ ] 1.4 Characterize normal, tool, approval/user-input, cancellation/deletion,
+  compaction, and failure turns using the transcript fixture.
+
+## 2. Revision-aware history commits
+
+- [ ] 2.1 Map all session/thread read-modify-write paths used by append, repair,
+  discard, compaction, interruption, and deletion.
+- [ ] 2.2 Add backward-compatible session revision read and compare-and-swap
+  primitives with atomic persistence semantics.
+- [ ] 2.3 Implement a history coordinator that serializes per-thread mutations
+  and retries only pure transformations after a revision conflict.
+- [ ] 2.4 Route compaction, history repair, and discard replacement writes through
+  the coordinator without replaying model or tool side effects.
+- [ ] 2.5 Add legacy-session and concurrent append/compaction/repair race tests.
+
+## 3. Low-risk internal boundaries
+
+- [ ] 3.1 Introduce immutable prepared-turn, model-round, and tool-dispatch type
+  contracts with focused unit tests.
+- [ ] 3.2 Extract pure stream aggregation and loop telemetry helpers without
+  changing event payloads or ordering.
+- [ ] 3.3 Extract turn lifecycle/finalization and goal-resume coordination with
+  once-only terminal outcome tests.
+
+## 4. Context and tool pipeline boundaries
+
+- [ ] 4.1 Extract turn-context resolution while preserving model, policy,
+  workspace, attachment, memory, skill, and tool-schema inputs.
+- [ ] 4.2 Extract tool execution service with existing approval, user-input,
+  cancellation, sandbox, and tool-result semantics.
+- [ ] 4.3 Extract ordered tool-call dispatch and verify suppression, limits, and
+  error behavior against characterization transcripts.
+
+## 5. Model-round extraction and facade cleanup
+
+- [ ] 5.1 Extract the model-round engine and stream collector behind explicit
+  outcomes while preserving request/cache-prefix and retry behavior.
+- [ ] 5.2 Compare representative legacy and extracted model-round transcripts in
+  offline deterministic tests, then remove any temporary internal selector.
+- [ ] 5.3 Reduce AgentLoop to its public facade plus narrow composition wiring and
+  remove obsolete duplicated helpers.
+
+## 6. Validation and handoff
+
+- [ ] 6.1 Run focused tests and `npm --prefix kun run build` for every completed
+  extraction increment.
+- [ ] 6.2 Run the full Kun suite and root typecheck when concurrent work no longer
+  blocks the shared worktree, documenting unrelated baseline failures separately.
+- [ ] 6.3 Review public HTTP/SSE, persisted-session, tool-schema, and cache-prefix
+  compatibility before declaring the change complete.

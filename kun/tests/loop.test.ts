@@ -88,7 +88,7 @@ describe('AgentLoop', () => {
     expect(loop.hydratedPressureThreads.has('thread_512')).toBe(true)
   })
 
-  it('injects the current shell runtime when bash is available', async () => {
+  it('injects the current shell runtime under the full-access sandbox', async () => {
     let observedRequest: ModelRequest | null = null
     const h = makeHarness({
       provider: 'shell-context',
@@ -98,7 +98,7 @@ describe('AgentLoop', () => {
         yield { kind: 'completed', stopReason: 'stop' }
       }
     })
-    await bootstrapThread(h)
+    await bootstrapThread(h, { request: { prompt: 'hello', sandboxMode: 'danger-full-access' } })
 
     await h.loop.runTurn(h.threadId, h.turnId)
 
