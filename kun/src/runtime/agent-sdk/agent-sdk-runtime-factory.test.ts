@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,6 +9,7 @@ import type { UserInputGate, UserInputRequest, UserInputResolution } from '../..
 import { InstructionRuntime } from '../../instructions/instruction-runtime.js'
 import { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
 import { LocalToolHost } from '../../adapters/tool/local-tool-host.js'
+import { InMemoryApprovalGate } from '../../adapters/in-memory-approval-gate.js'
 
 function fakeGate(pending: Promise<UserInputResolution>): {
   gate: UserInputGate
@@ -355,6 +356,71 @@ describe('createAgentSdkRuntime turn context', () => {
       output: expect.stringContaining('disabled by policy')
     })
     expect(executed).toEqual([])
+  })
+
+  test('gives concurrent bridged calls distinct approval identities', async () => {
+    const approvalGate = new InMemoryApprovalGate()
+    const executed: string[] = []
+    const registry = CapabilityRegistry.fromLocalTools([
+      LocalToolHost.defineTool({
+        name: 'approval_required',
+        description: 'Requires approval',
+        inputSchema: { type: 'object', properties: {} },
+        policy: 'on-request',
+        toolKind: 'command_execution',
+        execute: async () => {
+          executed.push('approval_required')
+          return { output: 'executed' }
+        }
+      })
+    ])
+    let nextId = 0
+    const runtime = createAgentSdkRuntime({
+      registry,
+      toolHost: new LocalToolHost({ registry }),
+      turns: {} as never,
+      sessionStore: {} as never,
+      threadStore: {
+        get: async () => threadWith({
+          workspace: '/ws',
+          approvalPolicy: 'on-request',
+          turns: [{ id: 'tn', prompt: 'run tool' } as ThreadRecord['turns'][number]]
+        })
+      } as never,
+      events: { record: async () => undefined } as never,
+      ids: { next: (prefix) => `${prefix}_${++nextId}` },
+      prefix: { systemPrompt: '' },
+      providerConfigs: {},
+      agentSdkProviderIds: new Set(),
+      defaultApprovalPolicy: 'on-request',
+      approvalGate
+    })
+    const deps = (runtime as unknown as {
+      deps: {
+        executeKunTool(
+          threadId: string,
+          turnId: string,
+          toolName: string,
+          args: Record<string, unknown>
+        ): Promise<{ output: unknown; isError?: boolean }>
+      }
+    }).deps
+
+    const first = deps.executeKunTool('th', 'tn', 'approval_required', {})
+    const second = deps.executeKunTool('th', 'tn', 'approval_required', {})
+
+    await vi.waitFor(() => {
+      expect(approvalGate.pending('th')).toHaveLength(2)
+    })
+    const approvals = approvalGate.pending('th')
+    expect(new Set(approvals.map((approval) => approval.id)).size).toBe(2)
+    for (const approval of approvals) approvalGate.decide(approval.id, 'allow')
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { output: 'executed', isError: false },
+      { output: 'executed', isError: false }
+    ])
+    expect(executed).toEqual(['approval_required', 'approval_required'])
   })
 
   test('uses the thread approval policy to gate SDK built-in tools', async () => {

@@ -481,7 +481,11 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
         // policy/sandbox/approval gates, hooks, read-before-edit validation,
         // and the operation journal.
         const result = await deps.toolHost.execute({
-          callId: `sdk_${turnId}_${toolName}`,
+          // A bridge call can be concurrent with another invocation of the
+          // same tool in one turn. Keep each call's approval and operation
+          // journal identity distinct so one pending approval cannot replace
+          // another in the gate.
+          callId: deps.ids.next('call_sdk'),
           toolName,
           arguments: args
         }, ctx)
