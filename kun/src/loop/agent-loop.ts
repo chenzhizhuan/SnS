@@ -11,7 +11,6 @@ import type {
   GuiDesignArtifactContext
 } from '../ports/tool-host.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
-import { DEFAULT_APPROVAL_POLICY, DEFAULT_SANDBOX_MODE } from '../contracts/policy.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
@@ -35,7 +34,6 @@ import type {
 import { ContextCompactor } from './context-compactor.js'
 import {
   DESIGN_MODE_INSTRUCTION,
-  SVG_ARTIFACT_ALLOWED_TOOL_NAMES,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from './design-mode.js'
 import {
@@ -107,7 +105,7 @@ import { healLoadedHistoryItems } from './history-healing.js'
 import { LoopTelemetry } from './loop-telemetry.js'
 import { ModelRoundEngine } from './model-round-engine.js'
 import { InteractiveToolBridge } from './interactive-tool-bridge.js'
-import { createToolDiscoveryContext } from './tool-discovery-context-factory.js'
+import { TurnContextResolver, resolveTurnModeContext } from './turn-context-resolver.js'
 import { createToolExecutionContext } from './tool-context-factory.js'
 import { ToolExecutionService } from './tool-execution-service.js'
 import { ToolCallDispatcher } from './tool-call-dispatcher.js'
@@ -130,7 +128,6 @@ import {
 import {
   PLAN_MODE_INSTRUCTION,
   isPlanClarifyingQuestion,
-  isStalePlanContext,
   resolvePlanModeToolSpecs,
   turnHasUnverifiedSourceChanges,
   verificationSuggestionInstruction
@@ -148,15 +145,10 @@ import {
 import {
   EMPTY_POST_TOOL_MAX_RECOVERY_STEPS,
   GOAL_NO_TOOL_REPEAT_MAX_RECOVERY_STEPS,
-  allowedToolNamesWithGuiStateTools,
   emptyPostToolRecoveryInstruction,
-  goalContinuationInstruction,
-  goalNoToolRecoveryInstruction,
   hasSuccessfulCreatePlanResult,
-  intersectAllowedToolNames,
   isRepeatedNoToolAssistantText,
   latestUserMessageText,
-  todoContinuationInstruction,
   userInputUnavailableInstruction
 } from './continuation-instructions.js'
 export {
@@ -445,6 +437,7 @@ export class AgentLoop {
   private readonly toolStormBreakers = new Map<string, ToolStormBreaker>()
   private readonly telemetry: LoopTelemetry
   private readonly modelRoundEngine: ModelRoundEngine
+  private readonly turnContextResolver: TurnContextResolver
   private readonly interactiveToolBridge: InteractiveToolBridge
   private readonly toolExecution: ToolExecutionService
   private readonly toolCallDispatcher: ToolCallDispatcher
@@ -498,6 +491,19 @@ export class AgentLoop {
       ...(opts.onPlanWritten ? { onPlanWritten: opts.onPlanWritten } : {})
     })
     this.toolCallDispatcher = new ToolCallDispatcher(this.toolExecution)
+    this.turnContextResolver = new TurnContextResolver({
+      toolHost: opts.toolHost,
+      resolveAttachments: (input) => this.resolveAttachments(input),
+      ...(opts.skillRuntime ? { skillRuntime: opts.skillRuntime } : {}),
+      ...(opts.instructionRuntime ? { instructionRuntime: opts.instructionRuntime } : {}),
+      ...(opts.memoryStore ? { memoryStore: opts.memoryStore } : {}),
+      interactiveToolBridge: this.interactiveToolBridge,
+      ...(opts.forcedAllowedToolNames ? { forcedAllowedToolNames: opts.forcedAllowedToolNames } : {}),
+      ...(opts.blockedProviderIds ? { blockedProviderIds: opts.blockedProviderIds } : {}),
+      ...(opts.blockedToolNames ? { blockedToolNames: opts.blockedToolNames } : {}),
+      ...(opts.blockedSkillIds ? { blockedSkillIds: opts.blockedSkillIds } : {}),
+      ...(opts.runtimeDataDir ? { runtimeDataDir: opts.runtimeDataDir } : {})
+    })
     this.goalResume = new GoalResumeCoordinator({
       launch: (threadId) => this.launchGoalResumeTurn(threadId),
       getActiveGoalKey: async (threadId) => {
@@ -1108,20 +1114,14 @@ export class AgentLoop {
     // let a stale continuation issue a new request or dispatch a tool after
     // its owning thread/turn no longer exists.
     if (signal.aborted || !thread || !turn) return 'aborted'
-    const dedicatedSvgTurn = turn.guiDesignArtifact?.kind === 'svg'
+    const modeContext = resolveTurnModeContext({
+      turn,
+      workspace: thread.workspace,
+      threadMode: thread.mode,
+      ...(this.opts.activePlanContext ? { fallbackPlanContext: this.opts.activePlanContext } : {})
+    })
+    const { dedicatedSvgTurn, activePlanContext } = modeContext
     await this.recordPipelineStage(threadId, turnId, 'input_received', { stepIndex })
-    const candidatePlanContext = turn?.guiPlan
-      ? { ...turn.guiPlan, turnId }
-      : this.opts.activePlanContext
-    // A plan context whose workspace doesn't match this thread is stale — e.g.
-    // carried in by a conversation fork. Drop it so the turn runs as a normal
-    // agent turn instead of hard-failing create_plan on the workspace mismatch
-    // or forcing a plan-only tool set the cloned history can't satisfy.
-    const planContextStale = isStalePlanContext(candidatePlanContext, thread?.workspace ?? '')
-    // A reserved SVG artifact is an execution turn even when the parent thread
-    // was left in Plan mode. Keeping plan context here would make the registry
-    // hide every structured SVG mutation tool.
-    const activePlanContext = dedicatedSvgTurn || planContextStale ? undefined : candidatePlanContext
     const budgetGate = await this.checkBudgetGate(thread, threadId, turnId)
     if (budgetGate === 'blocked') {
       // A cost-budget stop is a deliberate cap, not an interrupted goal turn:
@@ -1192,11 +1192,6 @@ export class AgentLoop {
     const items = repairModelHistoryItems(
       effectiveHistoryAfterLatestCompaction(historyItems)
     )
-    const approvalPolicy = normalizeApprovalPolicy(thread?.approvalPolicy)
-    const sandboxMode = normalizeSandboxMode(thread?.sandboxMode)
-    // Per-turn mode overrides the thread mode so the GUI can toggle
-    // Plan/agent (and run Build as agent) without recreating the thread.
-    const effectiveMode = dedicatedSvgTurn ? 'agent' : turn?.mode ?? thread?.mode
     const providerId = turn?.providerId?.trim() || thread?.providerId?.trim()
     const modelRoute = await this.resolveTurnModel({
       threadId,
@@ -1214,86 +1209,35 @@ export class AgentLoop {
     })
     const model = modelRoute.model
     const modelCapabilities = this.opts.modelCapabilities?.(model) ?? modelCapabilitiesForModel(model)
-    const attachments = await this.resolveAttachments({
-      attachmentIds: turn?.attachmentIds ?? [],
-      threadId,
-      workspace: thread?.workspace ?? '',
-      modelCapabilities
-    })
-    const skillResolution = await this.opts.skillRuntime?.resolveTurn({
-      prompt: turn?.prompt ?? '',
-      workspace: thread?.workspace ?? '',
-      ...(this.opts.blockedSkillIds ? { blockedSkillIds: this.opts.blockedSkillIds } : {})
-    }) ?? {
-      activeSkillIds: [],
-      activations: [],
-      instructions: [],
-      injectedBytes: 0
-    }
-    const instructionResolution = await this.opts.instructionRuntime?.resolveTurn({
-      workspace: thread?.workspace ?? ''
-    }) ?? {
-      instruction: undefined,
-      sources: [],
-      injectedBytes: 0
-    }
-    const memories = await this.retrieveMemories({
-      prompt: turn?.prompt ?? '',
-      workspace: thread?.workspace ?? ''
-    })
-    const planTurnActive = !dedicatedSvgTurn && !planContextStale && (effectiveMode === 'plan' || Boolean(activePlanContext))
-    const activeGoalInstruction = planTurnActive
-      ? null
-      : goalContinuationInstruction(thread?.goal)
-    const goalRecoveryInstruction = activeGoalInstruction
-      ? goalNoToolRecoveryInstruction(this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0)
-      : null
-    const activeTodoInstruction = planTurnActive
-      ? null
-      : todoContinuationInstruction(thread?.todos)
-    const forcedAllowedToolNames = intersectAllowedToolNames(
-      this.opts.forcedAllowedToolNames,
-      turn?.guiDesignArtifact?.kind === 'svg' ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES : undefined
-    )
-    const allowedToolNames = intersectAllowedToolNames(
-      allowedToolNamesWithGuiStateTools(
-        // Dedicated artifact continuation is governed by the hard SVG tool
-        // policy. An unrelated auto-activated skill must not hide edit/validate.
-        dedicatedSvgTurn ? undefined : skillResolution.allowedToolNames,
-        activeGoalInstruction !== null
-      ),
-      forcedAllowedToolNames
-    )
-    // IM/headless turns run without the user-input gate. The tools stay
-    // advertised so GUI/IM transitions keep a stable provider tool
-    // catalog; execution returns a tool error if the model calls them.
-    const userInputDisabled = turn?.disableUserInput === true
-    const toolContext = createToolDiscoveryContext({
+    const prepared = await this.turnContextResolver.resolve({
       threadId,
       turnId,
-      workspace: thread?.workspace ?? '',
-      threadMode: effectiveMode,
-      ...(activePlanContext ? { activePlanContext } : {}),
-      ...(turn?.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
-      ...(turn?.guiDesignMode ? { guiDesignMode: true } : {}),
-      ...(turn?.guiDesignArtifact ? { guiDesignArtifact: turn.guiDesignArtifact } : {}),
-      ...(turn?.imContext ? { imContext: true } : {}),
+      thread,
+      turn,
+      history: historyItems,
+      model,
       modelCapabilities,
-      activeSkillIds: skillResolution.activeSkillIds,
-      ...(allowedToolNames ? { allowedToolNames } : {}),
+      signal,
+      mode: modeContext,
+      goalNoToolRecoverySteps: this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0
+    })
+    const {
+      mode: effectiveMode,
       approvalPolicy,
       sandboxMode,
-      ...(userInputDisabled ? { userInputDisabled: true } : {}),
-      signal
-    }, {
-      memoryEnabled: Boolean(this.opts.memoryStore),
-      ...(this.opts.blockedProviderIds ? { blockedProviderIds: this.opts.blockedProviderIds } : {}),
-      ...(this.opts.blockedToolNames ? { blockedToolNames: this.opts.blockedToolNames } : {}),
-      ...(this.opts.blockedSkillIds ? { blockedSkillIds: this.opts.blockedSkillIds } : {}),
-      ...(this.opts.runtimeDataDir ? { runtimeDataDir: this.opts.runtimeDataDir } : {}),
-      interactiveToolBridge: this.interactiveToolBridge
-    })
-    const tools = await this.opts.toolHost.listTools(toolContext)
+      attachments,
+      skillResolution,
+      instructionResolution,
+      memories,
+      activeGoalInstruction,
+      goalRecoveryInstruction,
+      activeTodoInstruction,
+      planTurnActive,
+      allowedToolNames,
+      userInputDisabled,
+      toolDiscoveryContext: toolContext,
+      tools
+    } = prepared
     if (dedicatedSvgTurn) {
       const toolNames = new Set(tools.map((tool) => tool.name))
       const hasMutationTool = toolNames.has(DESIGN_SVG_EDIT_TOOL_NAME) || toolNames.has(DESIGN_SVG_ANIMATE_TOOL_NAME)
@@ -1314,7 +1258,7 @@ export class AgentLoop {
         return 'failed'
       }
     }
-    const toolSpecs: ModelToolSpec[] = tools
+    const toolSpecs: ModelToolSpec[] = [...tools]
     const toolProviderMetadata = new Map(
       tools.map((tool) => [tool.name, { providerId: tool.providerId, providerKind: tool.providerKind }])
     )
@@ -1490,9 +1434,9 @@ export class AgentLoop {
       ...(contextInstructions.length ? { contextInstructions } : {}),
       prefix: this.opts.prefix.fewShots,
       history: capToolResultImages(forwardHistory, MAX_FORWARDED_TOOL_IMAGES),
-      ...(attachments.imageAttachments.length ? { attachments: attachments.imageAttachments } : {}),
-      ...(attachments.textFallbacks.length ? { attachmentTextFallbacks: attachments.textFallbacks } : {}),
-      ...(attachments.documents.length ? { attachmentDocuments: attachments.documents } : {}),
+      ...(attachments.imageAttachments.length ? { attachments: [...attachments.imageAttachments] } : {}),
+      ...(attachments.textFallbacks.length ? { attachmentTextFallbacks: [...attachments.textFallbacks] } : {}),
+      ...(attachments.documents.length ? { attachmentDocuments: [...attachments.documents] } : {}),
       tools: effectiveToolSpecs,
       ...(requiredToolName ? { requiredToolName } : {}),
       ...(modelRoute.reasoningEffort ? { reasoningEffort: modelRoute.reasoningEffort } : {}),
@@ -2448,20 +2392,6 @@ export class AgentLoop {
     return null
   }
 
-  private async retrieveMemories(input: {
-    prompt: string
-    workspace: string
-  }) {
-    if (!this.opts.memoryStore) return []
-    const memories = await this.opts.memoryStore.retrieve({
-      query: input.prompt,
-      workspace: input.workspace,
-      limit: 8
-    })
-    this.opts.memoryStore.setLastInjected(memories.map((memory) => memory.id))
-    return memories
-  }
-
   /** Convenience factory for tests: builds a loop with sensible defaults. */
   static defaultPrefix(): ImmutablePrefix {
     return createImmutablePrefix({
@@ -2590,36 +2520,6 @@ function workspaceRelativeAttachmentPath(
   return relativePath.replace(/\\/g, '/')
 }
 
-function normalizeApprovalPolicy(
-  value: string | undefined
-): ToolHostContext['approvalPolicy'] {
-  switch (value) {
-    case 'on-request':
-    case 'always':
-    case 'never':
-    case 'auto':
-    case 'suggest':
-    case 'untrusted':
-      return value
-    default:
-      return DEFAULT_APPROVAL_POLICY
-  }
-}
-
-function normalizeSandboxMode(
-  value: string | undefined
-): NonNullable<ToolHostContext['sandboxMode']> {
-  switch (value) {
-    case 'read-only':
-    case 'workspace-write':
-    case 'danger-full-access':
-    case 'external-sandbox':
-      return value
-    default:
-      return DEFAULT_SANDBOX_MODE
-  }
-}
-
 function buildToolCatalogDriftMessage(toolCatalog: {
   fingerprint: string
   toolCount: number
@@ -2685,7 +2585,7 @@ function normalizeTurnLimits(input: AgentLoopOptions['turnLimits']): {
   }
 }
 
-export function memoryInstructions(memories: Array<{ id: string; content: string; scope: string }>): string[] {
+export function memoryInstructions(memories: ReadonlyArray<{ id: string; content: string; scope: string }>): string[] {
   if (memories.length === 0) return []
   return [
     [

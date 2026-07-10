@@ -96,7 +96,7 @@ describe('ModelRoundEngine', () => {
     ])
 
     await expect(test.run()).resolves.toEqual(expect.objectContaining({
-      kind: 'drained', snapshot: expect.objectContaining({ stopReason: 'tool_calls' })
+      kind: 'tool_calls', snapshot: expect.objectContaining({ stopReason: 'tool_calls' })
     }))
     expect(test.trace).toEqual([
       'stage:pre_send',
@@ -156,7 +156,7 @@ describe('ModelRoundEngine', () => {
       { kind: 'completed', stopReason: 'stop' }
     ])
 
-    await expect(test.run()).resolves.toEqual(expect.objectContaining({ kind: 'drained' }))
+    await expect(test.run()).resolves.toEqual(expect.objectContaining({ kind: 'completed' }))
     expect(test.trace).toEqual([
       'stage:pre_send',
       'stage:post_send',

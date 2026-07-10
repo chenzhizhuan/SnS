@@ -1,11 +1,20 @@
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { TurnItem } from '../contracts/items.js'
-import type { ModelToolSpec } from '../ports/model-client.js'
+import type { MemoryRecord } from '../contracts/memory.js'
+import type {
+  ModelDocumentAttachment,
+  ModelInputAttachment,
+  ModelTextAttachmentFallback,
+  ModelToolSpec
+} from '../ports/model-client.js'
+import type { InstructionTurnResolution } from '../instructions/instruction-runtime.js'
+import type { SkillTurnResolution } from '../skills/skill-runtime.js'
 import type {
   GuiDesignArtifactContext,
   GuiPlanContext,
   ToolCallLike,
+  ToolHost,
   ToolHostContext,
   ToolProviderKind
 } from '../ports/tool-host.js'
@@ -27,23 +36,46 @@ export type ModelRoundOutcome = 'continue' | 'stop' | 'failed' | 'aborted'
 /** Outcome returned after the ordered tool-dispatch stage. */
 export type ToolDispatchOutcome = 'continue' | 'aborted' | 'all_suppressed'
 
+export type ResolvedTurnAttachments = Readonly<{
+  imageAttachments: readonly ModelInputAttachment[]
+  textFallbacks: readonly ModelTextAttachmentFallback[]
+  documents: readonly ModelDocumentAttachment[]
+}>
+
+export type DiscoveredTool = Awaited<ReturnType<ToolHost['listTools']>>[number]
+
 /**
- * Stable inputs shared by a prepared model/tool turn. Context preparation
- * owns populating this record; execution services only consume it.
+ * Immutable per-model-step snapshot. Dynamic history and approved tool
+ * results are deliberately represented by a fresh snapshot on the next step,
+ * rather than mutating this record after a request begins.
  */
-export type PreparedTurnContext = {
+export type PreparedTurnContext = Readonly<{
   threadId: string
   turnId: string
   workspace: string
   model: string
-  providerId?: string
   mode: 'agent' | 'plan'
+  dedicatedSvgTurn: boolean
+  planContextStale: boolean
+  activePlanContext?: GuiPlanContext
   approvalPolicy: ToolHostContext['approvalPolicy']
   sandboxMode: NonNullable<ToolHostContext['sandboxMode']>
   signal: AbortSignal
   history: readonly TurnItem[]
-  tools: readonly ModelToolSpec[]
-}
+  modelCapabilities: ModelCapabilityMetadata
+  attachments: ResolvedTurnAttachments
+  skillResolution: SkillTurnResolution
+  instructionResolution: InstructionTurnResolution
+  memories: readonly MemoryRecord[]
+  activeGoalInstruction: string | null
+  goalRecoveryInstruction: string | null
+  activeTodoInstruction: string | null
+  planTurnActive: boolean
+  allowedToolNames?: readonly string[]
+  userInputDisabled: boolean
+  toolDiscoveryContext: ToolHostContext
+  tools: readonly DiscoveredTool[]
+}>
 
 /**
  * Stable inputs shared by tool discovery and tool execution. Discovery keeps

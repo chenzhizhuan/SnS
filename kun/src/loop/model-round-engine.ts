@@ -19,7 +19,8 @@ import type { LoopTelemetry } from './loop-telemetry.js'
 import type { TurnExecutionFailure } from './turn-execution-types.js'
 
 export type ModelRoundStreamResult =
-  | { kind: 'drained'; snapshot: ModelStreamSnapshot }
+  | { kind: 'completed'; snapshot: ModelStreamSnapshot }
+  | { kind: 'tool_calls'; snapshot: ModelStreamSnapshot }
   | { kind: 'aborted' }
   | { kind: 'failed' }
 
@@ -279,8 +280,9 @@ export class ModelRoundEngine {
       toolCallCount: snapshot.toolCalls.length
     })
     await persistAccumulatedResponse()
-    return snapshot.stopReason === 'error'
-      ? { kind: 'failed' }
-      : { kind: 'drained', snapshot }
+    if (snapshot.stopReason === 'error') return { kind: 'failed' }
+    return snapshot.toolCalls.length > 0
+      ? { kind: 'tool_calls', snapshot }
+      : { kind: 'completed', snapshot }
   }
 }

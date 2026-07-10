@@ -27,7 +27,7 @@
 
 ## 3. Low-risk internal boundaries
 
-- [ ] 3.1 Introduce immutable prepared-turn, model-round, and tool-dispatch type
+- [x] 3.1 Introduce immutable prepared-turn, model-round, and tool-dispatch type
   contracts with focused unit tests.
 - [x] 3.2 Extract pure stream aggregation and loop telemetry helpers without
   changing event payloads or ordering.
@@ -42,7 +42,7 @@
   approval's event-only projection and user-input's item-plus-event lifecycle.
 - [x] 4.0b Extract the execution-only tool context factory, keeping discovery
   context separate so it cannot accidentally gain real approval side effects.
-- [ ] 4.1 Extract turn-context resolution while preserving model, policy,
+- [x] 4.1 Extract turn-context resolution while preserving model, policy,
   workspace, attachment, memory, skill, and tool-schema inputs.
 - [x] 4.2 Extract tool execution service with existing approval, user-input,
   cancellation, sandbox, and tool-result semantics.
@@ -51,7 +51,7 @@
 
 ## 5. Model-round extraction and facade cleanup
 
-- [ ] 5.1 Extract the model-round engine and stream collector behind explicit
+- [x] 5.1 Extract the model-round engine and stream collector behind explicit
   outcomes while preserving request/cache-prefix and retry behavior.
 - [ ] 5.2 Compare representative legacy and extracted model-round transcripts in
   offline deterministic tests, then remove any temporary internal selector.
