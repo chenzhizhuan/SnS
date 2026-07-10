@@ -19,6 +19,7 @@ import type { UsageService } from '../services/usage-service.js'
 import { TurnCapacityError, type TurnService, type TurnSettlement } from '../services/turn-service.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { rewriteItemHistoryWithRetry } from '../services/history-commit-coordinator.js'
+import { ThreadItemProjectionService } from '../services/thread-item-projection.js'
 import { withThreadStoreMutation } from '../services/thread-mutation-coordinator.js'
 import type { PipelineStage } from '../contracts/events.js'
 import type { IdGenerator } from '../ports/id-generator.js'
@@ -36,10 +37,7 @@ import {
   DESIGN_MODE_INSTRUCTION,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from './design-mode.js'
-import {
-  effectiveHistoryAfterLatestCompaction,
-  placeCompactionsAtTurnEnd
-} from './compaction-history.js'
+import { effectiveHistoryAfterLatestCompaction } from './compaction-history.js'
 import { generateThreadTitle, resolveRoleModel } from './title-generator.js'
 import type { RolesConfig } from '../config/kun-config.js'
 import { InflightTracker } from './inflight-tracker.js'
@@ -348,6 +346,7 @@ export class AgentLoop {
   private readonly modelRouting: ModelRoutingService
   private readonly toolStormBreakers = new Map<string, ToolStormBreaker>()
   private readonly telemetry: LoopTelemetry
+  private readonly threadItems: ThreadItemProjectionService
   private readonly historyCompaction: HistoryCompactionService
   private readonly modelRoundEngine: ModelRoundEngine
   private readonly turnAttachments: TurnAttachmentService
@@ -376,6 +375,11 @@ export class AgentLoop {
   constructor(opts: AgentLoopOptions) {
     this.opts = opts
     this.telemetry = new LoopTelemetry(opts.sessionStore)
+    this.threadItems = new ThreadItemProjectionService({
+      threadStore: opts.threadStore,
+      sessionStore: opts.sessionStore,
+      nowIso: opts.nowIso
+    })
     this.historyCompaction = new HistoryCompactionService({
       sessionStore: opts.sessionStore,
       compactor: opts.compactor,
@@ -388,7 +392,7 @@ export class AgentLoop {
       getContextCompaction: () => opts.contextCompaction,
       getHooks: () => opts.hooks,
       clearReadTracker: (threadId?: string) => opts.toolHost.clearReadTracker?.(threadId),
-      rewriteThreadItemsFromSession: (threadId) => this.rewriteThreadItemsFromSession(threadId)
+      rewriteThreadItemsFromSession: (threadId) => this.threadItems.syncFromSession(threadId)
     })
     this.turnAttachments = new TurnAttachmentService(opts.attachmentStore)
     this.modelRouting = new ModelRoutingService(opts.model)
@@ -1091,7 +1095,7 @@ export class AgentLoop {
         }
       })
       if (healing.status === 'applied') {
-        await this.rewriteThreadItemsFromSession(threadId)
+        await this.threadItems.syncFromSession(threadId)
         historyItems = healing.items
       } else if (healing.status === 'unchanged') {
         historyItems = healing.items
@@ -1781,28 +1785,6 @@ export class AgentLoop {
           this.turnMadeProgress.add(input.turnId)
         }
       }
-    })
-  }
-
-  private async rewriteThreadItemsFromSession(threadId: string): Promise<void> {
-    const items = await this.opts.sessionStore.loadItems(threadId)
-    if (items.length === 0) return
-    const itemsByTurn = new Map<string, TurnItem[]>()
-    for (const item of items) {
-      const turnItems = itemsByTurn.get(item.turnId) ?? []
-      turnItems.push(item)
-      itemsByTurn.set(item.turnId, turnItems)
-    }
-    await this.mutateThread(threadId, async (current) => {
-      let changed = false
-      const turns = current.turns.map((turn) => {
-        const sessionItems = itemsByTurn.get(turn.id)
-        if (!sessionItems) return turn
-        changed = true
-        return { ...turn, items: placeCompactionsAtTurnEnd(sessionItems) }
-      })
-      if (!changed) return
-      await this.opts.threadStore.upsert(touchThread({ ...current, turns }, this.opts.nowIso()))
     })
   }
 

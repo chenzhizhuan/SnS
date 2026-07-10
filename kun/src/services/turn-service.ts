@@ -20,8 +20,7 @@ import type { SteeringQueue } from '../loop/steering-queue.js'
 import { ContextCompactor } from '../loop/context-compactor.js'
 import {
   effectiveHistoryAfterLatestCompaction,
-  insertCompactionIntoVisibleHistory,
-  placeCompactionsAtTurnEnd
+  insertCompactionIntoVisibleHistory
 } from '../loop/compaction-history.js'
 import { resolveCompactionModel, summarizeCompactionWithModel } from '../loop/compaction-summary.js'
 import type { ContextCompactionConfig } from '../loop/model-context-profile.js'
@@ -34,6 +33,7 @@ import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import { rewriteItemHistoryWithRetry } from './history-commit-coordinator.js'
 import { withThreadStoreMutation } from './thread-mutation-coordinator.js'
 import type { ThreadLifecycleFence } from './thread-lifecycle-fence.js'
+import { ThreadItemProjectionService } from './thread-item-projection.js'
 
 export type TurnServiceDeps = {
   threadStore: ThreadStore
@@ -92,6 +92,7 @@ export const DEFAULT_MAX_CONCURRENT_TURNS = 4
  */
 export class TurnService {
   private deps: TurnServiceDeps
+  private readonly threadItems: ThreadItemProjectionService
   private readonly inflightTurns = new Map<string, AbortController>()
   /** Turn ids that own one global admission slot. */
   private readonly admittedTurnThreads = new Map<string, string>()
@@ -99,6 +100,11 @@ export class TurnService {
 
   constructor(deps: TurnServiceDeps) {
     this.deps = deps
+    this.threadItems = new ThreadItemProjectionService({
+      threadStore: deps.threadStore,
+      sessionStore: deps.sessionStore,
+      nowIso: deps.nowIso
+    })
     this.maxConcurrentTurns = normalizeMaxConcurrentTurns(deps.maxConcurrentTurns)
   }
 
@@ -495,7 +501,7 @@ export class TurnService {
     }
     const result = committed.value
     if (committed.status === 'applied') {
-      await this.rewriteThreadItemsFromSession(input.threadId)
+      await this.threadItems.syncFromSession(input.threadId)
       await this.deps.events.record({
         kind: 'compaction_completed',
         threadId: input.threadId,
@@ -858,7 +864,7 @@ export class TurnService {
       }
     })
     if (history.status === 'applied' || history.status === 'unchanged') {
-      await this.rewriteThreadItemsFromSession(threadId)
+      await this.threadItems.syncFromSession(threadId)
     }
   }
 
@@ -879,27 +885,6 @@ export class TurnService {
 
   private keepUserItems(items: TurnItem[]): TurnItem[] {
     return items.filter((item) => item.kind === 'user_message')
-  }
-
-  private async rewriteThreadItemsFromSession(threadId: string): Promise<void> {
-    const items = await this.deps.sessionStore.loadItems(threadId)
-    if (items.length === 0) return
-    const itemsByTurn = new Map<string, TurnItem[]>()
-    for (const item of items) {
-      const turnItems = itemsByTurn.get(item.turnId) ?? []
-      turnItems.push(item)
-      itemsByTurn.set(item.turnId, turnItems)
-    }
-    await this.upsertThread(threadId, (current) => {
-      let changed = false
-      const turns = current.turns.map((turn) => {
-        const sessionItems = itemsByTurn.get(turn.id)
-        if (!sessionItems) return turn
-        changed = true
-        return { ...turn, items: placeCompactionsAtTurnEnd(sessionItems) }
-      })
-      return changed ? { ...current, turns } : current
-    })
   }
 
   private finalizeOpenItem(
