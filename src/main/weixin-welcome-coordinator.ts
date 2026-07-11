@@ -15,6 +15,7 @@ export type WeixinWelcomeCoordinatorDeps = {
   welcomeText: (settings: AppSettingsV1, channel: ClawImChannelV1) => string
   markWelcomeSent: (channelId: string) => Promise<void>
   logError: (category: string, message: string, detail?: unknown) => void
+  stopped?: () => boolean
 }
 
 /** Owns the Weixin-only eager welcome sent immediately after QR connection. */
@@ -24,6 +25,7 @@ export async function syncWeixinConnectWelcomes(
 ): Promise<void> {
   if (!settings.claw.enabled || !settings.claw.im.enabled) return
   for (const channel of settings.claw.channels) {
+    if (deps.stopped?.()) return
     if (!channel.enabled || channel.provider !== 'weixin' || channel.welcomeSentAt) continue
     const credential = channel.platformCredential
     if (credential?.kind !== 'weixin' || !credential.accountId.trim()) continue
@@ -32,9 +34,10 @@ export async function syncWeixinConnectWelcomes(
     deps.beginWelcome(channel.id)
     try {
       const owner = await deps.resolveOwner(channel)
+      if (deps.stopped?.()) return
       if (!owner) continue
       const result = await deps.sendWelcome(channel, owner, deps.welcomeText(settings, channel))
-      if (result.ok) await deps.markWelcomeSent(channel.id)
+      if (result.ok && !deps.stopped?.()) await deps.markWelcomeSent(channel.id)
     } catch (error) {
       deps.logError('claw-weixin', 'Failed to greet the WeChat owner after connect', {
         channelId: channel.id,

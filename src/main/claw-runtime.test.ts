@@ -3071,6 +3071,48 @@ describe('ClawRuntime', () => {
     expect(sendWeixinBridgeMessage).toHaveBeenCalledTimes(1)
   })
 
+  it('waits for an eager WeChat welcome and prevents settings writes after stop', async () => {
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.port = 0
+    settings.claw.channels = [buildChannel({
+      provider: 'weixin',
+      id: 'channel_weixin_stop',
+      welcomeSentAt: '',
+      platformCredential: {
+        kind: 'weixin',
+        accountId: 'acc_stop',
+        sessionKey: 'sess_stop',
+        createdAt: '2026-07-11T00:00:00.000Z'
+      }
+    })]
+    let resolveOwner!: (owner: string) => void
+    const resolveWeixinAccountUserId = vi.fn(() => new Promise<string>((resolve) => {
+      resolveOwner = resolve
+    }))
+    const patch = vi.fn(async () => settings)
+    const sendWeixinBridgeMessage = vi.fn(async () => ({ ok: true as const, messageId: 'late_message' }))
+    const runtime = createClawRuntime({
+      store: { load: vi.fn(async () => settings), patch } as never,
+      runtimeRequest: vi.fn() as never,
+      logError: vi.fn(),
+      sendWeixinBridgeMessage,
+      resolveWeixinAccountUserId
+    })
+
+    runtime.sync(settings)
+    await vi.waitFor(() => expect(resolveWeixinAccountUserId).toHaveBeenCalledTimes(1))
+    let stopped = false
+    const stopping = runtime.stop().then(() => { stopped = true })
+    await Promise.resolve()
+    expect(stopped).toBe(false)
+
+    resolveOwner('owner_stop')
+    await stopping
+    expect(sendWeixinBridgeMessage).not.toHaveBeenCalled()
+    expect(patch).not.toHaveBeenCalled()
+  })
+
   it('waits for the current WeChat turn to complete before returning the final reply', async () => {
     const settings = buildSettings()
     settings.claw.im.enabled = true

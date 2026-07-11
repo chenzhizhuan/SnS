@@ -16,13 +16,16 @@ export type FeishuTransportAdapterDeps = {
   logError: (category: string, message: string, detail?: unknown) => void
   onMessage: (channelId: string, message: NormalizedMessage) => void | Promise<void>
   allowedFileDirs: (settings: AppSettingsV1, channel: ClawImChannelV1) => string[]
+  createChannel?: typeof createLarkChannel
 }
 
 /** Owns Feishu/Lark SDK connections; callers only coordinate normalized messages. */
 export class FeishuTransportAdapter {
   private readonly channels = new Map<string, LarkChannel>()
   private readonly channelKeys = new Map<string, string>()
+  private readonly syncTasks = new Set<Promise<void>>()
   private syncVersion = 0
+  private stopped = false
 
   constructor(private readonly deps: FeishuTransportAdapterDeps) {}
 
@@ -144,7 +147,15 @@ export class FeishuTransportAdapter {
     })
   }
 
-  async sync(settings: AppSettingsV1): Promise<void> {
+  sync(settings: AppSettingsV1): Promise<void> {
+    if (this.stopped) return Promise.resolve()
+    let task: Promise<void>
+    task = this.runSync(settings).finally(() => this.syncTasks.delete(task))
+    this.syncTasks.add(task)
+    return task
+  }
+
+  private async runSync(settings: AppSettingsV1): Promise<void> {
     const version = ++this.syncVersion
     const targets = settings.claw.enabled
       ? settings.claw.channels.filter(isConfiguredFeishuChannel)
@@ -155,7 +166,7 @@ export class FeishuTransportAdapter {
         .filter((channelId) => !targetMap.has(channelId))
         .map((channelId) => this.close(channelId))
     )
-    if (version !== this.syncVersion) return
+    if (this.stopped || version !== this.syncVersion) return
 
     for (const target of targets) {
       const credential = target.platformCredential
@@ -170,10 +181,10 @@ export class FeishuTransportAdapter {
       if (this.channels.has(target.id) && this.channelKeys.get(target.id) === nextKey) continue
       if (this.channels.has(target.id)) {
         await this.close(target.id)
-        if (version !== this.syncVersion) return
+        if (this.stopped || version !== this.syncVersion) return
       }
       try {
-        const bridge = createLarkChannel({
+        const bridge = (this.deps.createChannel ?? createLarkChannel)({
           appId,
           appSecret,
           domain: domain === 'lark' ? Domain.Lark : Domain.Feishu,
@@ -200,7 +211,7 @@ export class FeishuTransportAdapter {
         ))
         registerReadReceiptNoop(bridge)
         await bridge.connect()
-        if (version !== this.syncVersion) {
+        if (this.stopped || version !== this.syncVersion) {
           await bridge.disconnect().catch(() => undefined)
           return
         }
@@ -216,7 +227,9 @@ export class FeishuTransportAdapter {
   }
 
   async stop(): Promise<void> {
+    this.stopped = true
     this.syncVersion += 1
+    await Promise.allSettled([...this.syncTasks])
     await Promise.all([...this.channels.keys()].map((channelId) => this.close(channelId)))
   }
 

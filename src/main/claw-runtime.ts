@@ -840,13 +840,18 @@ export class ClawRuntime {
   /** `${threadId}:${turnId}` of turns with an in-flight delayed-result push. */
   private readonly pendingResultPushes = new Set<string>()
   private readonly resultPushTasks = new Set<Promise<void>>()
+  private readonly lifecycleTasks = new Set<Promise<void>>()
+  private readonly webhookCloseTasks = new Set<Promise<void>>()
   private readonly stopController = new AbortController()
 
   constructor(deps: ClawRuntimeDeps) {
     this.deps = deps
     this.feishuTransport = new FeishuTransportAdapter({
       logError: deps.logError,
-      onMessage: (channelId, message) => this.handleFeishuMessage(channelId, message),
+      onMessage: (channelId, message) => this.trackLifecycleTask(
+        'Feishu inbound handler failed',
+        this.handleFeishuMessage(channelId, message)
+      ),
       allowedFileDirs: (settings, channel) => [
         this.resolveChannelWorkspaceRoot(settings, channel),
         settings.claw.im.workspaceRoot,
@@ -874,9 +879,32 @@ export class ClawRuntime {
   sync(settings: AppSettingsV1): void {
     if (this.stopController.signal.aborted) return
     this.syncWebhook(settings)
-    void this.feishuTransport.sync(settings)
-    void this.syncWeixinConnectWelcomes(settings)
+    this.trackLifecycleTask('Feishu channel sync failed', this.feishuTransport.sync(settings))
+    this.pruneWeixinWelcomeAttempts(settings)
+    this.trackLifecycleTask('WeChat welcome sync failed', this.syncWeixinConnectWelcomes(settings))
     this.syncTelegramChannels(settings)
+  }
+
+  private trackLifecycleTask(message: string, task: Promise<void>): Promise<void> {
+    const tracked = task.catch((error) => {
+      this.deps.logError('claw-lifecycle', message, {
+        message: error instanceof Error ? error.message : String(error)
+      })
+    })
+    this.lifecycleTasks.add(tracked)
+    void tracked.finally(() => this.lifecycleTasks.delete(tracked))
+    return tracked
+  }
+
+  private pruneWeixinWelcomeAttempts(settings: AppSettingsV1): void {
+    const configured = new Set(
+      settings.claw.channels
+        .filter((channel) => channel.enabled && channel.provider === 'weixin')
+        .map((channel) => channel.id)
+    )
+    for (const channelId of this.weixinConnectWelcomeAttempted) {
+      if (!configured.has(channelId)) this.weixinConnectWelcomeAttempted.delete(channelId)
+    }
   }
 
   /**
@@ -917,12 +945,15 @@ export class ClawRuntime {
       }),
       welcomeText: imWelcomeText,
       markWelcomeSent: (channelId) => this.markChannelWelcomeSent(channelId),
-      logError: this.deps.logError
+      logError: this.deps.logError,
+      stopped: () => this.stopController.signal.aborted
     })
   }
 
   private async markChannelWelcomeSent(channelId: string): Promise<void> {
+    if (this.stopController.signal.aborted) return
     const settings = await this.deps.store.load()
+    if (this.stopController.signal.aborted) return
     const now = new Date().toISOString()
     await this.deps.store.patch({
       claw: {
@@ -941,9 +972,22 @@ export class ClawRuntime {
 
   async stop(): Promise<void> {
     this.stopController.abort()
-    this.closeWebhook()
+    void this.closeWebhook(true)
     await this.feishuTransport.stop()
-    await Promise.allSettled([...this.resultPushTasks])
+    while (
+      this.lifecycleTasks.size > 0 ||
+      this.resultPushTasks.size > 0 ||
+      this.webhookCloseTasks.size > 0
+    ) {
+      await Promise.allSettled([
+        ...this.lifecycleTasks,
+        ...this.resultPushTasks,
+        ...this.webhookCloseTasks
+      ])
+    }
+    this.welcomeInFlight.clear()
+    this.weixinConnectWelcomeAttempted.clear()
+    this.pendingResultPushes.clear()
   }
 
   async status(): Promise<ClawRuntimeStatus> {
@@ -2157,17 +2201,17 @@ export class ClawRuntime {
     const im = settings.claw.im
     const key = `${im.port}|${im.path}`
     if (this.server && this.serverKey === key) return
-    this.closeWebhook()
+    void this.closeWebhook()
 
     const server = createServer((req, res) => {
-      void this.handleWebhook(req, res)
+      this.trackLifecycleTask('Claw webhook handler failed', this.handleWebhook(req, res))
     })
     server.on('error', (error) => {
       this.deps.logError('claw-webhook', 'Claw IM webhook server failed', {
         message: error instanceof Error ? error.message : String(error)
       })
       if (this.server === server) {
-        this.closeWebhook()
+        void this.closeWebhook()
       }
     })
     server.listen(im.port, '127.0.0.1')
@@ -2175,16 +2219,30 @@ export class ClawRuntime {
     this.serverKey = key
   }
 
-  private closeWebhook(): void {
-    if (!this.server) return
+  private closeWebhook(forceConnections = false): Promise<void> {
+    if (!this.server) return Promise.resolve()
     const server = this.server
     this.server = null
     this.serverKey = ''
-    server.close()
+    const task = new Promise<void>((resolve) => {
+      try {
+        server.close(() => resolve())
+        if (forceConnections) server.closeAllConnections?.()
+      } catch {
+        resolve()
+      }
+    })
+    this.webhookCloseTasks.add(task)
+    void task.finally(() => this.webhookCloseTasks.delete(task))
+    return task
   }
 
   private async handleWebhook(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
+      if (this.stopController.signal.aborted) {
+        writeJson(res, 503, { ok: false, message: 'Kun: Claw runtime is stopping.' })
+        return
+      }
       const settings = await this.deps.store.load()
       const im = settings.claw.im
       const url = new URL(req.url ?? '/', 'http://127.0.0.1')

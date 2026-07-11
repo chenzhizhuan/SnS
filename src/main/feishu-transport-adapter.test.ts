@@ -1,13 +1,56 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LarkChannel } from '@larksuiteoapi/node-sdk'
+import { defaultClawSettings, type AppSettingsV1, type ClawImChannelV1 } from '../shared/app-settings'
 import { FeishuTransportAdapter } from './feishu-transport-adapter'
 
-function adapter(logError = vi.fn()): FeishuTransportAdapter {
+function adapter(
+  logError = vi.fn(),
+  createChannel?: () => LarkChannel
+): FeishuTransportAdapter {
   return new FeishuTransportAdapter({
     logError,
     onMessage: vi.fn(),
-    allowedFileDirs: () => []
+    allowedFileDirs: () => [],
+    ...(createChannel ? { createChannel: createChannel as never } : {})
   })
+}
+
+function feishuSettings(): AppSettingsV1 {
+  const channel: ClawImChannelV1 = {
+    id: 'feishu_1',
+    provider: 'feishu',
+    label: 'Feishu',
+    enabled: true,
+    model: 'auto',
+    threadId: '',
+    workspaceRoot: '/tmp/workspace',
+    agentProfile: {
+      name: 'Kun',
+      description: '',
+      identity: '',
+      personality: '',
+      userContext: '',
+      replyRules: ''
+    },
+    platformCredential: {
+      kind: 'feishu',
+      appId: 'cli_test',
+      appSecret: 'secret',
+      domain: 'feishu',
+      createdAt: '2026-07-11T00:00:00.000Z'
+    },
+    conversations: [],
+    createdAt: '2026-07-11T00:00:00.000Z',
+    updatedAt: '2026-07-11T00:00:00.000Z'
+  }
+  return {
+    claw: {
+      ...defaultClawSettings(),
+      enabled: true,
+      im: { ...defaultClawSettings().im, enabled: true },
+      channels: [channel]
+    }
+  } as AppSettingsV1
 }
 
 describe('Feishu transport adapter', () => {
@@ -71,5 +114,31 @@ describe('Feishu transport adapter', () => {
       { markdown: '**hello**' },
       { replyTo: undefined, replyInThread: undefined }
     )
+  })
+
+  it('waits for a connecting channel and disconnects it during stop', async () => {
+    let finishConnect!: () => void
+    const connect = vi.fn(() => new Promise<void>((resolve) => {
+      finishConnect = resolve
+    }))
+    const disconnect = vi.fn(async () => undefined)
+    const bridge = {
+      on: vi.fn(),
+      connect,
+      disconnect
+    } as unknown as LarkChannel
+    const runtime = adapter(vi.fn(), () => bridge)
+
+    const syncing = runtime.sync(feishuSettings())
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(1))
+    let stopped = false
+    const stopping = runtime.stop().then(() => { stopped = true })
+    await Promise.resolve()
+    expect(stopped).toBe(false)
+
+    finishConnect()
+    await Promise.all([syncing, stopping])
+    expect(disconnect).toHaveBeenCalledTimes(1)
+    expect(runtime.channelRegistry.size).toBe(0)
   })
 })
