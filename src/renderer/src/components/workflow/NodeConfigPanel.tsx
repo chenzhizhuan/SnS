@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Braces, ChevronDown, ChevronRight, FlaskConical, Loader2, Plus, Star, Trash2, X } from 'lucide-react'
 import { describeNodeOutput, extractNodeRefs, varTypeToInputType } from '@shared/workflow-output-descriptors'
@@ -7,16 +7,19 @@ import { TriggerNodeEditor } from './node-editors/TriggerNodeEditor'
 import { AiNodeEditor } from './node-editors/AiNodeEditor'
 import { LogicAndHttpNodeEditor } from './node-editors/LogicAndHttpNodeEditor'
 import {
+  CustomNodeEditor as CustomNodeForm,
+  InputFieldsEditor,
+  NODE_INPUT_CLASS as INPUT_CLASS,
+  NodeEditorField as Field
+} from './node-editors/NodeEditorPrimitives'
+import {
   SCHEDULE_REASONING_EFFORT_IDS,
-  WORKFLOW_INPUT_FIELD_TYPES,
   WORKFLOW_NODE_INPUT_TYPES,
   getModelProviderSettings,
   type AppSettingsV1,
   type WorkflowCodeCheckResult,
   type WorkflowCodeLanguage,
   type WorkflowConditionOperator,
-  type WorkflowInputFieldType,
-  type WorkflowInputFieldV1,
   type WorkflowNodeErrorMode,
   type WorkflowNodeInputType,
   type WorkflowNodeInputV1,
@@ -25,9 +28,6 @@ import {
   type WorkflowOutputVar,
   type WorkflowVarType
 } from '@shared/app-settings'
-
-const INPUT_CLASS =
-  'w-full rounded-lg border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/25'
 
 /** A reachable upstream node, carrying the full node so the picker can derive its typed outputs. */
 type UpstreamNode = { id: string; name: string; type: WorkflowNodeV1['type']; node: WorkflowNodeV1 }
@@ -79,119 +79,6 @@ type Props = {
   workflowId?: string
   /** Persist the graph before a single-node test (so the test sees the latest config). */
   onBeforeTest?: () => Promise<void>
-}
-
-function Field({
-  label,
-  hint,
-  children
-}: {
-  label: string
-  hint?: string
-  children: ReactNode
-}): ReactElement {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[12px] font-medium text-ds-muted">{label}</span>
-      {children}
-      {hint ? <span className="text-[11px] leading-4 text-ds-faint">{hint}</span> : null}
-    </label>
-  )
-}
-
-type CustomNode = Extract<WorkflowNodeV1, { type: 'custom' }>
-
-/** Auto-generated form for a `custom` node, built from its module's field schema. */
-function CustomNodeForm({
-  node,
-  settings,
-  onChange
-}: {
-  node: CustomNode
-  settings: AppSettingsV1
-  onChange: (node: WorkflowNodeV1) => void
-}): ReactElement {
-  const { t } = useTranslation('common')
-  const module = settings.workflow.modules.find((item) => item.id === node.config.moduleId)
-  if (!module) {
-    return <p className="text-[12px] leading-5 text-red-600">{t('workflowModuleMissing')}</p>
-  }
-  const setValue = (key: string, value: string): void =>
-    onChange({ ...node, config: { ...node.config, values: { ...node.config.values, [key]: value } } })
-  return (
-    <>
-      {module.description ? (
-        <p className="text-[11.5px] leading-5 text-ds-faint">{module.description}</p>
-      ) : null}
-      {module.fields.length === 0 ? (
-        <p className="text-[11.5px] leading-5 text-ds-faint">{t('workflowModuleNoFields')}</p>
-      ) : null}
-      {module.fields.map((field) => {
-        const value = node.config.values[field.key] ?? field.defaultValue
-        if (field.type === 'boolean') {
-          return (
-            <label key={field.key} className="flex items-center gap-2 text-[13px] text-ds-ink">
-              <input
-                type="checkbox"
-                checked={value === 'true'}
-                onChange={(event) => setValue(field.key, event.target.checked ? 'true' : 'false')}
-              />
-              {field.label || field.key}
-            </label>
-          )
-        }
-        return (
-          <Field key={field.key} label={field.label || field.key}>
-            {field.type === 'textarea' ? (
-              <textarea
-                className={`${INPUT_CLASS} min-h-[80px] resize-y`}
-                value={value}
-                placeholder={field.placeholder}
-                onChange={(event) => setValue(field.key, event.target.value)}
-              />
-            ) : field.type === 'select' ? (
-              <select className={INPUT_CLASS} value={value} onChange={(event) => setValue(field.key, event.target.value)}>
-                {!field.options.includes(value) ? <option value={value}>{value || '—'}</option> : null}
-                {field.options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type={field.type === 'number' ? 'number' : 'text'}
-                className={INPUT_CLASS}
-                value={value}
-                placeholder={field.placeholder}
-                onChange={(event) => setValue(field.key, event.target.value)}
-              />
-            )}
-          </Field>
-        )
-      })}
-    </>
-  )
-}
-
-/** Comma-separated options input that keeps raw text while typing and normalizes on blur. */
-function OptionsInput({ options, onCommit }: { options: string[]; onCommit: (next: string[]) => void }): ReactElement {
-  const { t } = useTranslation('common')
-  const joined = options.join(', ')
-  const [raw, setRaw] = useState(joined)
-  // Re-sync only when the underlying options change by value (e.g. switching nodes / after commit).
-  useEffect(() => {
-    setRaw(joined)
-  }, [joined])
-  return (
-    <input
-      className={INPUT_CLASS}
-      value={raw}
-      placeholder={t('workflowModuleFieldOptions')}
-      onChange={(event) => setRaw(event.target.value)}
-      onBlur={() => onCommit(raw.split(',').map((option) => option.trim()).filter((option) => option.length > 0))}
-    />
-  )
 }
 
 type InputSourceOption = {
@@ -440,100 +327,6 @@ function InputBindingsEditor({
 }
 
 /** Reusable typed-field editor — shared by the manual trigger's input schema and the Parameter Extractor. */
-function InputFieldsEditor({
-  fields,
-  onChange
-}: {
-  fields: WorkflowInputFieldV1[]
-  onChange: (next: WorkflowInputFieldV1[]) => void
-}): ReactElement {
-  const { t } = useTranslation('common')
-  const addField = (): void =>
-    onChange([
-      ...fields,
-      { key: `field${fields.length + 1}`, label: '', type: 'text', required: false, options: [], defaultValue: '', description: '' }
-    ])
-  return (
-    <>
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-medium text-ds-muted">{t('workflowInputSchema')}</span>
-        <button
-          type="button"
-          onClick={addField}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium text-accent transition hover:bg-accent/10"
-        >
-          <Plus className="h-3 w-3" strokeWidth={2} />
-          {t('workflowInputAddField')}
-        </button>
-      </div>
-      {fields.length === 0 ? (
-        <p className="text-[11px] leading-4 text-ds-faint">{t('workflowInputSchemaHint')}</p>
-      ) : (
-        fields.map((field, index) => {
-          const update = (patch: Partial<WorkflowInputFieldV1>): void =>
-            onChange(fields.map((item, i) => (i === index ? { ...item, ...patch } : item)))
-          return (
-            <div key={index} className="flex flex-col gap-2 rounded-lg border border-ds-border p-2.5">
-              <div className="flex items-center gap-2">
-                <input
-                  className={`${INPUT_CLASS} min-w-0 flex-1`}
-                  value={field.key}
-                  placeholder={t('workflowInputKey')}
-                  onChange={(event) => update({ key: event.target.value })}
-                />
-                <select
-                  className={`${INPUT_CLASS} w-28 shrink-0`}
-                  value={field.type}
-                  onChange={(event) => update({ type: event.target.value as WorkflowInputFieldType })}
-                >
-                  {WORKFLOW_INPUT_FIELD_TYPES.map((fieldType) => (
-                    <option key={fieldType} value={fieldType}>
-                      {t(`workflowInputType_${fieldType}`)}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => onChange(fields.filter((_, i) => i !== index))}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ds-faint transition hover:bg-red-500/10 hover:text-red-600"
-                  aria-label={t('workflowInputRemoveField')}
-                >
-                  <X className="h-3.5 w-3.5" strokeWidth={2} />
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  className={`${INPUT_CLASS} min-w-0 flex-1`}
-                  value={field.label}
-                  placeholder={t('workflowInputLabel')}
-                  onChange={(event) => update({ label: event.target.value })}
-                />
-                <input
-                  className={`${INPUT_CLASS} min-w-0 flex-1`}
-                  value={field.defaultValue}
-                  placeholder={t('workflowInputDefault')}
-                  onChange={(event) => update({ defaultValue: event.target.value })}
-                />
-              </div>
-              {field.type === 'select' ? (
-                <OptionsInput options={field.options} onCommit={(next) => update({ options: next })} />
-              ) : null}
-              <label className="flex items-center gap-2 text-[12px] text-ds-muted">
-                <input
-                  type="checkbox"
-                  checked={field.required}
-                  onChange={(event) => update({ required: event.target.checked })}
-                />
-                {t('workflowInputRequired')}
-              </label>
-            </div>
-          )
-        })
-      )}
-    </>
-  )
-}
-
 /** Small capitalized type pill for a picker row (e.g. String / Number / JSON). */
 function TypeBadge({ type }: { type: WorkflowVarType }): ReactElement {
   return (
