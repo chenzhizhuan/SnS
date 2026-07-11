@@ -66,7 +66,7 @@
 - [x] 6.4 Introduce a typed node executor registry and move AI, HTTP, condition,
   transform, delay, and integration node families behind adapters.
 - [x] 6.5 Extract workflow scheduler and live-status projection.
-- [ ] 6.6 Split `NodeConfigPanel` into node-family editors with shared binding and
+- [x] 6.6 Split `NodeConfigPanel` into node-family editors with shared binding and
   validation components.
 - [ ] 6.7 Reduce `WorkflowRuntime` and the shared panel to composition facades.
 

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Braces, ChevronDown, ChevronRight, FlaskConical, Loader2, Plus, Star, Trash2, X } from 'lucide-react'
 import { describeNodeOutput, extractNodeRefs, varTypeToInputType } from '@shared/workflow-output-descriptors'
 import { ModelPicker } from './ModelPicker'
+import { TriggerNodeEditor } from './node-editors/TriggerNodeEditor'
+import { AiNodeEditor } from './node-editors/AiNodeEditor'
 import {
   SCHEDULE_REASONING_EFFORT_IDS,
   WORKFLOW_INPUT_FIELD_TYPES,
@@ -21,12 +23,8 @@ import {
   type WorkflowNodeRunResultV1,
   type WorkflowNodeV1,
   type WorkflowOutputVar,
-  type WorkflowTriggerScheduleKind,
-  type WorkflowVarType,
-  type WorkflowWebhookMethod
+  type WorkflowVarType
 } from '@shared/app-settings'
-
-const WEBHOOK_METHODS: WorkflowWebhookMethod[] = ['ANY', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
 const INPUT_CLASS =
   'w-full rounded-lg border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/25'
@@ -45,27 +43,12 @@ function varTypeLabel(type: WorkflowVarType): string {
   return type.charAt(0).toUpperCase() + type.slice(1)
 }
 
-const SCHEDULE_KINDS: WorkflowTriggerScheduleKind[] = ['manual', 'interval', 'daily', 'at', 'cron']
 const HTTP_METHODS: WorkflowHttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 const CODE_PLACEHOLDERS: Record<WorkflowCodeLanguage, string> = {
   javascript: 'return { value: $json }',
   python: 'import sys, json\ndata = json.load(sys.stdin)\nprint(data.get("text", ""))',
   bash: 'echo "$WORKFLOW_TEXT" | tr a-z A-Z'
 }
-function buildWorkflowRunCurl(settings: AppSettingsV1, name: string): string {
-  const port = settings.workflow.webhookPort
-  const secret = settings.workflow.webhookSecret.trim()
-  const lines = [
-    `curl -X POST http://127.0.0.1:${port}/workflow/run \\`,
-    `  -H "Content-Type: application/json" \\`
-  ]
-  if (secret) lines.push(`  -H "x-kun-secret: ${secret}" \\`)
-  // Shell-escape single quotes in the JSON so a workflow name with a quote can't break out of the -d '...' arg.
-  const payload = JSON.stringify({ workflow: name, input: '' }).replace(/'/g, "'\\''")
-  lines.push(`  -d '${payload}'`)
-  return lines.join('\n')
-}
-
 const CONDITION_OPERATORS: WorkflowConditionOperator[] = [
   'contains',
   'notContains',
@@ -896,256 +879,24 @@ export function NodeConfigPanel({
         ) : null}
 
         {node.type === 'manual-trigger' || node.type === 'schedule-trigger' || node.type === 'webhook-trigger' ? (
-          <Field label={t('workflowTriggerWorkspace')}>
-            <input
-              className={INPUT_CLASS}
-              value={node.config.workspaceRoot ?? ''}
-              placeholder={settings.workspaceRoot || '~/project'}
-              onChange={(event) =>
-                onChange({
-                  ...node,
-                  config: { ...node.config, workspaceRoot: event.target.value }
-                } as WorkflowNodeV1)
-              }
-            />
-            <span className="mt-1 text-[11px] leading-4 text-ds-faint">{t('workflowTriggerWorkspaceHint')}</span>
-          </Field>
-        ) : null}
-
-        {node.type === 'manual-trigger' ? (
-          <div className="flex flex-col gap-2 border-t border-ds-border pt-3">
-            <InputFieldsEditor
-              fields={node.config.inputSchema ?? []}
-              onChange={(next) => onChange({ ...node, config: { ...node.config, inputSchema: next } })}
-            />
-          </div>
-        ) : null}
-
-        {node.type === 'manual-trigger' && workflowName ? (
-          <div className="flex flex-col gap-1.5 border-t border-ds-border pt-3">
-            <span className="text-[12px] font-medium text-ds-muted">{t('workflowLocalApi')}</span>
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ds-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ds-muted">
-              {buildWorkflowRunCurl(settings, workflowName)}
-            </pre>
-            <button
-              type="button"
-              onClick={() => void navigator.clipboard?.writeText(buildWorkflowRunCurl(settings, workflowName))}
-              className="self-start rounded-md border border-ds-border px-2 py-1 text-[11.5px] font-medium text-ds-ink transition hover:bg-ds-hover"
-            >
-              {t('workflowLocalApiCopy')}
-            </button>
-            <span className="text-[11px] leading-4 text-ds-faint">{t('workflowLocalApiHint')}</span>
-          </div>
-        ) : null}
-
-        {node.type === 'schedule-trigger' ? (
-          <>
-            <Field label={t('workflowScheduleKind')}>
-              <select
-                className={INPUT_CLASS}
-                value={node.config.schedule.kind}
-                onChange={(event) =>
-                  onChange({
-                    ...node,
-                    config: {
-                      schedule: {
-                        ...node.config.schedule,
-                        kind: event.target.value as WorkflowTriggerScheduleKind
-                      }
-                    }
-                  })
-                }
-              >
-                {SCHEDULE_KINDS.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {t(`workflowScheduleKind_${kind}`)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {node.config.schedule.kind === 'interval' ? (
-              <Field label={t('workflowEveryMinutes')}>
-                <input
-                  type="number"
-                  min={1}
-                  className={INPUT_CLASS}
-                  value={node.config.schedule.everyMinutes}
-                  onChange={(event) =>
-                    onChange({
-                      ...node,
-                      config: {
-                        schedule: { ...node.config.schedule, everyMinutes: Number(event.target.value) || 1 }
-                      }
-                    })
-                  }
+          <TriggerNodeEditor
+            node={node}
+            settings={settings}
+            workflowName={workflowName}
+            inputSchemaEditor={node.type === 'manual-trigger' ? (
+              <div className="flex flex-col gap-2 border-t border-ds-border pt-3">
+                <InputFieldsEditor
+                  fields={node.config.inputSchema ?? []}
+                  onChange={(next) => onChange({ ...node, config: { ...node.config, inputSchema: next } })}
                 />
-              </Field>
-            ) : null}
-            {node.config.schedule.kind === 'daily' ? (
-              <Field label={t('workflowTimeOfDay')}>
-                <input
-                  type="time"
-                  className={INPUT_CLASS}
-                  value={node.config.schedule.timeOfDay}
-                  onChange={(event) =>
-                    onChange({
-                      ...node,
-                      config: { schedule: { ...node.config.schedule, timeOfDay: event.target.value } }
-                    })
-                  }
-                />
-              </Field>
-            ) : null}
-            {node.config.schedule.kind === 'at' ? (
-              <Field label={t('workflowAtTime')}>
-                <input
-                  type="datetime-local"
-                  className={INPUT_CLASS}
-                  value={node.config.schedule.atTime ? node.config.schedule.atTime.slice(0, 16) : ''}
-                  onChange={(event) =>
-                    onChange({
-                      ...node,
-                      config: {
-                        schedule: {
-                          ...node.config.schedule,
-                          atTime: event.target.value ? new Date(event.target.value).toISOString() : ''
-                        }
-                      }
-                    })
-                  }
-                />
-              </Field>
-            ) : null}
-            {node.config.schedule.kind === 'cron' ? (
-              <Field label={t('workflowCron')}>
-                <input
-                  className={INPUT_CLASS}
-                  value={node.config.schedule.cron}
-                  placeholder={t('workflowCronPlaceholder')}
-                  onChange={(event) =>
-                    onChange({
-                      ...node,
-                      config: { schedule: { ...node.config.schedule, cron: event.target.value } }
-                    })
-                  }
-                />
-              </Field>
-            ) : null}
-          </>
+              </div>
+            ) : undefined}
+            onChange={onChange}
+          />
         ) : null}
 
-        {node.type === 'webhook-trigger' ? (
-          <>
-            <Field label={t('workflowWebhookMethod')}>
-              <select
-                className={INPUT_CLASS}
-                value={node.config.method}
-                onChange={(event) =>
-                  onChange({ ...node, config: { ...node.config, method: event.target.value as WorkflowWebhookMethod } })
-                }
-              >
-                {WEBHOOK_METHODS.map((method) => (
-                  <option key={method} value={method}>
-                    {method}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label={t('workflowWebhookPath')}>
-              <input
-                className={INPUT_CLASS}
-                value={node.config.path}
-                placeholder="/my-hook"
-                onChange={(event) => onChange({ ...node, config: { ...node.config, path: event.target.value } })}
-              />
-            </Field>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[12px] font-medium text-ds-muted">{t('workflowWebhookUrl')}</span>
-              <code className="select-all break-all rounded-lg bg-ds-subtle px-3 py-2 text-[11.5px] text-ds-muted">
-                {`http://127.0.0.1:${settings.workflow.webhookPort}${node.config.path}`}
-              </code>
-            </div>
-          </>
-        ) : null}
-
-        {node.type === 'ai-agent' ? (
-          <>
-            <Field label={t('workflowPrompt')}>
-              <textarea
-                className={`${INPUT_CLASS} min-h-[120px] resize-y`}
-                value={node.config.prompt}
-                placeholder={t('workflowPromptPlaceholder', { token: '{{text}}' })}
-                onChange={(event) =>
-                  onChange({ ...node, config: { ...node.config, prompt: event.target.value } })
-                }
-              />
-              <span className="mt-1 text-[11px] leading-4 text-ds-faint">{t('workflowPromptUpstreamHint')}</span>
-            </Field>
-            <ModelPicker
-              providers={providers}
-              providerId={node.config.providerId}
-              model={node.config.model}
-              onChange={({ providerId, model }) => onChange({ ...node, config: { ...node.config, providerId, model } })}
-              emptyHint={t('workflowModelEmptyHint')}
-            />
-            <Field label={t('scheduleReasoning')}>
-              <select
-                className={INPUT_CLASS}
-                value={node.config.reasoningEffort}
-                onChange={(event) =>
-                  onChange({
-                    ...node,
-                    config: { ...node.config, reasoningEffort: event.target.value as typeof node.config.reasoningEffort }
-                  })
-                }
-              >
-                {SCHEDULE_REASONING_EFFORT_IDS.map((effort) => (
-                  <option key={effort} value={effort}>
-                    {t(`scheduleReasoning_${effort}`)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
-        ) : null}
-
-        {node.type === 'generate-image' ? (
-          <>
-            <Field label={t('workflowImagePrompt')}>
-              <textarea
-                className={`${INPUT_CLASS} min-h-[100px] resize-y`}
-                value={node.config.prompt}
-                placeholder={t('workflowImagePromptPlaceholder', { token: '{{text}}' })}
-                onChange={(event) => onChange({ ...node, config: { ...node.config, prompt: event.target.value } })}
-              />
-            </Field>
-            <ModelPicker
-              providers={providers}
-              providerId={node.config.providerId}
-              model={node.config.model}
-              onChange={({ providerId, model }) => onChange({ ...node, config: { ...node.config, providerId, model } })}
-              providerFilter={(provider) => Boolean(provider.image)}
-              modelsOf={(provider) => provider.image?.models ?? []}
-              modelLabel={t('workflowImageModel')}
-            />
-            <Field label={t('workflowImageSize')}>
-              <input
-                className={INPUT_CLASS}
-                value={node.config.size}
-                placeholder="1024x1024"
-                onChange={(event) => onChange({ ...node, config: { ...node.config, size: event.target.value } })}
-              />
-            </Field>
-            <Field label={t('workflowImageOutputDir')}>
-              <input
-                className={INPUT_CLASS}
-                value={node.config.outputDir}
-                placeholder={t('workflowImageOutputDirPlaceholder')}
-                onChange={(event) => onChange({ ...node, config: { ...node.config, outputDir: event.target.value } })}
-              />
-            </Field>
-            <p className="text-[11.5px] leading-5 text-ds-faint">{t('workflowImageHint')}</p>
-          </>
+        {node.type === 'ai-agent' || node.type === 'generate-image' ? (
+          <AiNodeEditor node={node} settings={settings} onChange={onChange} />
         ) : null}
 
         {node.type === 'condition' ? (
