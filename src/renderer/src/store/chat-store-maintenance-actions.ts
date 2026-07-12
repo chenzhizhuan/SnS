@@ -6,6 +6,12 @@ import { applyTheme, applyUiFontScale } from '../lib/apply-theme'
 import { confirmDialog } from '../lib/confirm-dialog'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
+import { requestCodeCanvasPanelOpen } from '../lib/code-canvas-panel-event'
+import {
+  prepareCodeCanvasResend,
+  type PrepareCodeCanvasResendOptions,
+  type PreparedCodeCanvasResend
+} from '../design/canvas/code-canvas-resend'
 import {
   deriveThreadTitleFromPrompt,
   getDefaultThreadTitle,
@@ -184,9 +190,20 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
   }
 }
 
+export type MaintenanceActionDependencies = {
+  prepareCodeCanvasResend?: (
+    options: PrepareCodeCanvasResendOptions
+  ) => Promise<PreparedCodeCanvasResend | null>
+  requestCodeCanvasPanelOpen?: () => void
+}
+
 export function createMaintenanceActions(
-  { set, get, sseAbortRef }: StoreActionContext
+  { set, get, sseAbortRef }: StoreActionContext,
+  dependencies: MaintenanceActionDependencies = {}
 ): Pick<ChatState, 'renameActiveThread' | 'renameThread' | 'pinThread' | 'archiveThread' | 'compactActiveThread' | 'forkActiveThread' | 'forkThreadFromTurn' | 'setActiveThreadGoal' | 'setActiveThreadGoalStatus' | 'clearActiveThreadGoal' | 'setActiveThreadTodoStatus' | 'clearActiveThreadTodos' | 'syncPlanTodosFromMarkdown' | 'resumeSessionIntoThread' | 'deleteThread' | 'rewindAndResend' | 'rollbackWorkspaceToCheckpoint' | 'resolveApproval' | 'resolveUserInput' | 'interrupt'> {
+  const prepareCanvasResend = dependencies.prepareCodeCanvasResend ?? prepareCodeCanvasResend
+  const openCodeCanvasPanel =
+    dependencies.requestCodeCanvasPanelOpen ?? requestCodeCanvasPanelOpen
   const forkActiveThreadWithOptions = async (options: { turnId?: string } = {}): Promise<void> => {
     const { activeThreadId, busy, blocks } = get()
     if (!activeThreadId) return
@@ -763,6 +780,17 @@ export function createMaintenanceActions(
     clearBusyWatchdog()
 
     try {
+      const canvasResend = await prepareCanvasResend({
+        route: state.route,
+        text: trimmed,
+        previousCanvasTurn: targetBlock.meta?.guiDesignCanvas === true,
+        fallbackWorkspaceRoot: state.workspaceRoot,
+        threadWorkspaceRoot: state.threads.find(
+          (thread) => thread.id === state.activeThreadId
+        )?.workspace,
+        threadId: state.activeThreadId
+      })
+      if (canvasResend) openCodeCanvasPanel()
       await p.rewindThread(state.activeThreadId, turnId)
       set({
         blocks: trimmedBlocks,
@@ -777,7 +805,14 @@ export function createMaintenanceActions(
         queuedMessages: [],
         error: null
       })
-      await get().sendMessage(trimmed)
+      if (canvasResend) {
+        await get().sendMessage(canvasResend.text, 'agent', {
+          displayText: canvasResend.displayText,
+          guiDesignCanvas: true
+        })
+      } else {
+        await get().sendMessage(trimmed)
+      }
     } catch (e) {
       set({ error: formatRuntimeError(e) })
     }

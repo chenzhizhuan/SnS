@@ -139,6 +139,7 @@ describe('KunRuntimeProvider', () => {
               status: 'completed',
               prompt: 'hi',
               createdAt: 't0',
+              guiDesignCanvas: true,
               items: [
                 {
                   id: 'item_user',
@@ -169,6 +170,10 @@ describe('KunRuntimeProvider', () => {
     const provider = new KunRuntimeProvider()
     const detail = await provider.getThreadDetail('thr_1')
     expect(detail.blocks.map((block) => block.kind)).toEqual(['user', 'assistant'])
+    expect(detail.blocks[0]).toMatchObject({
+      kind: 'user',
+      meta: { guiDesignCanvas: true }
+    })
     expect(detail.latestSeq).toBe(9)
     expect(detail.latestTurnId).toBe('turn_1')
     expect(detail.latestUserMessageId).toBe('item_user')

@@ -83,6 +83,9 @@ export type WebCitationSource = {
 
 export type RuntimeDisclosureMetadata = {
   displayText?: string
+  /** Persisted turn routing hint so edit/resend can rebuild live canvas context. */
+  guiDesignCanvas?: boolean
+  guiDesignMode?: boolean
   messageSource?: 'background_shell' | 'background_subagent' // client-only rendering hint; never sent to the runtime
   turnId?: string
   workspaceCheckpointId?: string

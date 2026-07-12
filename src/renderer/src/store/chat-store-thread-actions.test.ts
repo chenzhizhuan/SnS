@@ -230,6 +230,9 @@ describe('chat-store-thread-actions queued messages', () => {
       'draw an architecture map',
       expect.objectContaining({ guiDesignCanvas: true })
     )
+    expect(state.blocks.find((block) => block.kind === 'user')).toMatchObject({
+      meta: { guiDesignCanvas: true }
+    })
   })
 
   it('forwards the selected reasoning effort with the next turn', async () => {

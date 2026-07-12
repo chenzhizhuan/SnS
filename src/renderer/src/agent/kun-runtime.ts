@@ -230,6 +230,8 @@ export class KunRuntimeProvider implements AgentProvider {
         skillInjectionBytes: turn.skillInjectionBytes,
         injectedInstructionSources: turn.injectedInstructionSources,
         instructionInjectionBytes: turn.instructionInjectionBytes,
+        guiDesignCanvas: turn.guiDesignCanvas,
+        guiDesignMode: turn.guiDesignMode,
         workspaceCheckpointId: item.workspaceCheckpointId ?? turn.workspaceCheckpointId
       }))
     )

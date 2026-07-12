@@ -8,6 +8,7 @@ import {
   writeBrowserStorageItem
 } from '../lib/browser-storage'
 import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
+import { CODE_CANVAS_OPEN_REQUEST_EVENT } from '../lib/code-canvas-panel-event'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   isRightPanelContributionId,
@@ -269,6 +270,16 @@ export function useWorkbenchLayout({
     window.addEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
     return () => window.removeEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
   }, [workspaceRoot])
+
+  useEffect(() => {
+    const onCanvasOpenRequest = (): void => {
+      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+      setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.canvas)
+    }
+
+    window.addEventListener(CODE_CANVAS_OPEN_REQUEST_EVENT, onCanvasOpenRequest)
+    return () => window.removeEventListener(CODE_CANVAS_OPEN_REQUEST_EVENT, onCanvasOpenRequest)
+  }, [])
 
   useEffect(() => {
     if (previewThreadId.current === activeThreadId) return

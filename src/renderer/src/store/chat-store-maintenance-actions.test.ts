@@ -18,7 +18,10 @@ vi.mock('../agent/registry', () => ({
   getProvider: registryMock.getProvider
 }))
 
-import { createMaintenanceActions } from './chat-store-maintenance-actions'
+import {
+  createMaintenanceActions,
+  type MaintenanceActionDependencies
+} from './chat-store-maintenance-actions'
 
 type GoalPatch = {
   objective?: string
@@ -93,6 +96,7 @@ function buildHarness(options: {
   activeThreadId?: string | null
   createThreadSucceeds?: boolean
   initialGoal?: ThreadGoal | null
+  maintenanceDependencies?: MaintenanceActionDependencies
 } = {}): Harness {
   const activeThreadId = options.activeThreadId === undefined ? 'thr_existing' : options.activeThreadId
   const createThreadSucceeds = options.createThreadSucceeds ?? true
@@ -169,7 +173,7 @@ function buildHarness(options: {
     set,
     get,
     sseAbortRef: { current: null }
-  })
+  }, options.maintenanceDependencies)
 
   return { actions, createThread, drainQueuedMessages, get, provider, recoverActiveTurn, refreshThreads, selectThread, sendMessage, state }
 }
@@ -391,6 +395,104 @@ describe('chat-store-maintenance-actions workspace rollback', () => {
       console.info = previousConsoleInfo
       ;(globalThis as { window?: unknown }).window = previousWindow
     }
+  })
+})
+
+describe('chat-store-maintenance-actions rewind and resend', () => {
+  beforeEach(() => {
+    registryMock.getProvider.mockReset()
+  })
+
+  it('rebuilds canvas context and preserves tool routing for edited architecture prompts', async () => {
+    const prepareCodeCanvasResend = vi.fn(async () => ({
+      text: 'architecture prompt with live canvas snapshot',
+      displayText: '\u7ed9\u6211\u8bbe\u8ba1\u4e00\u4e2a\u5f53\u524d\u76ee\u5f55\u7684\u67b6\u6784\u56fe',
+      guiDesignCanvas: true as const
+    }))
+    const requestCodeCanvasPanelOpen = vi.fn()
+    const { actions, provider, sendMessage, state } = buildHarness({
+      maintenanceDependencies: {
+        prepareCodeCanvasResend,
+        requestCodeCanvasPanelOpen
+      }
+    })
+    Object.assign(state, {
+      route: 'chat',
+      busy: false,
+      blocks: [
+        {
+          kind: 'user',
+          id: 'user_1',
+          text: 'old prompt',
+          meta: { turnId: 'turn_1', guiDesignCanvas: true }
+        },
+        { kind: 'assistant', id: 'assistant_1', text: 'old answer' }
+      ],
+      queuedMessages: [],
+      turnStartedAtByUserId: {},
+      turnDurationByUserId: {},
+      turnReasoningFirstAtByUserId: {},
+      turnReasoningLastAtByUserId: {}
+    })
+
+    await actions.rewindAndResend(
+      'user_1',
+      '  \u7ed9\u6211\u8bbe\u8ba1\u4e00\u4e2a\u5f53\u524d\u76ee\u5f55\u7684\u67b6\u6784\u56fe  '
+    )
+
+    expect(prepareCodeCanvasResend).toHaveBeenCalledWith({
+      route: 'chat',
+      text: '\u7ed9\u6211\u8bbe\u8ba1\u4e00\u4e2a\u5f53\u524d\u76ee\u5f55\u7684\u67b6\u6784\u56fe',
+      previousCanvasTurn: true,
+      fallbackWorkspaceRoot: '/workspace/deepseek-gui',
+      threadWorkspaceRoot: '/workspace/deepseek-gui',
+      threadId: 'thr_existing'
+    })
+    expect(provider.rewindThread).toHaveBeenCalledWith('thr_existing', 'turn_1')
+    expect(requestCodeCanvasPanelOpen).toHaveBeenCalledTimes(1)
+    expect(sendMessage).toHaveBeenCalledWith(
+      'architecture prompt with live canvas snapshot',
+      'agent',
+      {
+        displayText: '\u7ed9\u6211\u8bbe\u8ba1\u4e00\u4e2a\u5f53\u524d\u76ee\u5f55\u7684\u67b6\u6784\u56fe',
+        guiDesignCanvas: true
+      }
+    )
+  })
+
+  it('keeps non-canvas edited prompts on the existing resend path', async () => {
+    const prepareCodeCanvasResend = vi.fn(async () => null)
+    const requestCodeCanvasPanelOpen = vi.fn()
+    const { actions, provider, sendMessage, state } = buildHarness({
+      maintenanceDependencies: {
+        prepareCodeCanvasResend,
+        requestCodeCanvasPanelOpen
+      }
+    })
+    Object.assign(state, {
+      route: 'chat',
+      busy: false,
+      blocks: [
+        {
+          kind: 'user',
+          id: 'user_1',
+          text: 'old prompt',
+          meta: { turnId: 'turn_1' }
+        },
+        { kind: 'assistant', id: 'assistant_1', text: 'old answer' }
+      ],
+      queuedMessages: [],
+      turnStartedAtByUserId: {},
+      turnDurationByUserId: {},
+      turnReasoningFirstAtByUserId: {},
+      turnReasoningLastAtByUserId: {}
+    })
+
+    await actions.rewindAndResend('user_1', '  Refactor this module  ')
+
+    expect(provider.rewindThread).toHaveBeenCalledWith('thr_existing', 'turn_1')
+    expect(requestCodeCanvasPanelOpen).not.toHaveBeenCalled()
+    expect(sendMessage).toHaveBeenCalledWith('Refactor this module')
   })
 })
 

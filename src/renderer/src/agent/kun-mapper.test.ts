@@ -1160,6 +1160,8 @@ describe('Kun extension metadata mapping', () => {
       kind: 'user_message',
       text: 'look at this',
       displayText: 'Inspect attached image',
+      guiDesignCanvas: true,
+      guiDesignMode: false,
       attachmentIds: ['att_1'],
       fileReferences: [{
         path: '/workspace/deepseek-gui/src/App.tsx',
@@ -1175,6 +1177,7 @@ describe('Kun extension metadata mapping', () => {
       kind: 'user',
       meta: {
         displayText: 'Inspect attached image',
+        guiDesignCanvas: true,
         attachmentIds: ['att_1'],
         fileReferences: [{
           path: '/workspace/deepseek-gui/src/App.tsx',

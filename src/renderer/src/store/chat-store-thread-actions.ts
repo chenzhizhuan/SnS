@@ -726,6 +726,8 @@ export function createThreadActions(
       overrides?.accountId?.trim() ??
       accountIdForComposerSelection(get().composerModelGroups, composerProviderId, composerModel)
     const reasoningEffort = queued?.reasoningEffort ?? overrides?.reasoningEffort?.trim()
+    const guiDesignCanvas = (queued?.guiDesignCanvas ?? overrides?.guiDesignCanvas) === true
+    const guiDesignMode = (queued?.guiDesignMode ?? overrides?.guiDesignMode) === true
     const userModelChip =
       queued?.modelLabel ?? overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
     const previousBlocks = get().blocks
@@ -749,10 +751,12 @@ export function createThreadActions(
           createdAt: new Date(now).toISOString(),
           text: displayText,
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
-          ...(userDisplayText || attachmentIds.length || attachments.length || fileReferences.length
+          ...(userDisplayText || guiDesignCanvas || guiDesignMode || attachmentIds.length || attachments.length || fileReferences.length
             ? {
                 meta: {
                   ...(userDisplayText ? { displayText: userDisplayText } : {}),
+                  ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+                  ...(guiDesignMode ? { guiDesignMode: true } : {}),
                   ...(attachmentIds.length ? { attachmentIds } : {}),
                   ...(attachments.length ? { attachments } : {}),
                   ...(fileReferences.length ? { fileReferences } : {})
@@ -926,8 +930,8 @@ export function createThreadActions(
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(runtimeDisplayText ? { displayText: runtimeDisplayText } : {}),
         ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
-        ...((queued?.guiDesignCanvas ?? overrides?.guiDesignCanvas) ? { guiDesignCanvas: true } : {}),
-        ...((queued?.guiDesignMode ?? overrides?.guiDesignMode) ? { guiDesignMode: true } : {}),
+        ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(guiDesignMode ? { guiDesignMode: true } : {}),
         ...((queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact)
           ? { guiDesignArtifact: queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact }
           : {}),
