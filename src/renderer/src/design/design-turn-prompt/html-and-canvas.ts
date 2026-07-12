@@ -347,6 +347,12 @@ export function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
       : '- NEVER paste raw HTML into assistant text and NEVER put HTML/`write`/`content` payloads inside design tools. Screen HTML is written by the system via Write/Edit tools after a screen frame is created.',
     '- The renderer validates each tool call, applies it atomically (one undo entry per call), and visually highlights the affected shapes for ~1s.',
     '- Keep tool use bounded: prefer the fewest calls that complete the requested visible outcome. Batch related screens in one `design_create_screen.screens` call and related shape operations in one focused `design_update_shapes.ops` call. Do not emit one call per shape.',
+    ...(codeCanvasMode
+      ? []
+      : [
+          '- DESIGN FOUNDATION GUIDANCE — before building a complete product or multi-screen experience, check whether a valid root `DESIGN.md` source is listed above. If it exists, read and follow it before designing. If it is absent, normally call `design_system` with `operation: "create"` before `design_create_screen` so the screens share a real project-level foundation. This is a preferred sequence, not a hard gate: a quick exploration or an explicit user request to skip the design system may proceed directly to screens.',
+          '- DESIGN-SYSTEM CLAIMS MUST BE FACTUAL — say that screens share a unified design system only when a valid root `DESIGN.md` was already listed or a `design_system` call succeeded in this turn. Per-screen `.kun-design/.../DESIGN.md` notes and visually similar page CSS do not count as the project design system.'
+        ]),
     '',
     'FIRST classify the request and commit to ONE primary lane:',
     '- EDIT AN EXISTING IMAGE — the user wants to change/edit/restyle/redo/recolor/fix/transform a picture that is ALREADY on the canvas, and the snapshot has a SELECTED `image` shape carrying an `imageUrl`. Phrasings like "change X into Y", "把这张图改成…", "改成 X", or "改一下这张图" all land here when the selected picture is the thing being changed. → call `generate_image` with `reference_image_paths` set to that `imageUrl`, then `design_update_shapes` that same shape (full rules under "Editing or restyling an EXISTING image" below). In this lane you MUST NOT use `design_create_screen` / `add-screen` and MUST NOT write or edit any HTML file.',
@@ -366,7 +372,7 @@ export function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
     ...(codeCanvasMode
       ? []
       : [
-          '- BUILD A COMPLETE MULTI-SCREEN EXPERIENCE — the user explicitly asks for a complete product, a set of pages, an end-to-end flow, multiple named screens, or wording such as "整套", "完整", "多页面", or "全套". → make one `design_create_screen` call with a `screens` array containing all necessary named screens and a self-contained brief for each. If pages are not named, choose the smallest coherent set that covers the main product flow.',
+          '- BUILD A COMPLETE MULTI-SCREEN EXPERIENCE — the user explicitly asks for a complete product, a set of pages, an end-to-end flow, multiple named screens, or wording such as "整套", "完整", "多页面", or "全套". → follow the DESIGN FOUNDATION GUIDANCE above, then make one `design_create_screen` call with a `screens` array containing all necessary named screens and a self-contained brief for each. If pages are not named, choose the smallest coherent set that covers the main product flow.',
           '- SCOPE AMBIGUITY — if it is genuinely unclear whether the user wants one screen or a complete multi-screen experience and that choice materially changes the work, ask one concise question with `user_input` and wait. Otherwise choose the narrowest reasonable scope and act.'
         ]),
     codeCanvasMode
