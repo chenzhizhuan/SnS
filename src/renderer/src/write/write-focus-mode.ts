@@ -4,6 +4,14 @@ export function writeFocusModeShellClassName(active: boolean): string {
     : 'min-w-0 flex-1 overflow-hidden rounded-2xl border border-ds-border-muted bg-ds-card/92 shadow-[0_12px_32px_rgba(20,47,95,0.04)] backdrop-blur-xl'
 }
 
+/** Keep Write-owned floating feedback above the z-60 focus shell and below dialogs. */
+export function writeFocusModeFloatingLayerClassName(
+  active: boolean,
+  defaultLayer: 'z-40' | 'z-50'
+): string {
+  return active ? 'z-[65]' : defaultLayer
+}
+
 export function isWriteFocusModeFormControl(target: EventTarget | null): boolean {
   if (!target || typeof target !== 'object') return false
   const tagName = (target as { tagName?: unknown }).tagName

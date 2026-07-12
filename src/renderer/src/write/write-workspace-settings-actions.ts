@@ -66,16 +66,30 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
     return settingsRequestGeneration
   }
   const requestIsCurrent = (generation: number): boolean => generation === settingsRequestGeneration
+  const applySettingsResponse = (
+    settings: Awaited<ReturnType<typeof rendererRuntimeClient.getSettings>>,
+    inlineRevisionAtRequest: number
+  ): ReturnType<typeof withResolvedInlineCompletionSettings> => {
+    const latestEnabled = get().inlineCompletion.enabled
+    const write = applyWriteSettingsState(set, settings)
+    if (inlineRevisionAtRequest !== inlineCompletionSettingsRevision) {
+      set((state) => ({
+        inlineCompletion: { ...state.inlineCompletion, enabled: latestEnabled }
+      }))
+    }
+    return write
+  }
 
   return {
     loadWriteSettings: async () => {
       if (get().settingsLoading) return
       const generation = nextSettingsRequest()
+      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
       set({ settingsLoading: true, settingsError: null })
       try {
         const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
         if (!requestIsCurrent(generation)) return
-        const write = applyWriteSettingsState(set, settings)
+        const write = applySettingsResponse(settings, inlineRevisionAtRequest)
         await get().initializeWorkspace(write.activeWorkspaceRoot)
         if (!requestIsCurrent(generation)) return
         set({ settingsLoading: false })
@@ -133,6 +147,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       const normalized = normalizePath(workspaceRoot)
       if (!normalized) return
       const generation = nextSettingsRequest()
+      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
       const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
       set({ workspaceRoots: roots, settingsLoading: false })
       try {
@@ -143,7 +158,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           }
         })
         if (!requestIsCurrent(generation)) return
-        const write = applyWriteSettingsState(set, settings)
+        const write = applySettingsResponse(settings, inlineRevisionAtRequest)
         await get().initializeWorkspace(write.activeWorkspaceRoot)
       } catch (error) {
         if (!requestIsCurrent(generation)) return
@@ -155,6 +170,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       const normalized = normalizePath(workspaceRoot)
       if (!normalized) return
       const generation = nextSettingsRequest()
+      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
       const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
       set({ settingsLoading: false })
       try {
@@ -165,7 +181,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           }
         })
         if (!requestIsCurrent(generation)) return
-        const write = applyWriteSettingsState(set, settings)
+        const write = applySettingsResponse(settings, inlineRevisionAtRequest)
         await get().initializeWorkspace(write.activeWorkspaceRoot)
       } catch (error) {
         if (!requestIsCurrent(generation)) return
@@ -177,6 +193,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       const normalized = normalizePath(workspaceRoot)
       if (!normalized) return
       const generation = nextSettingsRequest()
+      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
       set({ settingsLoading: false })
       const state = get()
       const fallback = state.defaultWorkspaceRoot ||
@@ -197,7 +214,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           }
         })
         if (!requestIsCurrent(generation)) return
-        const write = applyWriteSettingsState(set, settings)
+        const write = applySettingsResponse(settings, inlineRevisionAtRequest)
         if (normalizePath(get().workspaceRoot) === normalized) {
           await get().initializeWorkspace(write.activeWorkspaceRoot)
         }

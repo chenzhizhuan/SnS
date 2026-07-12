@@ -36,6 +36,7 @@ type Props = {
   workspaceRoot: string
   workspaceName: string
   workspacePathLabel: string
+  workspaceError?: string | null
   renderSafety: WriteRenderSafety
   fileGuardMessage: string
   fileGuardDetail: string
@@ -88,6 +89,7 @@ export function WriteWorkspaceDocumentPane({
   workspaceRoot,
   workspaceName,
   workspacePathLabel,
+  workspaceError,
   renderSafety,
   fileGuardMessage,
   fileGuardDetail,
@@ -159,6 +161,7 @@ export function WriteWorkspaceDocumentPane({
       <WriteWorkspaceStart
         workspaceName={workspaceName}
         workspacePathLabel={workspacePathLabel}
+        error={workspaceError}
         onAskAssistant={onAskAssistant}
         onCreateDraft={onCreateDraft}
         onPickWorkspace={onPickWorkspace}
@@ -215,7 +218,7 @@ export function WriteWorkspaceDocumentPane({
       <button
         type="button"
         onClick={() => onFocusModeChange(!focusMode)}
-        className={`${focusMode ? 'absolute bottom-2 right-2 z-30 sm:bottom-0 sm:right-0' : 'absolute right-3 top-3 z-30 opacity-45 hover:opacity-100'} inline-flex h-9 w-9 items-center justify-center rounded-xl border border-ds-border bg-ds-card/95 text-ds-muted shadow-[0_12px_28px_rgba(20,47,95,0.12)] backdrop-blur-xl transition hover:bg-ds-hover hover:text-ds-ink`}
+        className={`${focusMode ? 'absolute right-2 top-2 z-30 sm:right-0 sm:top-0' : 'absolute right-3 top-3 z-30 opacity-45 hover:opacity-100'} inline-flex h-9 w-9 items-center justify-center rounded-xl border border-ds-border bg-ds-card/95 text-ds-muted shadow-[0_12px_28px_rgba(20,47,95,0.12)] backdrop-blur-xl transition hover:bg-ds-hover hover:text-ds-ink`}
         title={`${t(focusMode ? 'writeFocusModeExit' : 'writeFocusModeEnter')} · ${focusMode ? 'Esc' : t('writeFocusModeShortcut')}`}
         aria-label={t(focusMode ? 'writeFocusModeExit' : 'writeFocusModeEnter')}
         aria-pressed={focusMode}

@@ -60,6 +60,20 @@ describe('Write onboarding decision', () => {
     })).toBe('show')
   })
 
+  it('does not count the managed welcome seed as user-created content', () => {
+    expect(getWriteOnboardingDecision({
+      ...baseState,
+      entriesByDir: {
+        [root]: [{
+          path: `${root}/welcome.md`,
+          name: 'welcome.md',
+          type: 'file',
+          ext: '.md'
+        }]
+      }
+    })).toBe('show')
+  })
+
   it('completes for existing content, an active file, or a custom writing space', () => {
     expect(getWriteOnboardingDecision({
       ...baseState,

@@ -1,5 +1,5 @@
 import type { FormEvent, ReactElement } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   ChevronDown,
@@ -74,6 +74,8 @@ export function WriteSidebar({
   const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const [entryDialog, setEntryDialog] = useState<EntryDialog | null>(null)
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({})
+  const [revealError, setRevealError] = useState<string | null>(null)
+  const revealErrorTimerRef = useRef<number | null>(null)
   // Field-level subscription: the sidebar must not re-render on fileContent or
   // selection updates, which fire on every keystroke in the editor.
   const {
@@ -130,6 +132,10 @@ export function WriteSidebar({
     void loadWriteSettings()
   }, [loadWriteSettings])
 
+  useEffect(() => () => {
+    if (revealErrorTimerRef.current) window.clearTimeout(revealErrorTimerRef.current)
+  }, [])
+
   const root = rootDirectory || workspaceRoot
   const rootLoading = Boolean(
     loadingDirs.__root__
@@ -139,7 +145,17 @@ export function WriteSidebar({
 
   const revealWritePath = async (targetPath: string, boundaryRoot: string): Promise<void> => {
     const result = await revealWorkspacePathInFileManager(targetPath, boundaryRoot)
-    if (!result.ok) setFileError(result.message)
+    if (revealErrorTimerRef.current) window.clearTimeout(revealErrorTimerRef.current)
+    if (result.ok) {
+      revealErrorTimerRef.current = null
+      setRevealError(null)
+      return
+    }
+    setRevealError(result.message)
+    revealErrorTimerRef.current = window.setTimeout(() => {
+      revealErrorTimerRef.current = null
+      setRevealError(null)
+    }, 3_600)
   }
 
   const defaultParentDirectory = (): string => {
@@ -338,6 +354,11 @@ export function WriteSidebar({
         {settingsError ? (
           <div className="mx-2 mt-1 rounded-lg border border-red-200/70 bg-red-50/80 px-2.5 py-2 text-[12px] leading-5 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
             {settingsError}
+          </div>
+        ) : null}
+        {revealError ? (
+          <div className="mx-2 mt-1 rounded-lg border border-red-200/70 bg-red-50/80 px-2.5 py-2 text-[12px] leading-5 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+            {revealError}
           </div>
         ) : null}
 

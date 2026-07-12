@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isWriteFocusModeFormControl,
   isWriteFocusModeShortcut,
+  writeFocusModeFloatingLayerClassName,
   writeFocusModeShellClassName
 } from './write-focus-mode'
 
@@ -43,5 +44,8 @@ describe('isWriteFocusModeShortcut', () => {
     expect(writeFocusModeShellClassName(true)).toContain('z-[60]')
     expect(writeFocusModeShellClassName(true)).not.toContain('backdrop-blur-xl')
     expect(writeFocusModeShellClassName(false)).toContain('backdrop-blur-xl')
+    expect(writeFocusModeFloatingLayerClassName(true, 'z-50')).toBe('z-[65]')
+    expect(writeFocusModeFloatingLayerClassName(false, 'z-50')).toBe('z-50')
+    expect(writeFocusModeFloatingLayerClassName(true, 'z-40')).not.toBe('z-[80]')
   })
 })

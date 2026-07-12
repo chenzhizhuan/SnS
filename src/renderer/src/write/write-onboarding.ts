@@ -1,4 +1,5 @@
 import type { WorkspaceEntry } from '@shared/workspace-file'
+import { DEFAULT_WRITE_WELCOME_FILE_NAME } from '@shared/app-settings'
 import { browserStorage, type BrowserStorageLike } from '../lib/browser-storage'
 
 const WRITE_ONBOARDING_STORAGE_KEY = 'kun.write.onboarding.v1'
@@ -37,6 +38,15 @@ function directorySnapshot(
   return matched ? entriesByDir[matched] : undefined
 }
 
+function isManagedDefaultWelcomeEntry(
+  entry: WorkspaceEntry,
+  root: string,
+  defaultRoot: string
+): boolean {
+  if (!defaultRoot || root !== defaultRoot || entry.type !== 'file') return false
+  return normalizePath(entry.path) === `${defaultRoot}/${DEFAULT_WRITE_WELCOME_FILE_NAME}`
+}
+
 export function getWriteOnboardingDecision(
   state: WriteOnboardingState
 ): WriteOnboardingDecision {
@@ -71,7 +81,10 @@ export function getWriteOnboardingDecision(
     root
   ].filter(Boolean))
   if (!entries) return 'pending'
-  return entries.length > 0 ? 'complete' : 'show'
+  const userEntries = entries.filter((entry) =>
+    !isManagedDefaultWelcomeEntry(entry, root, defaultRoot)
+  )
+  return userEntries.length > 0 ? 'complete' : 'show'
 }
 
 export function readWriteOnboardingComplete(

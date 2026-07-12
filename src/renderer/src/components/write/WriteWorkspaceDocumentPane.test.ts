@@ -161,6 +161,9 @@ describe('WriteWorkspaceDocumentPane focus mode', () => {
         paneProps(true, onFocusModeChange)
       ))
     })
+    const exitButton = renderer.root.findByProps({ 'aria-label': 'writeFocusModeExit' })
+    expect(exitButton.props.className).toContain('top-2')
+    expect(exitButton.props.className).not.toContain('bottom-2')
     await act(async () => keydown?.({
       key: 'Escape',
       defaultPrevented: false

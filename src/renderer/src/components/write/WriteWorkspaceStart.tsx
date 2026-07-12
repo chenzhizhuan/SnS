@@ -9,6 +9,7 @@ export function WriteWorkspaceStart({
   onRefreshWorkspace,
   workspaceName,
   workspacePathLabel,
+  error,
   onboarding = false
 }: {
   onAskAssistant: () => void
@@ -17,6 +18,7 @@ export function WriteWorkspaceStart({
   onRefreshWorkspace: () => void
   workspaceName: string
   workspacePathLabel: string
+  error?: string | null
   onboarding?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
@@ -34,6 +36,11 @@ export function WriteWorkspaceStart({
           <p className="write-start-copy mt-4 max-w-[56ch] text-[15px] leading-7 text-ds-muted">
             {t(onboarding ? 'writeOnboardingSub' : 'writeStartSub')}
           </p>
+          {error ? (
+            <p className="mt-4 max-w-[56ch] rounded-xl border border-red-200/70 bg-red-50/80 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+              {error}
+            </p>
+          ) : null}
 
           <div className="write-start-primary-actions mt-7 grid gap-3">
             <button

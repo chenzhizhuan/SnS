@@ -33,4 +33,13 @@ describe('WriteWorkspaceStart', () => {
     expect(html).toContain('Ask AI for an outline')
     expect(html).not.toContain('Use Kun default space')
   })
+
+  it('keeps workspace initialization failures visible in the main panel', () => {
+    const html = renderToStaticMarkup(createElement(WriteWorkspaceStart, {
+      ...baseProps,
+      error: 'Unable to load this writing space'
+    }))
+
+    expect(html).toContain('Unable to load this writing space')
+  })
 })
