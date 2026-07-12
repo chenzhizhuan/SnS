@@ -19,6 +19,7 @@ import {
   writeJoinPath,
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
+import { pathsEqual } from '../../write/write-workspace-store-helpers'
 import { getWriteRenderSafety } from '../../write/write-render-safety'
 import {
   applyWriteInlineEditReplacement,
@@ -52,6 +53,7 @@ import {
   WRITE_RICH_CLIPBOARD_ACTION,
   exportFormatLabel,
   formatSaveLabel,
+  isInlineCompletionToggleShortcut,
   inlineAgentPosition,
   isMarkdownFile,
   computeWriteDocumentStats,
@@ -66,6 +68,11 @@ import {
 } from '../../write/write-document-context'
 import { enqueueWriteWorkspaceFileTask } from '../../write/write-save-coordinator'
 import { writeFocusModeShellClassName } from '../../write/write-focus-mode'
+import {
+  getWriteOnboardingDecision,
+  readWriteOnboardingComplete,
+  writeWriteOnboardingComplete
+} from '../../write/write-onboarding'
 
 type Props = {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
@@ -90,6 +97,9 @@ export function WriteWorkspaceView({
   // not re-render for sidebar-only state such as the directory tree or quoted
   // selections.
   const {
+    defaultWorkspaceRoot,
+    workspaceRoots,
+    settingsLoading,
     workspaceRoot,
     activeFilePath,
     activeFileKind,
@@ -97,6 +107,8 @@ export function WriteWorkspaceView({
     autoSaveEnabled,
     autoSaveDelayMs,
     rootDirectory,
+    entriesByDir,
+    loadingDirs,
     inlineCompletion,
     inlineCompletionApiReady,
     selectionAssist,
@@ -117,6 +129,7 @@ export function WriteWorkspaceView({
     selection,
     recentEdits,
     loadWriteSettings,
+    setInlineCompletionEnabled,
     addWriteWorkspace,
     setFileContent,
     syncActiveFileFromDisk,
@@ -139,6 +152,9 @@ export function WriteWorkspaceView({
     setReviewActive
   } = useWriteWorkspaceStore(
     useShallow((s) => ({
+      defaultWorkspaceRoot: s.defaultWorkspaceRoot,
+      workspaceRoots: s.workspaceRoots,
+      settingsLoading: s.settingsLoading,
       workspaceRoot: s.workspaceRoot,
       activeFilePath: s.activeFilePath,
       activeFileKind: s.activeFileKind,
@@ -146,6 +162,8 @@ export function WriteWorkspaceView({
       autoSaveEnabled: s.autoSaveEnabled,
       autoSaveDelayMs: s.autoSaveDelayMs,
       rootDirectory: s.rootDirectory,
+      entriesByDir: s.entriesByDir,
+      loadingDirs: s.loadingDirs,
       inlineCompletion: s.inlineCompletion,
       inlineCompletionApiReady: s.inlineCompletionApiReady,
       selectionAssist: s.selectionAssist,
@@ -173,6 +191,7 @@ export function WriteWorkspaceView({
       selection: s.selection,
       recentEdits: s.recentEdits,
       loadWriteSettings: s.loadWriteSettings,
+      setInlineCompletionEnabled: s.setInlineCompletionEnabled,
       addWriteWorkspace: s.addWriteWorkspace,
       setFileContent: s.setFileContent,
       syncActiveFileFromDisk: s.syncActiveFileFromDisk,
@@ -209,6 +228,7 @@ export function WriteWorkspaceView({
   const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null>(null)
   const [exportNotice, setExportNotice] = useState<WriteNotice | null>(null)
   const [presentationInFlight, setPresentationInFlight] = useState(false)
+  const [onboardingComplete, setOnboardingComplete] = useState(readWriteOnboardingComplete)
   const workspaceReady = workspaceRoot.trim().length > 0
   const activeFileIsImage = activeFileKind === 'image'
   const activeFileIsPdf = activeFileKind === 'pdf'
@@ -221,6 +241,24 @@ export function WriteWorkspaceView({
     fileSize,
     truncated: fileTruncated
   })
+  const toggleInlineCompletion = useCallback((): void => {
+    const writeState = useWriteWorkspaceStore.getState()
+    void writeState.setInlineCompletionEnabled(!writeState.inlineCompletion.enabled)
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (
+        !activeFileIsText ||
+        renderSafety.readOnly ||
+        !isInlineCompletionToggleShortcut(event)
+      ) return
+      event.preventDefault()
+      toggleInlineCompletion()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeFileIsText, renderSafety.readOnly, toggleInlineCompletion])
   const debouncedPreviewContent = useDebouncedValue(fileContent, writePreviewDebounceMs(fileContent.length))
   const saveLabel = activeFileIsImage
     ? t('writeImagePreview')
@@ -252,6 +290,27 @@ export function WriteWorkspaceView({
     : null
   const workspacePathLabel = rootDirectory || workspaceRoot
   const workspaceName = workspacePathLabel ? writeBasenameFromPath(workspacePathLabel) : t('writeWorkspace')
+  const onboardingDecision = useMemo(() => getWriteOnboardingDecision({
+    persistedComplete: onboardingComplete,
+    settingsLoading,
+    defaultWorkspaceRoot,
+    workspaceRoots,
+    workspaceRoot,
+    rootDirectory,
+    entriesByDir,
+    loadingDirs,
+    activeFilePath
+  }), [
+    activeFilePath,
+    defaultWorkspaceRoot,
+    entriesByDir,
+    loadingDirs,
+    onboardingComplete,
+    rootDirectory,
+    settingsLoading,
+    workspaceRoot,
+    workspaceRoots
+  ])
   const exportInFlight = exportingFormat !== null
   const presentationEnabled = Boolean(
     workspaceReady &&
@@ -306,6 +365,11 @@ export function WriteWorkspaceView({
     setExportNotice(notice)
   }
 
+  const completeOnboarding = useCallback((): void => {
+    writeWriteOnboardingComplete()
+    setOnboardingComplete(true)
+  }, [])
+
   const createDraftFile = async (): Promise<void> => {
     if (!workspaceReady) {
       await pickWriteWorkspace()
@@ -314,7 +378,8 @@ export function WriteWorkspaceView({
     const root = rootDirectory || workspaceRoot
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     const path = writeJoinPath(root, `draft-${stamp}.md`)
-    await createFile(workspaceRoot, path, `# ${t('writeUntitledDraft')}\n\n`)
+    const created = await createFile(workspaceRoot, path, `# ${t('writeUntitledDraft')}\n\n`)
+    if (created) completeOnboarding()
   }
 
   const setAssistantPrompt = (prompt: string): void => {
@@ -801,7 +866,10 @@ export function WriteWorkspaceView({
       const picked = await window.kunGui.pickWorkspaceDirectory(workspaceRoot || undefined)
       if (!picked.canceled && picked.path) {
         await addWriteWorkspace(picked.path)
-        if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
+        if (pathsEqual(useWriteWorkspaceStore.getState().workspaceRoot, picked.path)) {
+          completeOnboarding()
+          if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
+        }
       }
     } catch (error) {
       setFileError(formatWorkspacePickerError(error))
@@ -898,6 +966,12 @@ export function WriteWorkspaceView({
   useEffect(() => {
     void loadWriteSettings()
   }, [loadWriteSettings])
+
+  useEffect(() => {
+    if (!onboardingComplete && onboardingDecision === 'complete') {
+      completeOnboarding()
+    }
+  }, [completeOnboarding, onboardingComplete, onboardingDecision])
 
   useEffect(() => {
     setExportMenuOpen(false)
@@ -1060,6 +1134,7 @@ export function WriteWorkspaceView({
         activeFileName={activeFileName}
         activeFilePath={activeFilePath ?? ''}
         documentStatsLabel={documentStatsLabel}
+        inlineCompletionEnabled={inlineCompletion.enabled}
         assistantOpen={assistantOpen}
         exportInFlight={exportInFlight}
         exportMenuOpen={exportMenuOpen}
@@ -1087,6 +1162,7 @@ export function WriteWorkspaceView({
           if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
           void flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' })
         }}
+        onToggleInlineCompletion={toggleInlineCompletion}
         onToggleLeftSidebar={onToggleLeftSidebar}
       />
       <div className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-hidden pb-3 pt-3">
@@ -1122,6 +1198,8 @@ export function WriteWorkspaceView({
             onMarkdownReviewStateChange={setReviewActive}
             focusMode={documentFocusMode}
             onFocusModeChange={setDocumentFocusMode}
+            onboarding={onboardingDecision === 'show'}
+            workspaceLoading={onboardingDecision === 'pending'}
             debouncedPreviewContent={debouncedPreviewContent}
             isMarkdown={isMarkdown}
             inlineCompletion={inlineCompletion}

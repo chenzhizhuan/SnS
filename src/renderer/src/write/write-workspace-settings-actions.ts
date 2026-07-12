@@ -14,7 +14,11 @@ import {
 
 type WriteSettingsActions = Pick<
   WriteWorkspaceState,
-  'loadWriteSettings' | 'selectWriteWorkspace' | 'addWriteWorkspace' | 'removeWriteWorkspace'
+  | 'loadWriteSettings'
+  | 'selectWriteWorkspace'
+  | 'addWriteWorkspace'
+  | 'removeWriteWorkspace'
+  | 'setInlineCompletionEnabled'
 >
 
 type WriteSettingsActionContext = {
@@ -53,6 +57,10 @@ function applyWriteSettingsState(
 
 export function createWriteSettingsActions({ set, get }: WriteSettingsActionContext): WriteSettingsActions {
   let settingsRequestGeneration = 0
+  let inlineCompletionSettingsWrite: Promise<void> = Promise.resolve()
+  let inlineCompletionSettingsRevision = 0
+  let pendingInlineCompletionWrites = 0
+  let confirmedInlineCompletionEnabled = true
   const nextSettingsRequest = (): number => {
     settingsRequestGeneration += 1
     return settingsRequestGeneration
@@ -68,14 +76,56 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
         const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
         if (!requestIsCurrent(generation)) return
         const write = applyWriteSettingsState(set, settings)
-        set({ settingsLoading: false })
         await get().initializeWorkspace(write.activeWorkspaceRoot)
+        if (!requestIsCurrent(generation)) return
+        set({ settingsLoading: false })
       } catch (error) {
         if (!requestIsCurrent(generation)) return
         set({
           settingsLoading: false,
           settingsError: error instanceof Error ? error.message : String(error)
         })
+      }
+    },
+
+    setInlineCompletionEnabled: async (enabled) => {
+      const currentEnabled = get().inlineCompletion.enabled
+      if (currentEnabled === enabled) return
+      if (pendingInlineCompletionWrites === 0) {
+        confirmedInlineCompletionEnabled = currentEnabled
+      }
+      pendingInlineCompletionWrites += 1
+      const revision = ++inlineCompletionSettingsRevision
+      set((state) => ({
+        inlineCompletion: { ...state.inlineCompletion, enabled },
+        settingsError: null
+      }))
+
+      const write = inlineCompletionSettingsWrite.then(async () => {
+        await rendererRuntimeClient.setSettings({
+          write: { inlineCompletion: { enabled } }
+        })
+        confirmedInlineCompletionEnabled = enabled
+      })
+      inlineCompletionSettingsWrite = write.catch(() => undefined)
+
+      try {
+        await write
+        if (revision === inlineCompletionSettingsRevision) {
+          set({ settingsError: null })
+        }
+      } catch (error) {
+        if (revision === inlineCompletionSettingsRevision) {
+          set((state) => ({
+            inlineCompletion: {
+              ...state.inlineCompletion,
+              enabled: confirmedInlineCompletionEnabled
+            },
+            settingsError: error instanceof Error ? error.message : String(error)
+          }))
+        }
+      } finally {
+        pendingInlineCompletionWrites = Math.max(0, pendingInlineCompletionWrites - 1)
       }
     },
 

@@ -73,6 +73,22 @@ export function formatSaveLabel(status: WriteSaveStatus, t: (key: string) => str
   return t('writeSaved')
 }
 
+export function isInlineCompletionToggleShortcut(
+  event: Pick<
+    KeyboardEvent,
+    'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'repeat' | 'isComposing'
+  >
+): boolean {
+  return (
+    event.code === 'Space' &&
+    event.shiftKey &&
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.repeat &&
+    !event.isComposing
+  )
+}
+
 type MarkdownTextNode = {
   type?: string
   text?: string

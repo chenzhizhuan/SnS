@@ -67,6 +67,8 @@ type Props = {
   onMarkdownReviewStateChange?: (active: boolean) => void
   focusMode: boolean
   onFocusModeChange: (active: boolean) => void
+  onboarding?: boolean
+  workspaceLoading?: boolean
 }
 
 export function WriteWorkspaceDocumentPane({
@@ -116,7 +118,9 @@ export function WriteWorkspaceDocumentPane({
   onImagePasteError,
   onMarkdownReviewStateChange,
   focusMode,
-  onFocusModeChange
+  onFocusModeChange,
+  onboarding = false,
+  workspaceLoading = false
 }: Props): ReactElement {
   const { t } = useTranslation('common')
 
@@ -144,6 +148,13 @@ export function WriteWorkspaceDocumentPane({
   }, [activeFileIsText, focusMode, onFocusModeChange])
 
   if (!activeFilePath) {
+    if (workspaceLoading) {
+      return (
+        <div className="flex h-full min-h-[320px] items-center justify-center text-[14px] text-ds-muted">
+          {t('writeWorkspaceLoading')}
+        </div>
+      )
+    }
     return (
       <WriteWorkspaceStart
         workspaceName={workspaceName}
@@ -152,6 +163,7 @@ export function WriteWorkspaceDocumentPane({
         onCreateDraft={onCreateDraft}
         onPickWorkspace={onPickWorkspace}
         onRefreshWorkspace={onRefreshWorkspace}
+        onboarding={onboarding}
       />
     )
   }

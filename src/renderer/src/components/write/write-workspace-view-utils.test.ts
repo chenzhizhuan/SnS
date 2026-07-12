@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeWriteDocumentStats,
   inlineAgentPlacement,
+  isInlineCompletionToggleShortcut,
   type WriteInlineAgentPosition
 } from './write-workspace-view-utils'
 
@@ -28,6 +29,32 @@ describe('computeWriteDocumentStats', () => {
     const stats = computeWriteDocumentStats('inter**nation**al [foot](https://example.com)note', true)
 
     expect(stats).toEqual({ characterCount: 21, wordCount: 2 })
+  })
+})
+
+describe('isInlineCompletionToggleShortcut', () => {
+  const event = (overrides: Partial<KeyboardEvent> = {}) => ({
+    code: 'Space',
+    ctrlKey: true,
+    metaKey: false,
+    shiftKey: true,
+    altKey: false,
+    repeat: false,
+    isComposing: false,
+    ...overrides
+  }) as KeyboardEvent
+
+  it('accepts Ctrl/Command + Shift + Space once', () => {
+    expect(isInlineCompletionToggleShortcut(event())).toBe(true)
+    expect(isInlineCompletionToggleShortcut(event({ ctrlKey: false, metaKey: true }))).toBe(true)
+  })
+
+  it('rejects incomplete, repeated, composing, and Alt-modified shortcuts', () => {
+    expect(isInlineCompletionToggleShortcut(event({ shiftKey: false }))).toBe(false)
+    expect(isInlineCompletionToggleShortcut(event({ repeat: true }))).toBe(false)
+    expect(isInlineCompletionToggleShortcut(event({ isComposing: true }))).toBe(false)
+    expect(isInlineCompletionToggleShortcut(event({ altKey: true }))).toBe(false)
+    expect(isInlineCompletionToggleShortcut(event({ code: 'Enter' }))).toBe(false)
   })
 })
 
