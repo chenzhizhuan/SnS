@@ -65,6 +65,7 @@ import {
   type WriteDocumentContext
 } from '../../write/write-document-context'
 import { enqueueWriteWorkspaceFileTask } from '../../write/write-save-coordinator'
+import { writeFocusModeShellClassName } from '../../write/write-focus-mode'
 
 type Props = {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
@@ -204,6 +205,7 @@ export function WriteWorkspaceView({
   const [inlineEditInFlight, setInlineEditInFlight] = useState(false)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [documentFocusMode, setDocumentFocusMode] = useState(false)
   const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null>(null)
   const [exportNotice, setExportNotice] = useState<WriteNotice | null>(null)
   const [presentationInFlight, setPresentationInFlight] = useState(false)
@@ -1049,7 +1051,7 @@ export function WriteWorkspaceView({
   ]
 
   return (
-    <div className="write-workspace-view ds-no-drag flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-3 sm:px-4 md:px-6 lg:px-8">
+    <div className={`write-workspace-view ds-no-drag flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-3 sm:px-4 md:px-6 lg:px-8 ${documentFocusMode ? 'is-focus-mode' : ''}`}>
       <WriteWorkspaceToolbar
         activeFileIsImage={activeFileIsImage}
         activeFileIsPdf={activeFileIsPdf}
@@ -1088,7 +1090,7 @@ export function WriteWorkspaceView({
         onToggleLeftSidebar={onToggleLeftSidebar}
       />
       <div className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-hidden pb-3 pt-3">
-        <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-ds-border-muted bg-ds-card/92 shadow-[0_12px_32px_rgba(20,47,95,0.04)] backdrop-blur-xl">
+        <div className={writeFocusModeShellClassName(documentFocusMode)}>
           <WriteWorkspaceDocumentPane
             activeFilePath={activeFilePath}
             documentEpoch={documentEpoch}
@@ -1118,6 +1120,8 @@ export function WriteWorkspaceView({
             richHandleRef={richHandleRef}
             markdownHandleRef={markdownHandleRef}
             onMarkdownReviewStateChange={setReviewActive}
+            focusMode={documentFocusMode}
+            onFocusModeChange={setDocumentFocusMode}
             debouncedPreviewContent={debouncedPreviewContent}
             isMarkdown={isMarkdown}
             inlineCompletion={inlineCompletion}

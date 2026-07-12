@@ -23,6 +23,12 @@ describe('computeWriteDocumentStats', () => {
 
     expect(stats.wordCount).toBe(4)
   })
+
+  it('does not split a visible word at inline Markdown mark boundaries', () => {
+    const stats = computeWriteDocumentStats('inter**nation**al [foot](https://example.com)note', true)
+
+    expect(stats).toEqual({ characterCount: 21, wordCount: 2 })
+  })
 })
 
 const action: WriteInlineAgentPosition = {

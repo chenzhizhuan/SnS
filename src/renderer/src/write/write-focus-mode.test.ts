@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isWriteFocusModeShortcut } from './write-focus-mode'
+import {
+  isWriteFocusModeFormControl,
+  isWriteFocusModeShortcut,
+  writeFocusModeShellClassName
+} from './write-focus-mode'
 
 describe('isWriteFocusModeShortcut', () => {
   const event = (overrides: Partial<KeyboardEvent> = {}) => ({
@@ -10,6 +14,7 @@ describe('isWriteFocusModeShortcut', () => {
     altKey: false,
     repeat: false,
     isComposing: false,
+    defaultPrevented: false,
     ...overrides
   }) as KeyboardEvent
 
@@ -23,5 +28,20 @@ describe('isWriteFocusModeShortcut', () => {
     expect(isWriteFocusModeShortcut(event({ repeat: true }))).toBe(false)
     expect(isWriteFocusModeShortcut(event({ isComposing: true }))).toBe(false)
     expect(isWriteFocusModeShortcut(event({ altKey: true }))).toBe(false)
+    expect(isWriteFocusModeShortcut(event({ defaultPrevented: true }))).toBe(false)
+  })
+
+  it('leaves form-control shortcuts to dialogs and other focused inputs', () => {
+    expect(isWriteFocusModeFormControl({ tagName: 'INPUT' } as unknown as EventTarget)).toBe(true)
+    expect(isWriteFocusModeFormControl({ tagName: 'TEXTAREA' } as unknown as EventTarget)).toBe(true)
+    expect(isWriteFocusModeFormControl({ tagName: 'DIV' } as unknown as EventTarget)).toBe(false)
+  })
+
+  it('uses the titlebar-safe viewport layer without covering higher-priority dialogs', () => {
+    expect(writeFocusModeShellClassName(true)).toContain('ds-titlebar-fixed-overlay')
+    expect(writeFocusModeShellClassName(true)).toContain('write-focus-mode-shell')
+    expect(writeFocusModeShellClassName(true)).toContain('z-[60]')
+    expect(writeFocusModeShellClassName(true)).not.toContain('backdrop-blur-xl')
+    expect(writeFocusModeShellClassName(false)).toContain('backdrop-blur-xl')
   })
 })

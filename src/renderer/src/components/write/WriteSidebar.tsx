@@ -137,6 +137,11 @@ export function WriteSidebar({
     || (workspaceRoot.trim() && !entriesByDir[root])
   )
 
+  const revealWritePath = async (targetPath: string, boundaryRoot: string): Promise<void> => {
+    const result = await revealWorkspacePathInFileManager(targetPath, boundaryRoot)
+    if (!result.ok) setFileError(result.message)
+  }
+
   const defaultParentDirectory = (): string => {
     if (!root) return workspaceRoot
     if (activeFilePath && activeFilePath.startsWith(root)) return writeDirnameFromPath(activeFilePath)
@@ -362,65 +367,63 @@ export function WriteSidebar({
                   onClick={() => void toggleWorkspaceGroup(workspacePath)}
                   className="min-h-[36px]"
                   buttonClassName="items-center gap-2 px-2.5 py-2"
-                  actions={
-                    active || removable ? (
-                      <>
-                        <SidebarIconButton
-                          onClick={() => void revealWorkspacePathInFileManager(workspacePath, workspacePath)}
-                          title={window.kunGui?.platform === 'darwin'
-                            ? t('fileTreeRevealInFinder')
-                            : t('fileTreeRevealInFileManager')}
-                          ariaLabel={window.kunGui?.platform === 'darwin'
-                            ? t('fileTreeRevealInFinder')
-                            : t('fileTreeRevealInFileManager')}
-                          stopPropagation
-                        >
-                          <FolderSearch className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        </SidebarIconButton>
-                        {active ? (
-                          <>
-                            <SidebarIconButton
-                              onClick={() => void openCreateFileDialog(root)}
-                              title={t('writeCreateFile')}
-                              ariaLabel={t('writeCreateFile')}
-                              tone="accent"
-                              stopPropagation
-                            >
-                              <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            </SidebarIconButton>
-                            <SidebarIconButton
-                              onClick={() => void openCreateDirectoryDialog(root)}
-                              title={t('writeCreateFolder')}
-                              ariaLabel={t('writeCreateFolder')}
-                              stopPropagation
-                            >
-                              <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            </SidebarIconButton>
-                            <SidebarIconButton
-                              onClick={() => void refreshWorkspace(workspaceRoot)}
-                              title={t('writeRefreshWorkspace')}
-                              ariaLabel={t('writeRefreshWorkspace')}
-                              stopPropagation
-                            >
-                              <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            </SidebarIconButton>
-                          </>
-                        ) : null}
-
-                        {removable ? (
+                  actions={(
+                    <>
+                      <SidebarIconButton
+                        onClick={() => void revealWritePath(workspacePath, workspacePath)}
+                        title={window.kunGui?.platform === 'darwin'
+                          ? t('fileTreeRevealInFinder')
+                          : t('fileTreeRevealInFileManager')}
+                        ariaLabel={window.kunGui?.platform === 'darwin'
+                          ? t('fileTreeRevealInFinder')
+                          : t('fileTreeRevealInFileManager')}
+                        stopPropagation
+                      >
+                        <FolderSearch className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      </SidebarIconButton>
+                      {active ? (
+                        <>
                           <SidebarIconButton
-                            onClick={() => void removeWorkspaceFromList(workspacePath)}
-                            title={t('writeRemoveWorkspace')}
-                            ariaLabel={t('writeRemoveWorkspace')}
-                            tone="danger"
+                            onClick={() => void openCreateFileDialog(root)}
+                            title={t('writeCreateFile')}
+                            ariaLabel={t('writeCreateFile')}
+                            tone="accent"
                             stopPropagation
                           >
-                            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+                            <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                           </SidebarIconButton>
-                        ) : null}
-                      </>
-                    ) : undefined
-                  }
+                          <SidebarIconButton
+                            onClick={() => void openCreateDirectoryDialog(root)}
+                            title={t('writeCreateFolder')}
+                            ariaLabel={t('writeCreateFolder')}
+                            stopPropagation
+                          >
+                            <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          </SidebarIconButton>
+                          <SidebarIconButton
+                            onClick={() => void refreshWorkspace(workspaceRoot)}
+                            title={t('writeRefreshWorkspace')}
+                            ariaLabel={t('writeRefreshWorkspace')}
+                            stopPropagation
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          </SidebarIconButton>
+                        </>
+                      ) : null}
+
+                      {removable ? (
+                        <SidebarIconButton
+                          onClick={() => void removeWorkspaceFromList(workspacePath)}
+                          title={t('writeRemoveWorkspace')}
+                          ariaLabel={t('writeRemoveWorkspace')}
+                          tone="danger"
+                          stopPropagation
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+                        </SidebarIconButton>
+                      ) : null}
+                    </>
+                  )}
                 >
                   {collapsed ? (
                     <ChevronRight className="h-3 w-3 shrink-0 text-ds-faint" strokeWidth={2} />
@@ -456,7 +459,7 @@ export function WriteSidebar({
                       onCreateDirectory={(directoryPath) => void openCreateDirectoryDialog(directoryPath)}
                       onRenameEntry={openRenameEntryDialog}
                       onDeleteEntry={openDeleteEntryDialog}
-                      onRevealEntry={(entry) => void revealWorkspacePathInFileManager(entry.path, workspaceRoot)}
+                      onRevealEntry={(entry) => void revealWritePath(entry.path, workspaceRoot)}
                       onRefresh={() => void refreshWorkspace(workspaceRoot)}
                       showHeader={false}
                       showRootLabel={false}
