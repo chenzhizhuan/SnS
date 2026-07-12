@@ -580,6 +580,17 @@ html[data-theme='dark'] .ds-code-sidebar {
   background: var(--ds-bg-canvas);
 }
 
+.ds-file-preview-svg {
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #eef0f3 25%, transparent 25%),
+    linear-gradient(-45deg, #eef0f3 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eef0f3 75%),
+    linear-gradient(-45deg, transparent 75%, #eef0f3 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+}
+
 .ds-file-preview-code-surface {
   position: relative;
   display: grid;

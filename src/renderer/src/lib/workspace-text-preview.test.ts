@@ -6,6 +6,7 @@ describe('isWorkspaceTextPreviewPath', () => {
     expect(isWorkspaceTextPreviewPath('/tmp/app/src/main.ts')).toBe(true)
     expect(isWorkspaceTextPreviewPath('/tmp/app/README.md')).toBe(true)
     expect(isWorkspaceTextPreviewPath('/tmp/app/.gitignore')).toBe(true)
+    expect(isWorkspaceTextPreviewPath('/tmp/app/architecture.svg')).toBe(true)
   })
 
   it('rejects common binary and media files', () => {

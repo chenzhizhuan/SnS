@@ -37,6 +37,7 @@ const TEXT_PREVIEW_EXTENSIONS = new Set([
   '.sql',
   '.svelte',
   '.swift',
+  '.svg',
   '.toml',
   '.ts',
   '.tsx',

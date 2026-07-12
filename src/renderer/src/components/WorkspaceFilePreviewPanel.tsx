@@ -105,6 +105,14 @@ function isMarkdownPreviewPath(path: string): boolean {
   return /\.(md|markdown|mdx)$/i.test(path)
 }
 
+function isSvgPreviewPath(path: string): boolean {
+  return /\.svg$/i.test(path)
+}
+
+export function svgPreviewDataUrl(content: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(content)}`
+}
+
 function normalizePreviewImageSrc(src: string | undefined): string | undefined {
   if (!src?.startsWith(`${MARKDOWN_DEFAULT_ORIGIN}/`)) return src
 
@@ -191,6 +199,7 @@ export function WorkspaceFilePreviewPanel({
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [markdownRendered, setMarkdownRendered] = useState(true)
+  const [svgRendered, setSvgRendered] = useState(true)
   const [readingMode, setReadingMode] = useState(false)
   const [highlightHtml, setHighlightHtml] = useState(() => renderFallbackCodeHtml(''))
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -204,6 +213,7 @@ export function WorkspaceFilePreviewPanel({
     }
 
     let cancelled = false
+    setSvgRendered(true)
     setLoading(true)
     setResult(null)
 
@@ -277,6 +287,11 @@ export function WorkspaceFilePreviewPanel({
   }, [result, target])
   const activeTargetKey = targetKey(target)
   const isMarkdownFile = isMarkdownPreviewPath(result?.ok ? result.path : target?.path ?? '')
+  const isSvgFile = isSvgPreviewPath(result?.ok ? result.path : target?.path ?? '')
+  const svgDataUrl = useMemo(
+    () => result?.ok && isSvgFile && !result.truncated ? svgPreviewDataUrl(result.content) : '',
+    [isSvgFile, result]
+  )
   const lines = useMemo(() => (result?.ok ? result.content.split('\n') : []), [result])
   const breadcrumbSegments = useMemo(() => {
     const path = result?.ok ? result.path : target?.path ?? ''
@@ -455,6 +470,23 @@ export function WorkspaceFilePreviewPanel({
               )}
             </button>
           ) : null}
+          {isSvgFile ? (
+            <button
+              type="button"
+              onClick={() => setSvgRendered((value) => !value)}
+              disabled={!result?.ok || result.truncated}
+              className="ds-code-sidebar-icon-button"
+              title={svgRendered ? t('filePreviewShowSvgSource') : t('filePreviewRenderSvg')}
+              aria-label={svgRendered ? t('filePreviewShowSvgSource') : t('filePreviewRenderSvg')}
+              aria-pressed={svgRendered}
+            >
+              {svgRendered ? (
+                <Code2 className="h-4 w-4" strokeWidth={1.75} />
+              ) : (
+                <Eye className="h-4 w-4" strokeWidth={1.75} />
+              )}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={openInEditor}
@@ -542,7 +574,15 @@ export function WorkspaceFilePreviewPanel({
                 {t('filePreviewTruncated')}
               </div>
             ) : null}
-            {isMarkdownFile && markdownRendered ? (
+            {isSvgFile && svgRendered && !result.truncated ? (
+              <div className="ds-file-preview-svg min-h-0 flex-1 overflow-auto p-5">
+                <img
+                  src={svgDataUrl}
+                  alt={currentFileName}
+                  className="block h-full min-h-[120px] w-full object-contain"
+                />
+              </div>
+            ) : isMarkdownFile && markdownRendered ? (
               <div className="ds-file-preview-markdown min-h-0 flex-1 overflow-auto px-5 py-4">
                 <div className="ds-markdown min-h-full text-ds-ink">
                   <ReactMarkdown

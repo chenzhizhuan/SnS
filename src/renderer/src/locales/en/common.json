@@ -2478,6 +2478,8 @@
   "filePreviewExitReadingMode": "Exit reading view",
   "filePreviewRenderMarkdown": "Render Markdown",
   "filePreviewShowSource": "Show Markdown source",
+  "filePreviewRenderSvg": "Render SVG",
+  "filePreviewShowSvgSource": "Show SVG source",
   "filePreviewTruncated": "Truncated",
   "fileTreeTitle": "Files",
   "fileTreeWorkspaceTab": "Workspace",

@@ -2478,6 +2478,8 @@
   "filePreviewExitReadingMode": "退出阅读",
   "filePreviewRenderMarkdown": "渲染 Markdown",
   "filePreviewShowSource": "显示 Markdown 源码",
+  "filePreviewRenderSvg": "渲染 SVG",
+  "filePreviewShowSvgSource": "显示 SVG 源码",
   "filePreviewTruncated": "已截断",
   "fileTreeTitle": "文件",
   "fileTreeWorkspaceTab": "工作区",
