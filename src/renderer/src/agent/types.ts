@@ -234,6 +234,7 @@ export type ToolBlock = {
 export type CompactionBlock = {
   kind: 'compaction'
   id: string
+  turnId?: string
   createdAt?: string
   summary: string
   status: 'running' | 'success' | 'error'
@@ -389,6 +390,7 @@ export type RuntimeErrorEventPayload = {
 
 export type CompactionEventPayload = {
   itemId: string
+  turnId?: string
   summary: string
   status: 'running' | 'success' | 'error'
   detail?: string

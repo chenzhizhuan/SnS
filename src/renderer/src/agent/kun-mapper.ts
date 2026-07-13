@@ -904,6 +904,7 @@ function compactionBlockFromItem(item: CoreTurnItemJson): ChatBlock {
   return {
     kind: 'compaction',
     id: item.id,
+    turnId: item.turnId,
     createdAt: itemCreatedAt(item),
     summary: item.summary?.trim() || 'Context compacted',
     status: item.status === 'failed' ? 'error' : 'success',
@@ -1130,6 +1131,7 @@ function childLifecycleToolEventFromRuntimeEvent(event: CoreRuntimeEventJson): T
 function compactionFromItem(item: CoreTurnItemJson): CompactionEventPayload {
   return {
     itemId: item.id,
+    turnId: item.turnId,
     summary: item.summary?.trim() || 'Context compacted',
     status: item.status === 'failed' ? 'error' : item.status === 'running' ? 'running' : 'success',
     createdAt: itemCreatedAt(item),
@@ -1165,6 +1167,7 @@ function compactionFromEvent(
 ): CompactionEventPayload {
   return {
     itemId: event.itemId ?? `compaction_${event.seq ?? Date.now()}`,
+    turnId: event.turnId,
     summary: event.summary ?? 'Context compacted',
     status,
     createdAt: event.timestamp,
