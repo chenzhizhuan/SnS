@@ -182,19 +182,21 @@ function ContainerIcon({
   return <Boxes className="h-4 w-4" aria-hidden />
 }
 
-export function ExtensionActivityBar({
+export function ExtensionViewRailLauncher({
   containers,
   groups,
   activeId,
-  onOpen
+  onOpen,
+  buttonClassName
 }: {
   containers: readonly RegisteredContribution<'views.containers'>[]
   groups: ExtensionWorkbenchViewGroups
   activeId?: string | null
   onOpen: (view: ExtensionWorkbenchView) => void
+  buttonClassName?: (active: boolean) => string
 }): ReactElement | null {
   const [launcherOpen, setLauncherOpen] = useState(false)
-  const rootRef = useRef<HTMLElement | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const allViews = useMemo<ExtensionWorkbenchView[]>(
     () => [
       ...groups.leftSidebar,
@@ -234,14 +236,19 @@ export function ExtensionActivityBar({
     setLauncherOpen(false)
     onOpen(view)
   }
+  const buttonClass = (active: boolean): string => buttonClassName?.(active) ??
+    `inline-flex h-8 w-8 items-center justify-center rounded-lg transition ${
+      active
+        ? 'bg-accent/12 text-accent'
+        : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+    }`
 
   return (
-    <aside
+    <div
       ref={rootRef}
       aria-label="Extension activity"
-      className="ds-no-drag relative z-30 flex h-full w-12 shrink-0 flex-col items-center gap-1.5 border-r border-ds-border-muted bg-white/80 py-3 backdrop-blur-xl dark:bg-ds-canvas"
+      className="relative flex flex-col items-center gap-1.5"
     >
-      <div aria-hidden className="ds-titlebar-safe-block w-full shrink-0" />
       {containerTargets.map(({ container, target }) => {
         const title = boundedPlainText(container.payload.title, 128)
         return (
@@ -253,11 +260,7 @@ export function ExtensionActivityBar({
             aria-pressed={activeId === target.id}
             data-tooltip={title}
             data-contribution-id={container.id}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition ${
-              activeId === target.id
-                ? 'bg-accent/12 text-accent'
-                : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-            }`}
+            className={buttonClass(activeId === target.id)}
           >
             <ContainerIcon container={container} />
           </button>
@@ -272,9 +275,7 @@ export function ExtensionActivityBar({
         aria-label="Open extension Views"
         aria-expanded={launcherOpen}
         data-tooltip="Extension Views"
-        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition ${
-          launcherOpen ? 'bg-accent/12 text-accent' : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-        }`}
+        className={buttonClass(launcherOpen)}
       >
         <Puzzle className="h-4 w-4" aria-hidden />
       </button>
@@ -283,7 +284,7 @@ export function ExtensionActivityBar({
         <div
           role="dialog"
           aria-label="Extension Views"
-          className="ds-card-strong absolute left-full top-3 z-50 ml-2 max-h-[min(620px,calc(100vh-2rem))] w-72 overflow-y-auto rounded-2xl border border-ds-border p-2 shadow-2xl"
+          className="ds-card-strong absolute bottom-0 right-full z-50 mr-2 max-h-[min(620px,calc(100vh-2rem))] w-72 overflow-y-auto rounded-2xl border border-ds-border p-2 shadow-2xl"
         >
           {SURFACE_GROUPS.map(({ key, title }) => {
             if (key === 'rightSidebar') return null
@@ -323,6 +324,6 @@ export function ExtensionActivityBar({
           })}
         </div>
       ) : null}
-    </aside>
+    </div>
   )
 }

@@ -62,7 +62,6 @@ import {
   ExtensionViewOutlet
 } from '../extensions/ControlledContributionSurfaces'
 import {
-  ExtensionActivityBar,
   firstViewForContainer,
   isExtensionWorkbenchView,
   readStoredExtensionSurfaceId,
@@ -789,12 +788,6 @@ export function Workbench(): ReactElement {
         })
       }}
     >
-      <ExtensionActivityBar
-        containers={extensionViewContainers}
-        groups={extensionViewGroups}
-        activeId={activeExtensionSurfaceId ?? rightPanelMode}
-        onOpen={openExtensionSurface}
-      />
       <WorkbenchLeftSidebar
         collapsed={leftSidebarCollapsed || activeExtensionCenterView?.point === 'views.fullPage'}
         width={leftSidebarWidth}
@@ -987,7 +980,13 @@ export function Workbench(): ReactElement {
             planPanelEnabled: Boolean(activeGuiPlan),
             onToggleFileTree: toggleFileTreeSidePanel,
             extensionItems: extensionRightPanelItems,
-            extensionContainers: extensionRightContainerTargets
+            extensionContainers: extensionRightContainerTargets,
+            extensionViewLauncher: {
+              containers: extensionViewContainers,
+              groups: extensionViewGroups,
+              activeId: activeExtensionSurfaceId ?? rightPanelMode,
+              onOpen: openExtensionSurface
+            }
           }
         }}
         imageAnnotationHost={imageAnnotationHost}

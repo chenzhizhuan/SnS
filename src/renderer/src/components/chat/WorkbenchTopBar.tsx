@@ -28,7 +28,12 @@ import {
   extensionResourceUrl,
   type RegisteredContribution
 } from '../../extensions/contribution-registry'
-import type { ExtensionRightContainerTarget } from '../../extensions/ExtensionWorkbenchSurfaces'
+import {
+  ExtensionViewRailLauncher,
+  type ExtensionRightContainerTarget,
+  type ExtensionWorkbenchView,
+  type ExtensionWorkbenchViewGroups
+} from '../../extensions/ExtensionWorkbenchSurfaces'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   type RightPanelMode
@@ -52,6 +57,12 @@ type Props = {
   onOpenSideChat?: () => void
   extensionItems?: readonly RegisteredContribution<'views.rightSidebar'>[]
   extensionContainers?: readonly ExtensionRightContainerTarget[]
+  extensionViewLauncher?: {
+    containers: readonly RegisteredContribution<'views.containers'>[]
+    groups: ExtensionWorkbenchViewGroups
+    activeId?: string | null
+    onOpen: (view: ExtensionWorkbenchView) => void
+  }
 }
 
 type WorkbenchTopActionsProps = {
@@ -371,7 +382,8 @@ export function WorkbenchSideRail({
   onToggleFileTree,
   onOpenSideChat,
   extensionItems = [],
-  extensionContainers = []
+  extensionContainers = [],
+  extensionViewLauncher
 }: Props): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
   const items = [
@@ -497,6 +509,13 @@ export function WorkbenchSideRail({
         >
           <Folders className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
+      ) : null}
+
+      {extensionViewLauncher ? (
+        <ExtensionViewRailLauncher
+          {...extensionViewLauncher}
+          buttonClassName={sideRailButtonClass}
+        />
       ) : null}
     </div>
   )

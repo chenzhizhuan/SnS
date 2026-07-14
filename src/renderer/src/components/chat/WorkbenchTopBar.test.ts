@@ -54,6 +54,11 @@ describe('WorkbenchSideRail', () => {
             id: 'issues',
             title: 'Issues',
             entry: 'dist/index.html'
+          }],
+          'views.fullPage': [{
+            id: 'dashboard',
+            title: 'Dashboard',
+            entry: 'dist/dashboard.html'
           }]
         })
       }]
@@ -72,7 +77,19 @@ describe('WorkbenchSideRail', () => {
         fileTreeEnabled: true,
         onToggleFileTree: vi.fn(),
         onOpenSideChat: vi.fn(),
-        extensionItems: registry.list('views.rightSidebar').filter((item) => item.owner.kind === 'extension')
+        extensionItems: registry.list('views.rightSidebar').filter((item) => item.owner.kind === 'extension'),
+        extensionViewLauncher: {
+          containers: registry.list('views.containers'),
+          groups: {
+            leftSidebar: registry.list('views.leftSidebar'),
+            rightSidebar: registry.list('views.rightSidebar').filter((item) => item.owner.kind === 'extension'),
+            auxiliaryPanel: registry.list('views.auxiliaryPanel'),
+            editorTab: registry.list('views.editorTab'),
+            fullPage: registry.list('views.fullPage')
+          },
+          activeId: null,
+          onOpen: vi.fn()
+        }
       })
     )
 
@@ -93,6 +110,8 @@ describe('WorkbenchSideRail', () => {
 
     expect(html).toContain('data-tooltip="Issues"')
     expect(html).toContain('data-contribution-id="extension:acme.issues/issues"')
+    expect(html).toContain('data-tooltip="Extension Views"')
+    expect(html).toContain('aria-label="Open extension Views"')
 
     expect(html).not.toContain(`data-tooltip="Choose default editor"`)
     expect(html).not.toContain(`data-tooltip="Terminal"`)

@@ -7,7 +7,7 @@ import {
   ExtensionWorkbenchSnapshotSchema
 } from './contribution-registry'
 import {
-  ExtensionActivityBar,
+  ExtensionViewRailLauncher,
   firstViewForContainer,
   readStoredExtensionSurfaceId,
   resolveCommandOpenView,
@@ -78,7 +78,7 @@ describe('Extension workbench surface consumers', () => {
 
   it('renders host-owned activity controls without mounting extension React code', () => {
     const { registry, groups } = fixture()
-    const html = renderToStaticMarkup(createElement(ExtensionActivityBar, {
+    const html = renderToStaticMarkup(createElement(ExtensionViewRailLauncher, {
       containers: registry.list('views.containers'),
       groups,
       activeId: 'extension:acme.workbench/tree',
