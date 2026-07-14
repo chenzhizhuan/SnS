@@ -15,6 +15,7 @@ const expected = [
   'direct-dom',
   'hello-sidebar',
   'kun-video-editor',
+  'presentation-studio',
   'streaming-model-provider',
   'tool-provider',
   'workspace-dashboard'
