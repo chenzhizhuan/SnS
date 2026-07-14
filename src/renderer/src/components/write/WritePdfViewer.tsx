@@ -15,6 +15,7 @@ import type {
   WriteSelectionAnchorRect,
   WriteSelectionPageRect
 } from './WriteMarkdownEditor'
+import { applyPdfTextLayerScale } from './write-pdf-text-layer'
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -329,6 +330,7 @@ function WritePdfPage({
       if (cancelled) return
 
       textLayer.replaceChildren()
+      applyPdfTextLayerScale(textLayer.style, viewport)
       const textContent = await page.getTextContent()
       const textLayerRenderer = new TextLayer({
         textContentSource: textContent,
@@ -337,11 +339,6 @@ function WritePdfPage({
       })
       await textLayerRenderer.render()
       if (!cancelled) {
-        // Whitespace-only spans are often stretched to absurd widths by the
-        // text layer; flag them so native selection skips painting them.
-        for (const span of Array.from(textLayer.querySelectorAll<HTMLElement>('span'))) {
-          if (!(span.textContent ?? '').trim()) span.classList.add('write-pdf-text-ws')
-        }
         const text = textContent.items
           .map((item: TextContentItem) => (typeof item.str === 'string' ? item.str : ''))
           .filter(Boolean)
@@ -415,10 +412,8 @@ export function WritePdfViewer({
   const [searchIndex, setSearchIndex] = useState(0)
   const [pageTexts, setPageTexts] = useState<PageText[]>([])
   const [committedSelectionRects, setCommittedSelectionRects] = useState<WriteSelectionPageRect[]>([])
-  // While the native selection is visible we keep the committed overlay
-  // hidden; it only takes over once focus moves away (e.g. into the assist
-  // popup) and the browser drops the native highlight.
-  const [liveSelection, setLiveSelection] = useState(false)
+  // Precise fragment rects are shown while dragging and kept after focus moves
+  // into the assist popup, while the DOM Selection remains the text source.
   const pageCount = pdfDocument?.numPages ?? 0
   const rootRef = viewerRef ?? localViewerRef
 
@@ -463,7 +458,6 @@ export function WritePdfViewer({
 
   useEffect(() => {
     setCommittedSelectionRects([])
-    setLiveSelection(false)
     onSelectionChange(emptyPdfSelection())
   }, [onSelectionChange, scale])
 
@@ -554,10 +548,8 @@ export function WritePdfViewer({
     onSelectionChange(next)
     if (next.text.trim()) {
       setCommittedSelectionRects(next.rects ?? [])
-      setLiveSelection(true)
     } else {
       setCommittedSelectionRects([])
-      setLiveSelection(false)
     }
   }, [onSelectionChange, rootRef])
 
@@ -577,18 +569,16 @@ export function WritePdfViewer({
       const selection = window.getSelection()
       if (!root) return
       if (!selection || selection.rangeCount === 0) {
-        setLiveSelection(false)
         return
       }
       const anchorInside = selection.anchorNode ? root.contains(selection.anchorNode) : false
       const focusInside = selection.focusNode ? root.contains(selection.focusNode) : false
       if (anchorInside || focusInside) {
         syncSelectionSoon()
-      } else {
-        // Selection moved elsewhere (e.g. into the assist popup input): keep
-        // the committed snapshot and let the overlay take over the highlight.
-        setLiveSelection(false)
+        return
       }
+      // If selection moved elsewhere (e.g. into the assist popup input), keep
+      // the committed snapshot visible in the overlay.
     }
     window.document.addEventListener('selectionchange', handleSelectionChange)
     return () => {
@@ -611,7 +601,6 @@ export function WritePdfViewer({
 
   const beginPdfSelection = useCallback((): void => {
     setCommittedSelectionRects([])
-    setLiveSelection(false)
     onSelectionChange(emptyPdfSelection())
   }, [onSelectionChange])
 
@@ -619,7 +608,6 @@ export function WritePdfViewer({
     <div
       ref={rootRef}
       className="write-pdf-viewer flex h-full min-h-0 min-w-0 flex-col"
-      data-live-selection={liveSelection ? '' : undefined}
     >
       <div className="write-pdf-toolbar shrink-0 border-b border-ds-border-muted bg-white/88 px-3 py-2 dark:bg-ds-card/95">
         <div className="flex min-w-0 flex-wrap items-center gap-2">

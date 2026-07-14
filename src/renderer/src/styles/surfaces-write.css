@@ -173,11 +173,6 @@
 }
 
 .write-pdf-text-layer ::selection {
-  background: var(--write-selection-bg, var(--ds-selection));
-}
-
-.write-pdf-text-layer br::selection,
-.write-pdf-text-layer .write-pdf-text-ws::selection {
   background: transparent;
 }
 
@@ -200,12 +195,6 @@
   position: absolute;
   border-radius: 3px;
   background: var(--write-selection-bg, var(--ds-selection));
-}
-
-/* While the browser paints the native selection, the committed overlay stays
-   invisible so the two highlights never stack. */
-.write-pdf-viewer[data-live-selection] .write-pdf-selection-rect {
-  opacity: 0;
 }
 
 .write-workspace-toolbar-grid {

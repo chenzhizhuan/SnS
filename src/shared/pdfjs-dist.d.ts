@@ -5,6 +5,7 @@ declare module 'pdfjs-dist/build/pdf.mjs' {
     width: number
     height: number
     scale: number
+    userUnit: number
     rotation: number
     rawDims?: {
       pageWidth: number
@@ -51,6 +52,7 @@ declare module 'pdfjs-dist/legacy/build/pdf.mjs' {
     width: number
     height: number
     scale: number
+    userUnit: number
     rotation: number
   }
   export type RenderTask = {
