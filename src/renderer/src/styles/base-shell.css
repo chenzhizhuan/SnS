@@ -2949,7 +2949,7 @@ body.ds-workbench-resizing webview {
   top: 50%;
   left: 0;
   width: var(--timeline-wave-width);
-  height: 0.25rem;
+  height: 0.125rem;
   transform: translateY(-50%);
   border-radius: 1px;
   background: color-mix(in srgb, var(--ds-text-muted) 44%, transparent);
