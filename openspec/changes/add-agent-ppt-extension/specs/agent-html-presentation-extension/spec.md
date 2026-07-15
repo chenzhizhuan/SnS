@@ -38,7 +38,7 @@ Every persisted mutation SHALL require an expected revision, SHALL serialize cal
 - **THEN** the extension returns the recorded resulting revision without applying the batch twice
 
 ### Requirement: The editor provides a complete bounded visual workflow
-The extension SHALL contribute the editor only as a responsive right-sidebar View with a dedicated presentation icon. The editor SHALL expose Slides, Canvas, and Properties as focused sidebar tabs and support creating and loading a deck, slide navigation and ordering, text/shape/image elements, selection, drag, resize, inline text changes, property editing, undo/redo, preview, and debounced save.
+The extension SHALL contribute the editor only as a responsive right-sidebar View with a dedicated presentation icon. The editor SHALL expose Slides, Canvas, and Properties as focused sidebar tabs and support creating and loading a deck, slide navigation and ordering, text/shape/image elements, selection, drag, resize, inline text changes, property editing, undo/redo, preview, and debounced save. At usable sidebar widths, the page-thumbnail navigator SHALL remain visible beside Canvas and Properties; very narrow Views MAY collapse it into the Slides tab. The host SHALL mark the complete embedded View as non-draggable so its controls receive pointer input, and the renderer SHALL preserve each slide's authored background color.
 
 #### Scenario: Open Kun PPT from the right activity rail
 - **WHEN** the installed extension contributions are loaded in a trusted workspace
@@ -47,6 +47,14 @@ The extension SHALL contribute the editor only as a responsive right-sidebar Vie
 #### Scenario: Create and revise a deck
 - **WHEN** a user creates a deck, adds slides and elements, moves and styles them, undoes one edit, and previews the result
 - **THEN** the canvas, slide rail, inspector, preview, and saved standalone file show the same revision
+
+#### Scenario: Navigate and edit in the right sidebar
+- **WHEN** a presentation is loaded in a normal-width right sidebar
+- **THEN** its authored background renders without a host CSS override, its page thumbnails remain visible beside the active editor pane, and the user can click deck actions, tabs, thumbnails, toolbar controls, and property inputs
+
+#### Scenario: Edit the HTML presentation as bounded DIV and CSS layers
+- **WHEN** a user selects a text, shape, or image from the DOM layer tree, changes its order, or applies supported CSS declarations for layout and appearance
+- **THEN** the editor maps those changes to the same typed element operations, keeps undo and autosave behavior, and regenerates the standalone HTML projection with matching DIV or image styles
 
 #### Scenario: Ask the main Kun Agent to revise the open deck
 - **WHEN** the user asks the main conversation Agent to revise a presentation while Presentation Studio is installed
@@ -70,6 +78,10 @@ The extension MUST render validated structured fields with safe DOM APIs and MUS
 #### Scenario: Text contains HTML and script syntax
 - **WHEN** a text element contains tags, event-handler strings, or a closing script marker
 - **THEN** the editor and standalone projection display it as text and the embedded model remains parseable
+
+#### Scenario: CSS input attempts to escape the structured editor
+- **WHEN** a user enters selectors, at-rules, comments, URLs, unsupported properties, or geometry outside the slide canvas in the CSS editor
+- **THEN** Kun rejects the edit without changing the presentation model or injecting the input into the extension Webview
 
 #### Scenario: Invalid image path
 - **WHEN** an image element uses an absolute path, traversal, unsupported type, or unavailable file
@@ -134,4 +146,8 @@ Development and production builds SHALL include the stable Presentation Studio e
 
 #### Scenario: Upgrade removes an obsolete permission
 - **WHEN** a newer bundled Presentation Studio version requests only a subset of the permissions granted to the currently managed version
-- **THEN** Kun installs and selects the safer update while continuing to reject any bundled update that adds a permission
+- **THEN** Kun installs and selects the safer update, preserves each reviewed workspace while narrowing its cached grant to the remaining permissions, and continues to reject any bundled update that adds a permission
+
+#### Scenario: Reopen after a safe bundled update
+- **WHEN** a user has authorized Kun PPT for a workspace and restarts after an immutable bundled update with the same or fewer accepted permissions
+- **THEN** the extension remains authorized for that workspace without another consent prompt, while any later permission addition requires a fresh review

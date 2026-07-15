@@ -551,6 +551,18 @@ export function registerExtensionIpcHandlers(
     }
     const currentPermissions = [...extension.grantedPermissions].sort()
     const nextPermissions = [...(request.permissions ?? [])].sort()
+    if (
+      request.permissions !== null &&
+      extension.workspaceTrusted &&
+      currentPermissions.length === nextPermissions.length &&
+      currentPermissions.every((permission, index) => permission === nextPermissions[index])
+    ) {
+      return {
+        ok: true,
+        status: 200,
+        body: JSON.stringify({ unchanged: true })
+      }
+    }
     const result = await performProtectedRuntimeOperation(options, event, {
       extensionId: request.extensionId,
       extensionVersion: expectedVersion,

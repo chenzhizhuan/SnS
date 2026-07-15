@@ -19,6 +19,12 @@ import {
   stableStringify,
   validatePresentationProject
 } from './presentation.js'
+import {
+  PresentationCssEditError,
+  applyEditableElementCss,
+  editableCssPropertiesForElement,
+  serializeEditableElementCss
+} from './presentation-css.js'
 
 function sampleProject() {
   const project = createPresentationProject({
@@ -131,6 +137,106 @@ test('standalone projection safely escapes text and round-trips the embedded mod
   assert.ok(!html.includes('</script><img src=x'))
   assert.ok(html.includes('&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;'))
   assert.equal(stableStringify(parsePresentationHtml(html)), stableStringify(normalizePresentationProject(project)))
+})
+
+test('safe CSS declarations round-trip and map back to typed element fields', () => {
+  const original = createTextElement('element-css', {
+    x: 8,
+    y: 12,
+    width: 70,
+    height: 18,
+    text: 'Editable DIV'
+  })
+  assert.deepEqual(
+    applyEditableElementCss(original, serializeEditableElementCss(original)),
+    original
+  )
+
+  const edited = applyEditableElementCss(original, `
+    left: 12.5%;
+    top: 20%;
+    width: 65%;
+    opacity: 0.8;
+    transform: rotate(-6deg);
+    color: #aabbcc;
+    font-size: 64px;
+    font-family: serif;
+    text-align: center;
+    justify-content: flex-end;
+  `)
+  assert.equal(edited.type, 'text')
+  if (edited.type !== 'text') throw new Error('Expected text element')
+  assert.deepEqual(
+    {
+      x: edited.x,
+      y: edited.y,
+      width: edited.width,
+      opacity: edited.opacity,
+      rotation: edited.rotation,
+      color: edited.color,
+      fontSize: edited.fontSize,
+      fontFamily: edited.fontFamily,
+      align: edited.align,
+      verticalAlign: edited.verticalAlign
+    },
+    {
+      x: 12.5,
+      y: 20,
+      width: 65,
+      opacity: 0.8,
+      rotation: -6,
+      color: '#AABBCC',
+      fontSize: 64,
+      fontFamily: 'serif',
+      align: 'center',
+      verticalAlign: 'bottom'
+    }
+  )
+})
+
+test('element.style uses the typed reducer and produces a reversible edit for Agent and UI calls', () => {
+  const project = createPresentationProject({ id: 'deck-css', firstSlideId: 'slide-css' })
+  project.slides[0].elements.push(createShapeElement('shape-css', {
+    x: 10,
+    width: 40,
+    fillColor: '#112233'
+  }))
+  const normalized = normalizePresentationProject(project)
+  const result = applyPresentationOperations(normalized, [{
+    kind: 'element.style',
+    slideId: 'slide-css',
+    elementId: 'shape-css',
+    css: 'left: 20%; width: 55%; background-color: #AABBCC; border-radius: 24px;'
+  }])
+  const styled = result.project.slides[0].elements[0]
+  assert.equal(styled?.type, 'shape')
+  if (styled?.type !== 'shape') throw new Error('Expected shape element')
+  assert.deepEqual(
+    { x: styled.x, width: styled.width, fillColor: styled.fillColor, cornerRadius: styled.cornerRadius },
+    { x: 20, width: 55, fillColor: '#AABBCC', cornerRadius: 24 }
+  )
+  assert.deepEqual(
+    applyPresentationOperations(result.project, result.inverseOperations).project,
+    normalized
+  )
+})
+
+test('safe CSS editor rejects selectors, injection syntax, unknown properties, and overflow', () => {
+  const shape = createShapeElement('shape-css')
+  assert.throws(
+    () => applyEditableElementCss(shape, '.shape { background-color: #FFFFFF; }'),
+    PresentationCssEditError
+  )
+  assert.throws(
+    () => applyEditableElementCss(shape, 'background-image: url(https://example.com/x.png);'),
+    /Invalid CSS declaration|Unsupported CSS property/
+  )
+  assert.throws(
+    () => applyEditableElementCss(shape, 'left: 80%; width: 40%;'),
+    /remain inside/
+  )
+  assert.ok(editableCssPropertiesForElement(shape).includes('border-radius'))
+  assert.ok(!editableCssPropertiesForElement(shape).includes('font-family'))
 })
 
 test('HTML extraction rejects missing, duplicate, and malformed model markers', () => {

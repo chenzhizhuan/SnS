@@ -170,12 +170,19 @@ export class ExtensionRegistry {
         entry.versions[version.version] = structuredClone(version)
       }
       if (select && entry.selectedVersion !== version.version) {
+        const previousPermissions = entry.useDevelopment
+          ? undefined
+          : selectedInstalledPermissions(entry)
         if (entry.selectedVersion !== undefined) {
           entry.previousSelectedVersion = entry.selectedVersion
         }
         entry.selectedVersion = version.version
         entry.useDevelopment = false
-        entry.workspacePermissionGrants = {}
+        entry.workspacePermissionGrants = carryForwardWorkspacePermissionGrants(
+          entry.workspacePermissionGrants,
+          previousPermissions,
+          version.grantedPermissions
+        )
       }
       result = structuredClone(entry)
       return registry
@@ -194,9 +201,16 @@ export class ExtensionRegistry {
         })
       }
       if (entry.selectedVersion !== version) {
+        const previousPermissions = entry.useDevelopment
+          ? undefined
+          : selectedInstalledPermissions(entry)
         if (entry.selectedVersion !== undefined) entry.previousSelectedVersion = entry.selectedVersion
         entry.selectedVersion = version
-        entry.workspacePermissionGrants = {}
+        entry.workspacePermissionGrants = carryForwardWorkspacePermissionGrants(
+          entry.workspacePermissionGrants,
+          previousPermissions,
+          entry.versions[version]!.grantedPermissions
+        )
       }
       if (entry.useDevelopment) entry.workspacePermissionGrants = {}
       entry.useDevelopment = false
@@ -218,10 +232,17 @@ export class ExtensionRegistry {
         })
       }
       const current = entry.selectedVersion
+      const previousPermissions = entry.useDevelopment
+        ? undefined
+        : selectedInstalledPermissions(entry)
       entry.selectedVersion = target
       entry.previousSelectedVersion = current
       entry.useDevelopment = false
-      entry.workspacePermissionGrants = {}
+      entry.workspacePermissionGrants = carryForwardWorkspacePermissionGrants(
+        entry.workspacePermissionGrants,
+        previousPermissions,
+        entry.versions[target]!.grantedPermissions
+      )
       result = structuredClone(entry)
       return registry
     })
@@ -545,6 +566,35 @@ function requireEntry(
     throw extensionError('EXTENSION_NOT_INSTALLED', 'Extension is not installed', { extensionId })
   }
   return entry
+}
+
+function selectedInstalledPermissions(entry: ExtensionRegistryEntry): string[] | undefined {
+  if (entry.selectedVersion === undefined) return undefined
+  return entry.versions[entry.selectedVersion]?.grantedPermissions
+}
+
+/**
+ * A workspace review remains valid when an immutable installed update cannot
+ * broaden the authority accepted for the previously selected package. Grants
+ * are narrowed to the new package ceiling so removed permissions cannot leak
+ * into the selected-version snapshot. Any addition, missing prior selection,
+ * or mutable development source fails closed and requires a fresh review.
+ */
+function carryForwardWorkspacePermissionGrants(
+  current: Record<string, string[]>,
+  previousAllowed: readonly string[] | undefined,
+  nextAllowed: readonly string[]
+): Record<string, string[]> {
+  if (previousAllowed === undefined) return {}
+  const previous = new Set(previousAllowed)
+  if (nextAllowed.some((permission) => !previous.has(permission))) return {}
+  const next = new Set(nextAllowed)
+  return Object.fromEntries(
+    Object.entries(current).map(([workspaceKey, permissions]) => [
+      workspaceKey,
+      permissions.filter((permission) => next.has(permission))
+    ])
+  )
 }
 
 function assertVersionRecord(

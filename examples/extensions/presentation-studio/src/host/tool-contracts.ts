@@ -235,6 +235,17 @@ export const presentationOperationSchema: JsonObject = {
     {
       type: 'object',
       properties: {
+        kind: { const: 'element.style' },
+        slideId: idSchema,
+        elementId: idSchema,
+        css: { type: 'string', minLength: 1, maxLength: 2000 }
+      },
+      required: ['kind', 'slideId', 'elementId', 'css'],
+      additionalProperties: false
+    },
+    {
+      type: 'object',
+      properties: {
         kind: { const: 'element.delete' },
         slideId: idSchema,
         elementId: idSchema
@@ -318,7 +329,7 @@ const applyInputSchema: JsonObject = {
       minItems: 1,
       maxItems: 128,
       items: presentationOperationSchema,
-      description: 'Use only the declared operation kinds. element.upsert requires a complete typed element.'
+      description: 'Use only the declared operation kinds. element.upsert requires a complete typed element; element.style accepts bounded safe CSS declarations.'
     }
   },
   required: ['path', 'expectedRevision', 'operations'],
@@ -417,7 +428,7 @@ export const presentationToolDeclarations = [
   },
   {
     id: 'presentation-apply',
-    description: 'Apply typed operations to the revision returned by presentation-read. operationId is optional. slide.insert defaults backgroundColor to null; element.upsert requires a complete text, shape, or image element and text fontFamily is optional.',
+    description: 'Apply typed operations to the revision returned by presentation-read. operationId is optional. slide.insert defaults backgroundColor to null; element.upsert accepts complete elements; element.style accepts bounded safe CSS declarations for one element.',
     inputSchema: applyInputSchema,
     outputSchema: applyOutputSchema,
     sideEffects: 'write',

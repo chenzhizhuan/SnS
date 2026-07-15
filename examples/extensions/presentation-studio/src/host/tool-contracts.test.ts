@@ -52,6 +52,15 @@ test('the Webview is a sidebar workspace controlled by the main Agent tools', as
   assert.match(styles, /data-active-panel="slides"/u)
   assert.match(styles, /data-active-panel="canvas"/u)
   assert.match(styles, /data-active-panel="properties"/u)
+  assert.match(styles, /grid-template-columns:\s*clamp\(138px, 27%, 184px\) minmax\(0, 1fr\)/u)
+  assert.match(styles, /@media \(max-width: 520px\)[\s\S]*?\.slide-rail\s*\{[\s\S]*?display:\s*none/u)
+  assert.doesNotMatch(styles, /\.canvas-background\s*\{[^}]*\bfill\s*:/u)
+  assert.equal(markup.match(/class="canvas-background"[^>]*fill="#ffffff"/gu)?.length, 2)
+  assert.doesNotMatch(controller, /node\.hidden = name !== panel/u)
+  assert.match(controller, /ui\.slidesPanel\.hidden = false/u)
+  assert.match(controller, /function layerSection\(/u)
+  assert.match(controller, /kind: 'element\.style'/u)
+  assert.match(styles, /\.css-declarations\s*\{/u)
   assert.doesNotMatch(controller, /client\.agent/u)
 })
 
@@ -180,4 +189,35 @@ test('main Agent apply calls may omit operationId and slide background defaults'
   assert.equal(element?.type, 'text')
   if (element?.type !== 'text') assert.fail('expected text element')
   assert.equal(element.fontFamily, 'sans')
+})
+
+test('main Agent may apply bounded safe CSS to one presentation element', async () => {
+  const declaration = presentationToolDeclarations.find(({ id }) => id === 'presentation-apply')
+  assert.ok(declaration)
+  const validatorUrl = new URL(
+    '../../../../../../kun/dist/extensions/json-schema-validator.js',
+    import.meta.url
+  )
+  const runtime = await import(validatorUrl.href) as {
+    compileExtensionJsonSchema(
+      schema: Record<string, unknown>,
+      subject: string
+    ): { assert(value: unknown, subject: string): void }
+  }
+  const input = {
+    path: 'learning-theme.kun-ppt.html',
+    expectedRevision: 3,
+    operations: [{
+      kind: 'element.style',
+      slideId: 'slide-1',
+      elementId: 'title-1',
+      css: 'left: 8%; width: 84%; color: #FFFFFF; font-size: 56px;'
+    }]
+  }
+  const validator = runtime.compileExtensionJsonSchema(
+    declaration.inputSchema as Record<string, unknown>,
+    'tools.presentation-apply.inputSchema'
+  )
+  assert.doesNotThrow(() => validator.assert(input, 'presentation-apply arguments'))
+  assert.deepEqual(operationsFrom(input), input.operations)
 })

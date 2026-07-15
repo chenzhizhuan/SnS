@@ -109,6 +109,37 @@ describe('bundled extension seeding', () => {
     })
   })
 
+  it('preserves and narrows workspace authorization across safe bundled updates', async () => {
+    const harness = await createHarness()
+    const workspaceKey = 'a'.repeat(64)
+    const initialPermissions = ['commands.register', 'ui.views']
+    await writeBundle(harness, '1.0.0', initialPermissions)
+    await seedBundledExtensions(seedOptions(harness))
+    await harness.manager.setWorkspacePermissionGrant(
+      'acme.demo',
+      workspaceKey,
+      initialPermissions,
+      '1.0.0'
+    )
+
+    await writeBundle(harness, '2.0.0', initialPermissions)
+    expect(await seedBundledExtensions(seedOptions(harness))).toMatchObject([{
+      outcome: 'updated-selected'
+    }])
+    expect((await harness.registry.get('acme.demo'))?.workspacePermissionGrants[workspaceKey])
+      .toEqual(initialPermissions)
+    expect(await harness.registry.isWorkspaceTrusted('acme.demo', workspaceKey)).toBe(true)
+
+    await writeBundle(harness, '3.0.0', ['ui.views'])
+    expect(await seedBundledExtensions(seedOptions(harness))).toMatchObject([{
+      outcome: 'updated-selected'
+    }])
+    expect((await harness.registry.get('acme.demo'))?.workspacePermissionGrants[workspaceKey])
+      .toEqual(['ui.views'])
+    const reopenedRegistry = new ExtensionRegistry(harness.paths)
+    expect(await reopenedRegistry.isWorkspaceTrusted('acme.demo', workspaceKey)).toBe(true)
+  })
+
   it('upgrades a historical bundle whose Action reused its command ID', async () => {
     const harness = await createHarness()
     const permissions = ['commands.register', 'ui.actions']

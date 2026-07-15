@@ -4,7 +4,7 @@
   "apiVersion": "1.0.0",
   "name": "presentation-studio",
   "publisher": "kun-examples",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "displayName": "Kun PPT",
   "description": "A revision-aware Kun PPT display HTML workspace for people and the main Kun Agent.",
   "license": "MIT",
@@ -855,6 +855,38 @@
                     "type": "object",
                     "properties": {
                       "kind": {
+                        "const": "element.style"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "css": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "elementId",
+                      "css"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
                         "const": "element.delete"
                       },
                       "slideId": {
@@ -879,7 +911,7 @@
                   }
                 ]
               },
-              "description": "Use only the declared operation kinds. element.upsert requires a complete typed element."
+              "description": "Use only the declared operation kinds. element.upsert requires a complete typed element; element.style accepts bounded safe CSS declarations."
             }
           },
           "required": [
@@ -1479,7 +1511,7 @@
       },
       {
         "id": "presentation-apply",
-        "description": "Apply typed operations to the revision returned by presentation-read. operationId is optional. slide.insert defaults backgroundColor to null; element.upsert requires a complete text, shape, or image element and text fontFamily is optional.",
+        "description": "Apply typed operations to the revision returned by presentation-read. operationId is optional. slide.insert defaults backgroundColor to null; element.upsert accepts complete elements; element.style accepts bounded safe CSS declarations for one element.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2259,6 +2291,38 @@
                     "type": "object",
                     "properties": {
                       "kind": {
+                        "const": "element.style"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "css": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "elementId",
+                      "css"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
                         "const": "element.delete"
                       },
                       "slideId": {
@@ -2283,7 +2347,7 @@
                   }
                 ]
               },
-              "description": "Use only the declared operation kinds. element.upsert requires a complete typed element."
+              "description": "Use only the declared operation kinds. element.upsert requires a complete typed element; element.style accepts bounded safe CSS declarations."
             }
           },
           "required": [

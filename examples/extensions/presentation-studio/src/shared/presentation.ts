@@ -1,3 +1,8 @@
+import {
+  MAX_EDITABLE_CSS_LENGTH,
+  applyEditableElementCss
+} from './presentation-css.js'
+
 export const PRESENTATION_SCHEMA_VERSION = 1 as const
 
 export const MAX_PRESENTATION_HTML_BYTES = 900_000
@@ -103,6 +108,7 @@ export type PresentationOperation =
   | { kind: 'slide.delete'; slideId: string }
   | { kind: 'slide.reorder'; slideId: string; index: number }
   | { kind: 'element.upsert'; slideId: string; element: PresentationElement; index?: number }
+  | { kind: 'element.style'; slideId: string; elementId: string; css: string }
   | { kind: 'element.delete'; slideId: string; elementId: string }
 
 export interface PresentationValidationIssue {
@@ -694,6 +700,7 @@ function parseOperation(value: unknown, path: string): PresentationOperation {
     'slide.delete',
     'slide.reorder',
     'element.upsert',
+    'element.style',
     'element.delete'
   ])
   switch (kind) {
@@ -731,6 +738,14 @@ function parseOperation(value: unknown, path: string): PresentationOperation {
         slideId: idValue(input.slideId, `${path}.slideId`),
         element: parseElement(input.element, `${path}.element`),
         ...optionalIndexProperty(input, 'index', path)
+      }
+    case 'element.style':
+      exactKeys(input, ['kind', 'slideId', 'elementId', 'css'], path)
+      return {
+        kind,
+        slideId: idValue(input.slideId, `${path}.slideId`),
+        elementId: idValue(input.elementId, `${path}.elementId`),
+        css: stringValue(input.css, `${path}.css`, MAX_EDITABLE_CSS_LENGTH, true)
       }
     case 'element.delete':
       exactKeys(input, ['kind', 'slideId', 'elementId'], path)
@@ -867,6 +882,24 @@ export function applyPresentationOperations(
             inverseOperations.unshift({ kind: 'element.delete', slideId: slide.id, elementId: operation.element.id })
           }
           addChanged(changedIds, slide.id, operation.element.id)
+          break
+        }
+        case 'element.style': {
+          const slide = findSlide(project, operation.slideId, operationIndex)
+          const index = slide.elements.findIndex((element) => element.id === operation.elementId)
+          if (index < 0) {
+            throw new PresentationOperationError(`Element not found: ${operation.elementId}`, operationIndex)
+          }
+          const previous = slide.elements[index]!
+          const styled = applyEditableElementCss(previous, operation.css)
+          slide.elements.splice(index, 1, styled)
+          inverseOperations.unshift({
+            kind: 'element.upsert',
+            slideId: slide.id,
+            element: previous,
+            index
+          })
+          addChanged(changedIds, slide.id, styled.id)
           break
         }
         case 'element.delete': {

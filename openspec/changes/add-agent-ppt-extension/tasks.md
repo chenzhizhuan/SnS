@@ -32,6 +32,9 @@
 - [x] 5.2 Run the repository extension example gate plus relevant root typecheck/build checks and diff hygiene.
 - [x] 5.3 Exercise the built Webview in a browser harness and visually verify the narrow Slides, Canvas, and Properties sidebar layouts.
 - [x] 5.4 Reproduce the failing main-Agent apply shape, add regression coverage, and verify an existing seeded profile upgrades to the sidebar-only package.
+- [x] 5.5 Fix the inherited Electron drag region, preserve authored slide backgrounds, keep page thumbnails visible beside the active editor pane at usable sidebar widths, and add interaction/layout regressions.
+- [x] 5.6 Preserve cached workspace authorization across immutable same/subset-permission updates, require review for permission additions, and make repeated identical permission application idempotent.
+- [x] 5.7 Add a DOM layer tree and bounded CSS declaration editor that maps human HTML-style edits to typed operations without allowing arbitrary HTML, script, URL, selector, or CSS injection.
 
 ## 6. Presentation Artifact Handoff
 

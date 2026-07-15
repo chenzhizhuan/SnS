@@ -27,6 +27,11 @@ import {
   latestPresentationPath,
   presentationPathsFromWorkspaceEntries
 } from '../shared/presentation-sync.js'
+import {
+  applyEditableElementCss,
+  editableCssPropertiesForElement,
+  serializeEditableElementCss
+} from '../shared/presentation-css.js'
 
 declare global {
   interface Window {
@@ -262,14 +267,11 @@ function isStudioPanel(value: unknown): value is StudioPanel {
 function setActivePanel(panel: StudioPanel, focus = false): void {
   activePanel = panel
   ui.studio.dataset.activePanel = panel
-  const panels: Record<StudioPanel, HTMLElement> = {
-    slides: ui.slidesPanel,
-    canvas: ui.canvasPanel,
-    properties: ui.propertiesPanel
-  }
-  for (const [name, node] of Object.entries(panels) as Array<[StudioPanel, HTMLElement]>) {
-    node.hidden = name !== panel
-  }
+  // The slide rail stays visible beside Canvas and Properties at normal sidebar
+  // widths. CSS collapses it back into the Slides tab on very narrow Views.
+  ui.slidesPanel.hidden = false
+  ui.canvasPanel.hidden = panel !== 'canvas'
+  ui.propertiesPanel.hidden = panel !== 'properties'
   for (const tab of ui.panelTabs) {
     const selected = tab.dataset.studioTab === panel
     tab.setAttribute('aria-selected', String(selected))
@@ -953,6 +955,22 @@ function upsertElement(element: PresentationElement, label: string): void {
   localApply([{ kind: 'element.upsert', slideId: slide.id, element }], label)
 }
 
+function reorderElement(elementId: string, index: number): void {
+  const slide = currentSlide()
+  if (!slide || conflicted) return
+  const current = slide.elements.findIndex((element) => element.id === elementId)
+  const boundedIndex = clamp(index, 0, slide.elements.length - 1)
+  if (current < 0 || current === boundedIndex) return
+  const element = slide.elements[current]!
+  selectedElementId = element.id
+  localApply([{
+    kind: 'element.upsert',
+    slideId: slide.id,
+    element,
+    index: boundedIndex
+  }], boundedIndex > current ? 'bring layer forward' : 'send layer backward')
+}
+
 function deleteSelectedElement(): void {
   const slide = currentSlide()
   const element = currentElement()
@@ -1127,6 +1145,109 @@ function section(titleText: string, ...children: HTMLElement[]): HTMLElement {
   return node
 }
 
+function elementTag(element: PresentationElement): 'div' | 'img' {
+  return element.type === 'image' ? 'img' : 'div'
+}
+
+function layerSection(slide: PresentationSlide): HTMLElement {
+  const list = html('div')
+  list.className = 'layer-tree'
+  if (slide.elements.length === 0) {
+    const empty = html('p')
+    empty.className = 'muted'
+    empty.textContent = 'This slide has no editable DIV or image elements yet.'
+    list.append(empty)
+    return section('DOM / Layers', list)
+  }
+
+  const layers = slide.elements.map((element, index) => ({ element, index })).reverse()
+  for (const { element, index } of layers) {
+    const row = html('div')
+    row.className = 'layer-row'
+    row.dataset.selected = String(element.id === selectedElementId)
+
+    const select = html('button')
+    select.type = 'button'
+    select.className = 'layer-select'
+    select.setAttribute('aria-pressed', String(element.id === selectedElementId))
+    select.title = `Select ${element.type} ${element.id}`
+    const tag = html('code')
+    tag.className = 'layer-tag'
+    tag.textContent = `<${elementTag(element)}>`
+    const name = html('span')
+    name.className = 'layer-name'
+    name.textContent = `${element.type} · ${element.id}`
+    select.append(tag, name)
+    select.addEventListener('click', () => selectElement(element.id))
+
+    const actions = html('span')
+    actions.className = 'layer-actions'
+    const forward = html('button')
+    forward.type = 'button'
+    forward.className = 'layer-order-button'
+    forward.textContent = '↑'
+    forward.title = 'Bring forward'
+    forward.setAttribute('aria-label', `Bring ${element.id} forward`)
+    forward.disabled = conflicted || index === slide.elements.length - 1
+    forward.addEventListener('click', () => reorderElement(element.id, index + 1))
+    const backward = html('button')
+    backward.type = 'button'
+    backward.className = 'layer-order-button'
+    backward.textContent = '↓'
+    backward.title = 'Send backward'
+    backward.setAttribute('aria-label', `Send ${element.id} backward`)
+    backward.disabled = conflicted || index === 0
+    backward.addEventListener('click', () => reorderElement(element.id, index - 1))
+    actions.append(forward, backward)
+    row.append(select, actions)
+    list.append(row)
+  }
+  return section('DOM / Layers', list)
+}
+
+function cssEditorSection(element: PresentationElement): HTMLElement {
+  const editor = html('div')
+  editor.className = 'css-editor'
+  const selector = html('code')
+  selector.className = 'css-selector'
+  selector.textContent = `${elementTag(element)}[data-kun-element-id="${element.id}"]`
+  const textarea = html('textarea')
+  textarea.className = 'css-declarations'
+  textarea.value = serializeEditableElementCss(element)
+  textarea.spellcheck = false
+  textarea.disabled = conflicted
+  textarea.setAttribute('aria-label', `Editable CSS declarations for ${element.id}`)
+  const help = html('small')
+  help.className = 'css-help'
+  help.textContent = `Allowed: ${editableCssPropertiesForElement(element).join(', ')}`
+  const error = html('p')
+  error.className = 'field-error css-error'
+  error.setAttribute('role', 'alert')
+  const apply = html('button')
+  apply.type = 'button'
+  apply.className = 'button button-primary button-compact'
+  apply.textContent = 'Apply CSS'
+  apply.disabled = conflicted
+  apply.addEventListener('click', () => {
+    try {
+      const slide = currentSlide()
+      if (!slide) return
+      applyEditableElementCss(element, textarea.value)
+      error.textContent = ''
+      localApply([{
+        kind: 'element.style',
+        slideId: slide.id,
+        elementId: element.id,
+        css: textarea.value
+      }], 'edit element CSS')
+    } catch (cause) {
+      error.textContent = errorMessage(cause)
+    }
+  })
+  editor.append(selector, textarea, help, error, apply)
+  return section('Safe CSS', editor)
+}
+
 function geometryFields(element: PresentationElement): HTMLElement {
   const grid = html('div')
   grid.className = 'inspector-grid'
@@ -1183,12 +1304,14 @@ function renderInspector(): void {
           localApply([{ kind: 'slide.update', slideId: slide.id, patch: { title } }], 'rename slide')),
         field('Background', slide.backgroundColor ?? project.theme.backgroundColor, (backgroundColor) =>
           localApply([{ kind: 'slide.update', slideId: slide.id, patch: { backgroundColor } }], 'change slide background'), { type: 'color' })
-      )
+      ),
+      layerSection(slide)
     )
     return
   }
 
   ui.inspectorTitle.textContent = `${element.type} · ${element.id}`
+  ui.inspectorBody.append(layerSection(slide))
   const common = section(
     'Layout',
     geometryFields(element),
@@ -1245,6 +1368,8 @@ function renderInspector(): void {
         upsertElement({ ...element, fit }, 'change image fit'))
     ))
   }
+
+  ui.inspectorBody.append(cssEditorSection(element))
 
   const remove = html('button')
   remove.type = 'button'

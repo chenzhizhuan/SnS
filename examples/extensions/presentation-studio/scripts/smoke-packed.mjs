@@ -28,7 +28,7 @@ try {
   const extractedRoot = join(temporary, 'extracted')
   const extracted = await extractKunxArchive(archivePath, extractedRoot)
   assert.equal(extracted.manifest.main, 'dist/host/extension.js')
-  assert.equal(extracted.manifest.version, '0.1.4')
+  assert.equal(extracted.manifest.version, '0.1.6')
   assert.deepEqual(extracted.manifest.contributes['views.rightSidebar'], [{
     id: 'studio',
     title: 'Kun PPT',

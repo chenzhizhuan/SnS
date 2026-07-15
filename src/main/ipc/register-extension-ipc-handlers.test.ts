@@ -313,6 +313,42 @@ describe('extension IPC security bridge', () => {
     expect(state.runtimeRequest).not.toHaveBeenCalled()
   })
 
+  it('treats an identical persisted workspace grant as an idempotent no-op', async () => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      grantedPermissions: ['webview', 'ui.views'],
+      workspaceTrusted: true
+    })
+    const view = state.viewSessions.create({
+      sessionId: 'permission-noop-view',
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      contributionId: 'issues',
+      workspaceRoot: '/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+
+    const result = await electronMock.handlers.get('extension:set-permissions')!(state.trustedEvent, {
+      extensionId: 'acme.example',
+      expectedVersion: '1.2.3',
+      permissions: ['ui.views', 'webview'],
+      workspaceRoot: '/workspace'
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ unchanged: true })
+    })
+    expect(state.protectedActions.authorizeAndPerform).not.toHaveBeenCalled()
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+    expect(state.viewSessions.get(view.sessionId)).toMatchObject({ workspaceRoot: '/workspace' })
+    expect(state.contentScripts.revokeExtension).not.toHaveBeenCalled()
+  })
+
   it('binds guest requests to the Main-owned session and forwards nonce headers', async () => {
     const state = fixture()
     const record = state.viewSessions.create({

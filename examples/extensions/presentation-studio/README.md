@@ -65,11 +65,21 @@ opens without a restored deck, it discovers and loads the most recently modified
 root-level `.kun-ppt.html` file so a deck created while the View was closed is
 still rendered immediately.
 
+Properties also exposes a DOM/Layers tree for the current slide. Text and shape
+elements correspond to projected `div` nodes and images correspond to `img`
+nodes. Selecting a layer reveals a bounded CSS declaration editor for layout,
+rotation, opacity, typography, borders, fills, and image fit. Applying CSS emits
+an `element.style` typed operation, so direct manipulation, human CSS edits, and
+main-Agent edits share revision checks, undo, autosave, and deterministic HTML
+projection. Selectors, at-rules, comments, URLs, unsupported properties, and
+out-of-canvas geometry are rejected rather than injected into the Webview.
+
 For `presentation-apply`, `operationId` is optional and Kun derives a bounded
 key from the tool invocation when it is omitted. Inserted slides default an
 omitted `backgroundColor` to `null` (the deck theme), and text elements may use
-an optional `fontFamily` override. These defaults keep normal main-Agent calls
-compact while the saved model remains canonical.
+an optional `fontFamily` override. `element.style` accepts the same bounded CSS
+declarations shown in Properties for an existing element. These defaults keep
+normal main-Agent calls compact while the saved model remains canonical.
 
 ## Chat handoff
 

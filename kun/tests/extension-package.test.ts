@@ -250,6 +250,43 @@ describe('extension package management', () => {
     }
   })
 
+  it('requires a fresh workspace review when a selected version adds permission authority', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-extension-permission-update-'))
+    try {
+      const source = join(root, 'source')
+      const paths = new ExtensionPaths({
+        packageRoot: join(root, 'extensions'),
+        dataRoot: join(root, 'extension-data')
+      })
+      const registry = new ExtensionRegistry(paths)
+      const manager = new ExtensionPackageManager(paths, registry, { compatibility })
+      const workspaceKey = 'c'.repeat(64)
+
+      await writeExtensionSource(source, '1.0.0', 0, ['ui.views'])
+      const v1Archive = join(root, 'acme.demo-1.0.0.kunx')
+      await packKunx(source, v1Archive, { compatibility })
+      await manager.installArchive(v1Archive, { grantedPermissions: ['ui.views'] })
+      await manager.setWorkspacePermissionGrant(
+        'acme.demo',
+        workspaceKey,
+        ['ui.views'],
+        '1.0.0'
+      )
+
+      const nextPermissions = ['ui.views', 'workspace.read']
+      await writeExtensionSource(source, '2.0.0', 0, nextPermissions)
+      const v2Archive = join(root, 'acme.demo-2.0.0.kunx')
+      await packKunx(source, v2Archive, { compatibility })
+      await manager.installArchive(v2Archive, { grantedPermissions: nextPermissions })
+
+      expect((await registry.get('acme.demo'))?.workspacePermissionGrants).toEqual({})
+      expect(await registry.isWorkspaceTrusted('acme.demo', workspaceKey)).toBe(false)
+    } finally {
+      await makeWritable(root)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('leaves the prior selected version usable when version admission fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-extension-install-rollback-'))
     try {
