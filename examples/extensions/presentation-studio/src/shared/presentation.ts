@@ -42,6 +42,7 @@ export interface PresentationTextElement extends PresentationElementBase {
   text: string
   fontSize: number
   fontWeight: 400 | 500 | 600 | 700
+  fontFamily?: PresentationFontFamily
   color: string
   align: PresentationTextAlign
   verticalAlign: PresentationVerticalAlign
@@ -396,13 +397,27 @@ function parseElement(value: unknown, path: string): PresentationElement {
   const common = ['id', 'type', 'x', 'y', 'width', 'height', 'rotation', 'opacity']
   const base = parseElementBase(input, path)
   if (type === 'text') {
-    exactKeys(input, [...common, 'text', 'fontSize', 'fontWeight', 'color', 'align', 'verticalAlign'], path)
+    exactKeysWithOptional(
+      input,
+      [...common, 'text', 'fontSize', 'fontWeight', 'color', 'align', 'verticalAlign'],
+      ['fontFamily'],
+      path
+    )
     return {
       ...base,
       type,
       text: stringValue(input.text, `${path}.text`, 4_000),
       fontSize: numberValue(input.fontSize, `${path}.fontSize`, 8, 240),
       fontWeight: fontWeightValue(input.fontWeight, `${path}.fontWeight`),
+      ...('fontFamily' in input
+        ? {
+            fontFamily: enumValue(
+              input.fontFamily,
+              `${path}.fontFamily`,
+              ['sans', 'serif', 'mono'] as const
+            )
+          }
+        : {}),
       color: colorValue(input.color, `${path}.color`),
       align: enumValue(input.align, `${path}.align`, ['left', 'center', 'right'] as const),
       verticalAlign: enumValue(input.verticalAlign, `${path}.verticalAlign`, ['top', 'middle', 'bottom'] as const)
@@ -432,7 +447,7 @@ function parseElement(value: unknown, path: string): PresentationElement {
 
 function parseSlide(value: unknown, path: string): PresentationSlide {
   const input = record(value, path)
-  exactKeys(input, ['id', 'title', 'backgroundColor', 'elements'], path)
+  exactKeysWithOptional(input, ['id', 'title', 'elements'], ['backgroundColor'], path)
   if (!Array.isArray(input.elements)) fail('invalid_type', `${path}.elements`, 'Expected an array')
   if (input.elements.length > MAX_ELEMENTS_PER_SLIDE) {
     fail('too_many_elements', `${path}.elements`, `At most ${MAX_ELEMENTS_PER_SLIDE} elements are allowed`)
@@ -440,7 +455,7 @@ function parseSlide(value: unknown, path: string): PresentationSlide {
   return {
     id: idValue(input.id, `${path}.id`),
     title: stringValue(input.title, `${path}.title`, 120, true),
-    backgroundColor: input.backgroundColor === null
+    backgroundColor: input.backgroundColor === undefined || input.backgroundColor === null
       ? null
       : colorValue(input.backgroundColor, `${path}.backgroundColor`),
     elements: input.elements.map((element, index) => parseElement(element, `${path}.elements[${index}]`))
@@ -928,6 +943,7 @@ function elementCss(element: PresentationElement, className: string, index: numb
       `color:${element.color}`,
       `font-size:${cssNumber(element.fontSize / 16)}cqw`,
       `font-weight:${element.fontWeight}`,
+      ...(element.fontFamily ? [`font-family:${fontStack(element.fontFamily)}`] : []),
       `text-align:${element.align}`,
       `justify-content:${element.verticalAlign === 'top' ? 'flex-start' : element.verticalAlign === 'bottom' ? 'flex-end' : 'center'}`
     )

@@ -22,6 +22,10 @@ The extension MUST route both Webview edits and Agent tool edits through the sam
 - **WHEN** the Agent applies multiple valid operations against the current revision
 - **THEN** all operations commit as one revision and the open View refreshes to the same resulting model
 
+#### Scenario: Apply a naturally generated Agent batch
+- **WHEN** the main Agent omits an explicit operation ID or an inserted slide background and optionally supplies a supported text font family
+- **THEN** Kun derives a bounded idempotency key, normalizes the omitted background to null, persists the supported font choice, and applies the batch without a schema-only failure
+
 ### Requirement: Concurrent edits fail closed
 Every persisted mutation SHALL require an expected revision, SHALL serialize calls for the same case-folded workspace path inside one Extension Host, and SHALL reject a stale revision observed before persistence without overwriting the newer presentation. Cross-process atomic conditional writes are outside this requirement because Extension API v1 does not expose them.
 
@@ -34,15 +38,31 @@ Every persisted mutation SHALL require an expected revision, SHALL serialize cal
 - **THEN** the extension returns the recorded resulting revision without applying the batch twice
 
 ### Requirement: The editor provides a complete bounded visual workflow
-The full-page View SHALL support creating and loading a deck, slide navigation and ordering, text/shape/image elements, selection, drag, resize, inline text changes, property editing, undo/redo, preview, debounced save, and presentation-specific Agent runs.
+The extension SHALL contribute the editor only as a responsive right-sidebar View with a dedicated presentation icon. The editor SHALL expose Slides, Canvas, and Properties as focused sidebar tabs and support creating and loading a deck, slide navigation and ordering, text/shape/image elements, selection, drag, resize, inline text changes, property editing, undo/redo, preview, and debounced save.
+
+#### Scenario: Open Kun PPT from the right activity rail
+- **WHEN** the installed extension contributions are loaded in a trusted workspace
+- **THEN** the right activity rail shows the Kun PPT icon and selecting it opens the responsive presentation editor
 
 #### Scenario: Create and revise a deck
 - **WHEN** a user creates a deck, adds slides and elements, moves and styles them, undoes one edit, and previews the result
 - **THEN** the canvas, slide rail, inspector, preview, and saved standalone file show the same revision
 
-#### Scenario: Ask the presentation Agent to revise the open deck
-- **WHEN** the user submits a revision request from the View
-- **THEN** pending visual edits are saved first, a private extension-owned run uses the presentation profile/tools, and accepted file changes refresh the editor
+#### Scenario: Ask the main Kun Agent to revise the open deck
+- **WHEN** the user asks the main conversation Agent to revise a presentation while Presentation Studio is installed
+- **THEN** the Agent can use the registered presentation tools and accepted file changes refresh the open sidebar editor without creating an extension-owned Agent run
+
+#### Scenario: Agent creates a deck different from the current sidebar path
+- **WHEN** the main Agent creates or modifies another root-level `.kun-ppt.html` while the sidebar is open
+- **THEN** the sidebar follows that tool-written path and renders its current revision without moving Agent interaction out of the main conversation
+
+#### Scenario: Open the sidebar after an Agent created a deck
+- **WHEN** the sidebar has no restored deck and one or more root-level presentation files already exist
+- **THEN** the sidebar loads the most recently modified valid `.kun-ppt.html` file
+
+#### Scenario: Identify the generated display artifact
+- **WHEN** the main Agent successfully creates a standalone `.kun-ppt.html` deck
+- **THEN** the open Kun PPT sidebar renders it and the completed-turn file card identifies it as Kun PPT display HTML
 
 ### Requirement: Presentation content cannot control the extension Webview
 The extension MUST render validated structured fields with safe DOM APIs and MUST NOT execute or inject arbitrary presentation HTML, CSS, JavaScript, remote resources, or event handlers into the bridge-bearing Webview.
@@ -62,7 +82,7 @@ After an Agent turn completes, the GUI SHALL surface every successful, workspace
 - **WHEN** PPT Master successfully exports `presentations/brief.pptx` and the Agent turn completes
 - **THEN** the final reply shows one presentation card whose primary action asks the operating system to open that file with its configured default application such as WPS or PowerPoint
 
-#### Scenario: Presentation Studio writes an HTML deck
+#### Scenario: Kun PPT writes an HTML deck
 - **WHEN** a successful presentation write tool reports `brief.kun-ppt.html`
 - **THEN** the final reply shows one presentation card that can open the standalone HTML projection with the system default application
 
@@ -95,14 +115,14 @@ After an Agent turn completes, the GUI SHALL surface every successful, workspace
 - **THEN** the final reply keeps both presentation cards rather than case-folding them into one
 
 ### Requirement: Extension declarations remain public and verifiable
-The implementation SHALL use only public Extension API v1 surfaces, minimum Manifest permissions, bounded strict tool schemas, and declarations that exactly match runtime registration.
+The implementation SHALL use only public Extension API v1 surfaces, minimum Manifest permissions, bounded strict tool schemas, and declarations that exactly match runtime registration. It SHALL NOT declare an Agent profile or request `agent.run` permission.
 
 #### Scenario: Validate and pack the extension
 - **WHEN** repository extension checks build, validate, and pack all examples
 - **THEN** Presentation Studio passes without unresolved browser imports, undeclared resources, private Kun imports, or tool declaration drift
 
-### Requirement: Presentation Studio is bundled as a default extension
-Development and production builds SHALL include Presentation Studio in the product-owned bundled extension catalog beside Kun Video Editor, and Kun SHALL seed it through the normal extension registry without overriding an explicit user uninstall.
+### Requirement: Kun PPT is bundled as a default extension
+Development and production builds SHALL include the stable Presentation Studio extension identity with the user-visible Kun PPT name in the product-owned bundled extension catalog beside Kun Video Editor, and Kun SHALL seed it through the normal extension registry without overriding an explicit user uninstall.
 
 #### Scenario: Start with a clean profile
 - **WHEN** Kun starts with a clean profile and the generated bundled extension catalog
@@ -111,3 +131,7 @@ Development and production builds SHALL include Presentation Studio in the produ
 #### Scenario: Start after explicitly uninstalling Presentation Studio
 - **WHEN** a user uninstalls the seeded Presentation Studio extension and restarts Kun
 - **THEN** the bundled-extension seeder preserves that removal instead of resurrecting the extension
+
+#### Scenario: Upgrade removes an obsolete permission
+- **WHEN** a newer bundled Presentation Studio version requests only a subset of the permissions granted to the currently managed version
+- **THEN** Kun installs and selects the safer update while continuing to reject any bundled update that adds a permission

@@ -8,7 +8,7 @@ The NQ reference project edits arbitrary HTML inside an unsandboxed iframe and e
 
 **Goals:**
 
-- Make one presentation editable by both a person and an extension-owned Kun Agent without last-writer-wins data loss.
+- Make one presentation editable by both a person and the main Kun Agent without last-writer-wins data loss.
 - Keep the canonical artifact directly openable as a standalone HTML presentation.
 - Keep slide and element identity stable across sessions and exports.
 - Use only public Extension API v1.0 surfaces and minimum required permissions.
@@ -41,19 +41,21 @@ Elements are a discriminated union of text, shape, and workspace-relative image 
 
 Every mutation supplies `expectedRevision`. The host rereads the file, compares revisions, applies the batch, increments once, renders the complete canonical HTML, rechecks the prior content immediately before `context.workspace.writeFile`, then rereads it for verification. Calls for paths that differ only by ASCII case are serialized inside the extension host.
 
-Agent mutations also supply an `operationId`. A digest and resulting revision are retained in a bounded receipt list, making a same-input retry return the prior success while rejecting reuse with different input. Extension API v1.0 offers neither atomic rename nor atomic conditional/create-only writes. Revision checks, immediate pre-write rechecks, per-path serialization, and post-write verification cover normal UI/Agent races inside one Extension Host, while cross-process atomicity is explicitly deferred.
+Agent mutations may supply an `operationId`; otherwise the host derives one from the bounded tool invocation identity. A digest and resulting revision are retained in a bounded receipt list, making a same-input retry return the prior success while rejecting reuse with different input. Extension API v1.0 offers neither atomic rename nor atomic conditional/create-only writes. Revision checks, immediate pre-write rechecks, per-path serialization, and post-write verification cover normal UI/Agent races inside one Extension Host, while cross-process atomicity is explicitly deferred.
 
-### 4. The Webview is a trusted renderer for untrusted structured data
+### 4. The Webview is a trusted right-sidebar renderer for untrusted structured data
 
-The full-page Webview builds slide DOM with `createElement`, `textContent`, validated style values, and broker-loaded workspace images. It never injects presentation HTML with `innerHTML`, never creates a nested iframe, and never enables remote network access. The file projection escapes all text and attributes and includes a restrictive standalone CSP.
+The Webview is contributed only as a right-sidebar entry with a dedicated presentation icon. Its sidebar-first shell presents Slides, Canvas, and Properties as three tabs so a single focused workspace fits the same narrow contribution surface used by other editor extensions. It builds slide DOM with `createElement`, `textContent`, validated style values, and broker-loaded workspace images. It never injects presentation HTML with `innerHTML`, creates a nested iframe, or enables remote network access. The file projection escapes all text and attributes and includes a restrictive standalone CSP.
 
-The editor offers a slide rail, responsive 16:9 canvas, drag/resize, inline text editing, property inspector, slide operations, undo/redo, preview, and debounced save. Before starting or steering the Agent, it flushes pending edits so the Agent reads the current revision. A revision conflict never overwrites; the UI asks for reload.
+The editor offers a slide rail, responsive 16:9 canvas, drag/resize, inline text editing, property inspector, slide operations, undo/redo, preview, and debounced save. A revision conflict never overwrites; the UI asks for reload.
 
-### 5. A dedicated Agent profile uses five narrow tools
+### 5. The main Kun Agent uses five narrow extension tools
 
-The private `presentation-designer` profile may use only `presentation-create`, `presentation-read`, `presentation-apply`, `presentation-validate`, and `presentation-export-copy`. Its instructions require reading the current revision before edits, using stable IDs, applying bounded batches, refreshing on conflicts, validating before completion, and treating PPTX as a separate PPT Master workflow.
+The extension keeps its stable internal `kun-examples.presentation-studio` identity for in-place upgrades, but every user-visible surface calls it **Kun PPT**. When Kun PPT is installed, it registers `presentation-create`, `presentation-read`, `presentation-apply`, `presentation-validate`, and `presentation-export-copy` through Kun's normal extension ToolHost path. Those tools are available to the main conversation Agent, which remains the only Agent interaction surface. The Webview does not create, steer, cancel, or replay an extension-owned Agent run and the extension declares no Agent profile or `agent.run` permission.
 
-The same tools remain available through Kun's normal extension ToolHost path. Declarations are defined once in TypeScript and regression-tested against the Manifest, so side-effect classification, input/output schemas, and output limits cannot silently drift.
+Tool declarations are defined once in TypeScript and regression-tested against the Manifest, so side-effect classification, input/output schemas, output limits, and the Kun PPT View title cannot silently drift. Successful tool mutations publish `presentation.changed`; an open Webview follows the changed tool path and renders the standalone `.kun-ppt.html` model immediately. If the View opens after the mutation and has no restored deck, it lists the root workspace presentations and loads the most recently modified one. Command-originated changes do not unexpectedly switch the active deck, and a same-file concurrent edit still fails closed. The post-turn artifact card labels this output as Kun PPT display HTML.
+
+The direct apply contract keeps model-authored calls practical: `operationId` may be omitted and is then derived from Kun's bounded tool invocation identity, inserted slides default a missing background to the deck theme, and text elements may optionally override the theme font family. The persisted project remains canonical after normalization.
 
 ### 6. Completed turns surface presentation artifacts through the existing system opener
 
@@ -66,14 +68,15 @@ The primary card action calls the existing `editor:open-path` bridge with `edito
 - [Risk] A single HTML file can grow large. -> Cap the model and rendered file below the public 1 MiB tool/message budget and reject oversized edits before writing.
 - [Risk] Extension API v1.0 writes are not rename-atomic or conditionally atomic. -> Serialize case-folded paths, recheck directly before persistence, verify the post-write document, and document cross-process atomic storage as a future platform improvement.
 - [Risk] Workspace images may be missing or too large. -> Validate relative paths, use bounded broker reads, show a non-fatal placeholder, and report validation warnings.
-- [Risk] Agent and user edit concurrently. -> Flush UI edits before Agent input and fail closed on revision mismatch rather than automatically merging.
+- [Risk] The main Agent and user edit concurrently. -> Fail closed on revision mismatch rather than automatically merging; the Agent rereads and deliberately rebases.
 - [Risk] HTML projection could become an XSS surface. -> Project only validated AST fields, escape every text/attribute value, forbid arbitrary CSS/script, and keep the bridge-bearing Webview independent of the exported markup.
 - [Risk] A tool may report a presentation-looking path that no longer exists. -> Keep path resolution in the main process, show a bounded open failure in the card, and never attempt a shell-command fallback.
 - [Risk] A generic writer or symlink may disguise executable content as a presentation path. -> Require runtime-derived Presentation Studio provenance and a verified write-time digest for standalone HTML, then revalidate the canonical target's regular-file type, suffix, and current content digest in the main process.
+- [Risk] Removing an obsolete bundled permission can prevent existing profiles from receiving a safer editor revision. -> Allow automatic bundled upgrades only when every new permission is already present in the managed version; additions still require explicit approval.
 
 ## Migration Plan
 
-No persisted Kun data migration is required. Development and production builds package the example into the product-owned bundled extension catalog, and the existing normal registry seeder installs it for clean profiles and profiles that have not explicitly removed it. Create a new `.kun-ppt.html` deck and edit it through the contributed full-page View or tools. Future schema versions must add explicit model migration before accepting older files. Explicitly uninstalling the extension remains durable, and removing the extension leaves standalone presentation files intact.
+No persisted Kun data migration is required. Development and production builds package the example into the product-owned bundled extension catalog, and the existing normal registry seeder installs it for clean profiles and profiles that have not explicitly removed it. Create a new `.kun-ppt.html` deck and edit it through the contributed right-sidebar View or ask the main Kun Agent to use the installed presentation tools. Future schema versions must add explicit model migration before accepting older files. Explicitly uninstalling the extension remains durable, and removing the extension leaves standalone presentation files intact.
 
 ## Open Questions
 

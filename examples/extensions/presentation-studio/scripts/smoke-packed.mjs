@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -28,6 +28,23 @@ try {
   const extractedRoot = join(temporary, 'extracted')
   const extracted = await extractKunxArchive(archivePath, extractedRoot)
   assert.equal(extracted.manifest.main, 'dist/host/extension.js')
+  assert.equal(extracted.manifest.version, '0.1.4')
+  assert.deepEqual(extracted.manifest.contributes['views.rightSidebar'], [{
+    id: 'studio',
+    title: 'Kun PPT',
+    entry: 'dist/webview/index.html',
+    icon: 'assets/presentation-studio.svg',
+    order: 40,
+    multiple: false,
+    localResourceRoots: ['dist/webview']
+  }])
+  assert.deepEqual(extracted.manifest.contributes['views.fullPage'], [])
+  assert.deepEqual(extracted.manifest.contributes.agentProfiles, [])
+  assert.ok(!extracted.manifest.permissions.includes('agent.run'))
+  assert.match(
+    await readFile(join(extractedRoot, 'assets', 'presentation-studio.svg'), 'utf8'),
+    /<svg\b/u
+  )
   const extensionModule = await import(
     `${pathToFileURL(join(extractedRoot, extracted.manifest.main)).href}?smoke=${Date.now()}`
   )
@@ -69,7 +86,7 @@ try {
   ])
   for (const registration of disposables) await registration.dispose()
   await extensionModule.deactivate?.()
-  process.stdout.write('Packed Presentation Studio extracted, imported, and activated successfully.\n')
+  process.stdout.write('Packed Kun PPT extracted, imported, and activated successfully.\n')
 } finally {
   await rm(temporary, { recursive: true, force: true })
 }

@@ -724,7 +724,7 @@ export async function openEditorPath(payload: OpenEditorPathOptions): Promise<Ed
         const content = await readFile(targetPath)
         const actualSha256 = createHash('sha256').update(content).digest('hex')
         if (actualSha256 !== expectedSha256) {
-          throw new Error('Presentation changed after it was generated. Save it again in Presentation Studio before opening.')
+          throw new Error('Presentation changed after it was generated. Save it again in Kun PPT before opening.')
         }
       }
     }

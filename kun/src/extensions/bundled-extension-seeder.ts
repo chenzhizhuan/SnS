@@ -312,7 +312,7 @@ async function reconcileBundle(
   if (comparison === 0) {
     return skippedResult(prior, descriptor, timestamp, 'skipped-version-conflict')
   }
-  if (!sameStrings(managed.requestedPermissions, descriptor.permissions)) {
+  if (!isPermissionSubset(descriptor.permissions, managed.requestedPermissions)) {
     return skippedResult(prior, descriptor, timestamp, 'skipped-permission-change')
   }
 
@@ -554,10 +554,9 @@ function stringField(value: Record<string, unknown>, key: string): string {
   return field
 }
 
-function sameStrings(left: readonly string[], right: readonly string[]): boolean {
-  const first = [...left].sort()
-  const second = [...right].sort()
-  return first.length === second.length && first.every((value, index) => value === second[index])
+function isPermissionSubset(candidate: readonly string[], baseline: readonly string[]): boolean {
+  const allowed = new Set(baseline)
+  return candidate.every((permission) => allowed.has(permission))
 }
 
 async function sha256File(path: string): Promise<string> {

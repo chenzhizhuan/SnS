@@ -8,25 +8,30 @@
 
 - [x] 2.1 Implement the revision-aware project service with per-path serialization, size limits, idempotency receipts, post-write verification, and conflict errors.
 - [x] 2.2 Register create/read/apply/validate/export-copy tools and View commands through public Extension API v1, with progress, cancellation, bounded outputs, and change notifications.
-- [x] 2.3 Add the private presentation Agent profile and test exact Manifest/runtime declaration parity.
+- [x] 2.3 Expose the five presentation tools to the main Agent, omit extension-owned Agent profiles/runs, and test exact Manifest/runtime declaration parity.
+- [x] 2.4 Accept practical main-Agent apply calls by deriving an omitted operation ID and normalizing supported slide/text defaults.
 
 ## 3. Visual Presentation Studio
 
-- [x] 3.1 Build the full-page Webview shell with deck path controls, slide rail, 16:9 canvas, inspector, status, and responsive/themed styling.
+- [x] 3.1 Build the right-sidebar Webview shell with deck path controls, tabbed slide rail/canvas/inspector, status, and responsive/themed styling.
 - [x] 3.2 Implement slide and element creation, selection, ordering, drag/resize, inline text editing, property controls, undo/redo, preview, image resolution, and debounced revision-aware save.
-- [x] 3.3 Implement extension-owned Agent run create/steer/cancel/replay, flush-before-run behavior, and automatic refresh after tool mutations.
+- [x] 3.3 Keep Agent interaction in the main conversation, follow the path changed by main-Agent tools, refresh newer revisions, and discover the latest deck when the View opens after a mutation.
+- [x] 3.4 Contribute a dedicated Presentation Studio icon and responsive right-sidebar View entry, with manifest parity and packed-asset coverage.
+- [x] 3.5 Rename every user-visible extension surface to Kun PPT and label the generated standalone artifact as Kun PPT display HTML while preserving the stable extension ID.
 
 ## 4. Packaging And Documentation
 
 - [x] 4.1 Add the Manifest, package scripts, TypeScript/Vite configuration, README, license, and clean-room reference notes.
 - [x] 4.2 Add Presentation Studio to the extension examples index and validation enumeration.
 - [x] 4.3 Add Presentation Studio to the product-owned bundled extension catalog, packaged-resource validation, and default-seeding smoke coverage.
+- [x] 4.4 Version the sidebar-only package and allow bundled updates that only remove obsolete permissions without accepting permission additions.
 
 ## 5. Verification
 
 - [x] 5.1 Run the extension's typecheck, build, unit tests, Manifest validation, and package validation.
 - [x] 5.2 Run the repository extension example gate plus relevant root typecheck/build checks and diff hygiene.
-- [x] 5.3 Exercise the built Webview in a browser harness and visually verify canvas, inspector, drag/resize, preview, and Agent panel layout.
+- [x] 5.3 Exercise the built Webview in a browser harness and visually verify the narrow Slides, Canvas, and Properties sidebar layouts.
+- [x] 5.4 Reproduce the failing main-Agent apply shape, add regression coverage, and verify an existing seeded profile upgrades to the sidebar-only package.
 
 ## 6. Presentation Artifact Handoff
 

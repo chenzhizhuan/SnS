@@ -146,7 +146,7 @@ async function registerTools(
       const result = await service.apply({
         path: requiredString(input, 'path'),
         expectedRevision: requiredNumber(input, 'expectedRevision'),
-        operationId: requiredString(input, 'operationId'),
+        operationId: optionalString(input, 'operationId') ?? invocation.invocation.invocationId,
         operations: operationsFrom(input)
       }, toolControl(invocation))
       if (!result.idempotentReplay) {
@@ -280,6 +280,13 @@ function requiredString(input: JsonObject, key: string): string {
 function requiredNumber(input: JsonObject, key: string): number {
   const value = input[key]
   if (typeof value !== 'number') throw new TypeError(`${key} must be a number`)
+  return value
+}
+
+function optionalString(input: JsonObject, key: string): string | undefined {
+  const value = input[key]
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') throw new TypeError(`${key} must be a string`)
   return value
 }
 

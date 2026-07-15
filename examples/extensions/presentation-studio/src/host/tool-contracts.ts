@@ -1,8 +1,4 @@
-import type {
-  AgentProfileDeclarationInput,
-  ExtensionToolDeclarationInput,
-  JsonObject
-} from '@kun/extension-api'
+import type { ExtensionToolDeclarationInput, JsonObject } from '@kun/extension-api'
 
 const idSchema: JsonObject = {
   type: 'string',
@@ -46,6 +42,7 @@ const textElementSchema: JsonObject = {
     text: { type: 'string', maxLength: 4000 },
     fontSize: { type: 'number', minimum: 8, maximum: 240 },
     fontWeight: { enum: [400, 500, 600, 700] },
+    fontFamily: { enum: ['sans', 'serif', 'mono'] },
     color: colorSchema,
     align: { enum: ['left', 'center', 'right'] },
     verticalAlign: { enum: ['top', 'middle', 'bottom'] }
@@ -107,7 +104,7 @@ const slideSchema: JsonObject = {
     backgroundColor: { oneOf: [colorSchema, { type: 'null' }] },
     elements: { type: 'array', maxItems: 128, items: elementSchema }
   },
-  required: ['id', 'title', 'backgroundColor', 'elements'],
+  required: ['id', 'title', 'elements'],
   additionalProperties: false
 }
 
@@ -310,10 +307,21 @@ const applyInputSchema: JsonObject = {
   properties: {
     path: pathSchema,
     expectedRevision: { type: 'integer', minimum: 1 },
-    operationId: { type: 'string', minLength: 1, maxLength: 128 },
-    operations: { type: 'array', minItems: 1, maxItems: 128, items: presentationOperationSchema }
+    operationId: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 128,
+      description: 'Optional idempotency key. Kun derives one from the tool invocation when omitted.'
+    },
+    operations: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 128,
+      items: presentationOperationSchema,
+      description: 'Use only the declared operation kinds. element.upsert requires a complete typed element.'
+    }
   },
-  required: ['path', 'expectedRevision', 'operationId', 'operations'],
+  required: ['path', 'expectedRevision', 'operations'],
   additionalProperties: false
 }
 
@@ -409,7 +417,7 @@ export const presentationToolDeclarations = [
   },
   {
     id: 'presentation-apply',
-    description: 'Apply one bounded typed operation batch using expectedRevision and an idempotent operationId.',
+    description: 'Apply typed operations to the revision returned by presentation-read. operationId is optional. slide.insert defaults backgroundColor to null; element.upsert requires a complete text, shape, or image element and text fontFamily is optional.',
     inputSchema: applyInputSchema,
     outputSchema: applyOutputSchema,
     sideEffects: 'write',
@@ -439,19 +447,19 @@ export const presentationToolDeclarations = [
 export const presentationCommandContributions = [
   {
     id: 'presentation-create',
-    title: 'Presentation Studio: Create Deck',
+    title: 'Kun PPT: Create Deck',
     description: 'Create a new root-level standalone HTML presentation.',
     inputSchema: createInputSchema
   },
   {
     id: 'presentation-load',
-    title: 'Presentation Studio: Load Deck',
+    title: 'Kun PPT: Load Deck',
     description: 'Load a root-level standalone HTML presentation.',
     inputSchema: pathInputSchema
   },
   {
     id: 'presentation-save',
-    title: 'Presentation Studio: Save Operations',
+    title: 'Kun PPT: Save Operations',
     description: 'Save one revision-aware batch of visual presentation operations.',
     inputSchema: {
       ...applyInputSchema,
@@ -460,41 +468,17 @@ export const presentationCommandContributions = [
   },
   {
     id: 'presentation-export-copy',
-    title: 'Presentation Studio: Export Copy',
+    title: 'Kun PPT: Export Copy',
     description: 'Copy the current revision to another root-level HTML presentation.',
     inputSchema: exportInputSchema
   }
 ]
 
-export const presentationAgentProfile = {
-  id: 'presentation-designer',
-  title: 'Presentation Designer',
-  description: 'Privately edits the active structured HTML presentation with revision-aware tools.',
-  instructions: [
-    'Work only on the root-level .kun-ppt.html path named by the user or View.',
-    'Always call presentation-read immediately before editing and use its current revision.',
-    'Preserve stable slide and element IDs. Use bounded typed operations; never author arbitrary HTML or script.',
-    'Give every presentation-apply batch a unique operationId and reuse it only for an exact retry.',
-    'If an operation reports a revision conflict, read again and deliberately rebase the requested changes.',
-    'Validate the deck before declaring the task complete and fix actionable structural warnings.',
-    'Use presentation-export-copy for a separate copy; choose another name if the destination conflicts.',
-    'PPTX and PDF are separate workflows; do not claim that this extension exports either format.'
-  ].join('\n'),
-  allowedTools: presentationToolDeclarations.map(({ id }) => id),
-  budget: {
-    maxTokens: 16_384,
-    maxElapsedMs: 180_000,
-    maxModelRequests: 16,
-    maxToolInvocations: 40,
-    maxEvents: 1_500
-  },
-  visibility: 'private'
-} satisfies AgentProfileDeclarationInput
-
-export const presentationViewContribution = {
+export const presentationSidebarViewContribution = {
   id: 'studio',
-  title: 'Presentation Studio',
+  title: 'Kun PPT',
   entry: 'dist/webview/index.html',
+  icon: 'assets/presentation-studio.svg',
   order: 40,
   multiple: false,
   localResourceRoots: ['dist/webview']

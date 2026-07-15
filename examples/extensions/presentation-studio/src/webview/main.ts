@@ -1,7 +1,5 @@
 import {
   ExtensionHostClient,
-  type AgentRunEvent,
-  type AgentRunSubscription,
   type HostMessage,
   type HostTransport,
   type JsonObject,
@@ -24,6 +22,11 @@ import {
   type PresentationSlide,
   type PresentationTextElement
 } from '../shared/presentation.js'
+import {
+  decidePresentationChange,
+  latestPresentationPath,
+  presentationPathsFromWorkspaceEntries
+} from '../shared/presentation-sync.js'
 
 declare global {
   interface Window {
@@ -32,6 +35,7 @@ declare global {
 }
 
 type SaveTone = 'idle' | 'saving' | 'saved' | 'error'
+type StudioPanel = 'slides' | 'canvas' | 'properties'
 type CommandResponse = { path: string; project: PresentationProject }
 type SaveResponse = CommandResponse & {
   resultingRevision: number
@@ -75,20 +79,17 @@ type ImageCacheEntry =
 type PersistedViewState = {
   path?: string
   selectedSlideId?: string
-  lastRunId?: string
-  lastAgentSequence?: number
+  activePanel?: StudioPanel
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const SAVE_DEBOUNCE_MS = 450
 const MAX_IMAGE_BASE64_CHARS = 8 * 1024 * 1024
-const TERMINAL_RUN_STATES = new Set(['completed', 'failed', 'cancelled', 'budget-exhausted'])
-
 const client = new ExtensionHostClient(window.kunExtension)
 
 function required<T extends Element>(selector: string): T {
   const node = document.querySelector<T>(selector)
-  if (!node) throw new Error(`Presentation Studio is missing ${selector}`)
+  if (!node) throw new Error(`Kun PPT is missing ${selector}`)
   return node
 }
 
@@ -102,6 +103,10 @@ const ui = {
   conflictBanner: required<HTMLElement>('#conflict-banner'),
   conflictDetail: required<HTMLElement>('#conflict-detail'),
   reloadConflict: required<HTMLButtonElement>('#reload-conflict'),
+  panelTabs: [...document.querySelectorAll<HTMLButtonElement>('[data-studio-tab]')],
+  slidesPanel: required<HTMLElement>('#slides-panel'),
+  canvasPanel: required<HTMLElement>('#canvas-panel'),
+  propertiesPanel: required<HTMLElement>('#properties-panel'),
   deckTitle: required<HTMLElement>('#deck-title'),
   slideList: required<HTMLOListElement>('#slide-list'),
   addSlide: required<HTMLButtonElement>('#add-slide'),
@@ -138,13 +143,7 @@ const ui = {
   previewElements: required<SVGGElement>('#preview-elements'),
   previewPrev: required<HTMLButtonElement>('#preview-prev'),
   previewNext: required<HTMLButtonElement>('#preview-next'),
-  previewPosition: required<HTMLElement>('#preview-position'),
-  agentForm: required<HTMLFormElement>('#agent-form'),
-  agentPrompt: required<HTMLTextAreaElement>('#agent-prompt'),
-  sendAgent: required<HTMLButtonElement>('#send-agent'),
-  cancelAgent: required<HTMLButtonElement>('#cancel-agent'),
-  agentState: required<HTMLElement>('#agent-state'),
-  agentEvents: required<HTMLOListElement>('#agent-events')
+  previewPosition: required<HTMLElement>('#preview-position')
 }
 
 let project: PresentationProject | null = null
@@ -163,10 +162,7 @@ let inlineEditingId: string | null = null
 let previewIndex = 0
 let idCounter = 0
 let viewStateTimer = 0
-let activeRunId: string | null = null
-let lastRunId: string | null = null
-let lastAgentSequence = 0
-let agentSubscription: AgentRunSubscription | null = null
+let activePanel: StudioPanel = 'canvas'
 const imageCache = new Map<string, ImageCacheEntry>()
 
 function svg<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
@@ -216,11 +212,6 @@ function setSaveStatus(message: string, tone: SaveTone = 'idle'): void {
   ui.saveState.dataset.tone = tone
 }
 
-function setAgentStatus(message: string, tone: SaveTone = 'idle'): void {
-  ui.agentState.textContent = message
-  ui.agentState.dataset.tone = tone
-}
-
 function setConflict(message: string): void {
   conflicted = true
   ui.conflictDetail.textContent = message
@@ -258,11 +249,34 @@ function scheduleViewState(): void {
     const state: PersistedViewState = {
       ...(activePath ? { path: activePath } : {}),
       ...(selectedSlideId ? { selectedSlideId } : {}),
-      ...(lastRunId ? { lastRunId } : {}),
-      lastAgentSequence
+      activePanel
     }
     void client.ui.setViewState(state as unknown as JsonValue).catch(() => undefined)
   }, 150)
+}
+
+function isStudioPanel(value: unknown): value is StudioPanel {
+  return value === 'slides' || value === 'canvas' || value === 'properties'
+}
+
+function setActivePanel(panel: StudioPanel, focus = false): void {
+  activePanel = panel
+  ui.studio.dataset.activePanel = panel
+  const panels: Record<StudioPanel, HTMLElement> = {
+    slides: ui.slidesPanel,
+    canvas: ui.canvasPanel,
+    properties: ui.propertiesPanel
+  }
+  for (const [name, node] of Object.entries(panels) as Array<[StudioPanel, HTMLElement]>) {
+    node.hidden = name !== panel
+  }
+  for (const tab of ui.panelTabs) {
+    const selected = tab.dataset.studioTab === panel
+    tab.setAttribute('aria-selected', String(selected))
+    tab.tabIndex = selected ? 0 : -1
+    if (selected && focus) tab.focus()
+  }
+  scheduleViewState()
 }
 
 function renderControls(): void {
@@ -279,9 +293,6 @@ function renderControls(): void {
   ui.addShape.disabled = !editable || !slide
   ui.openImage.disabled = !editable || !slide
   ui.openPreview.disabled = !loaded || !slide
-  ui.agentPrompt.disabled = !editable
-  ui.sendAgent.disabled = !editable
-  ui.cancelAgent.disabled = activeRunId === null
 }
 
 function fontFamily(token: PresentationFontFamily): string {
@@ -370,7 +381,7 @@ function renderTextElement(group: SVGGElement, element: PresentationTextElement)
   text.setAttribute('fill', element.color)
   text.setAttribute('font-size', String(fontSize))
   text.setAttribute('font-weight', String(element.fontWeight))
-  text.setAttribute('font-family', fontFamily(project?.theme.fontFamily ?? 'sans'))
+  text.setAttribute('font-family', fontFamily(element.fontFamily ?? project?.theme.fontFamily ?? 'sans'))
   text.setAttribute('text-anchor', element.align === 'right' ? 'end' : element.align === 'center' ? 'middle' : 'start')
   text.setAttribute('pointer-events', 'none')
   lines.forEach((line, index) => {
@@ -744,6 +755,7 @@ function selectSlide(slideId: string): void {
   selectedSlideId = slideId
   selectedElementId = null
   previewIndex = project.slides.findIndex((slide) => slide.id === slideId)
+  setActivePanel('canvas')
   renderAll()
   scheduleViewState()
 }
@@ -1260,86 +1272,21 @@ async function createDeck(path: string): Promise<void> {
   commitProject(response.project, response.path)
 }
 
-function agentEventDetail(event: AgentRunEvent): string {
-  if (event.type === 'state' || event.type === 'terminal') return event.state
-  if (event.type === 'progress') return event.message
-  if (event.type === 'steering-accepted') return event.steeringId
-  if (event.type === 'usage') return JSON.stringify(event.usage).slice(0, 4000)
-  const content = typeof event.content === 'string' ? event.content : JSON.stringify(event.content)
-  return (content || event.role).slice(0, 4000)
-}
-
-function appendAgentEvent(event: AgentRunEvent): void {
-  if (event.sequence <= lastAgentSequence && ui.agentEvents.childElementCount > 0) return
-  lastAgentSequence = Math.max(lastAgentSequence, event.sequence)
-  const item = html('li')
-  item.className = 'agent-event'
-  const kind = html('span')
-  kind.className = 'agent-event-kind'
-  kind.textContent = `${event.sequence} · ${event.type}`
-  const detail = html('span')
-  detail.className = 'agent-event-detail'
-  detail.textContent = agentEventDetail(event)
-  item.append(kind, detail)
-  ui.agentEvents.append(item)
-  item.scrollIntoView({ block: 'nearest' })
-  if (event.type === 'state') setAgentStatus(event.state, event.state === 'running' ? 'saving' : 'idle')
-  if (event.type === 'terminal') {
-    setAgentStatus(event.state, event.state === 'completed' ? 'saved' : 'error')
-    activeRunId = null
-    renderControls()
-  }
-  scheduleViewState()
-}
-
-async function observeRun(runId: string, afterSequence = 0): Promise<void> {
-  await agentSubscription?.dispose()
-  agentSubscription = await client.agent.subscribe({ runId, afterSequence })
-  agentSubscription.onEvent(appendAgentEvent)
-}
-
-async function sendAgent(input: string): Promise<void> {
-  if (!project || !activePath || conflicted) return
-  await flushPending('before-agent')
-  if (!project || pendingOperations.length > 0 || conflicted) {
-    throw new Error('The deck must be saved before the Agent can run.')
-  }
-  const contextualInput = [
-    `Presentation file: ${activePath}`,
-    `Current revision: ${project.revision}`,
-    `Selected slide ID: ${selectedSlideId ?? 'none'}`,
-    '',
-    input
-  ].join('\n')
-  if (activeRunId) {
-    setAgentStatus('Sending steering…', 'saving')
-    const result = await client.agent.steer({ runId: activeRunId, input: contextualInput })
-    if (!result.accepted) throw new Error('The running Agent did not accept steering.')
-    return
-  }
-
-  ui.agentEvents.replaceChildren()
-  lastAgentSequence = 0
-  setAgentStatus('Creating Agent run…', 'saving')
-  const { run } = await client.agent.createRun({
-    input: contextualInput,
-    profileId: 'presentation-designer',
-    visibility: 'private',
-    metadata: { path: activePath, revision: project.revision, selectedSlideId: selectedSlideId ?? null },
-    budget: {
-      maxTokens: 12_000,
-      maxElapsedMs: 900_000,
-      maxModelRequests: 24,
-      maxToolInvocations: 48,
-      maxEvents: 2_000
+async function latestWorkspaceDeckPath(): Promise<string | undefined> {
+  const entries = await client.workspace.list('.')
+  const paths = presentationPathsFromWorkspaceEntries(entries)
+  const candidates = await Promise.all(paths.map(async (path) => {
+    try {
+      const info = await client.workspace.stat(path)
+      return {
+        path,
+        modifiedAt: typeof info.modifiedAt === 'string' ? info.modifiedAt : ''
+      }
+    } catch {
+      return null
     }
-  })
-  activeRunId = run.id
-  lastRunId = run.id
-  setAgentStatus(run.state, run.state === 'running' ? 'saving' : 'idle')
-  renderControls()
-  scheduleViewState()
-  await observeRun(run.id, 0)
+  }))
+  return latestPresentationPath(candidates.filter((candidate) => candidate !== null))
 }
 
 function isChangedPayload(value: JsonValue): value is JsonObject & PresentationChangedPayload {
@@ -1353,16 +1300,31 @@ function isChangedPayload(value: JsonValue): value is JsonObject & PresentationC
 async function handleHostMessage(message: HostMessage): Promise<void> {
   if (message.channel !== 'presentation.changed' || !isChangedPayload(message.payload)) return
   const change = message.payload
-  if (!project || change.path !== activePath || change.revision <= project.revision) return
   if (change.source === 'command' && ownSaveTargetRevision === change.revision) return
-  if (pendingOperations.length > 0 || savePromise) {
+  const action = decidePresentationChange({
+    hasProject: project !== null,
+    activePath,
+    currentRevision: project?.revision ?? 0,
+    changePath: change.path,
+    changeRevision: change.revision,
+    source: change.source
+  })
+  if (action === 'ignore') return
+  if (action === 'refresh-current' && (pendingOperations.length > 0 || savePromise)) {
     setConflict(`Revision ${change.revision} arrived while local edits were pending.`)
     return
   }
   try {
-    const slideId = selectedSlideId ?? undefined
-    await loadDeck(activePath, slideId)
-    setSaveStatus(`Refreshed after ${change.source} change · revision ${change.revision}`, 'saved')
+    const path = action === 'follow-tool' ? change.path : activePath
+    const slideId = action === 'refresh-current' ? selectedSlideId ?? undefined : undefined
+    await loadDeck(path, slideId)
+    setActivePanel('canvas')
+    setSaveStatus(
+      action === 'follow-tool'
+        ? `Showing Agent presentation · revision ${change.revision}`
+        : `Refreshed after ${change.source} change · revision ${change.revision}`,
+      'saved'
+    )
   } catch (error) {
     setConflict(`Could not refresh revision ${change.revision}: ${errorMessage(error)}`)
   }
@@ -1374,6 +1336,23 @@ function applyTheme(theme: Theme): void {
 }
 
 function bindEvents(): void {
+  for (const [index, tab] of ui.panelTabs.entries()) {
+    const panel = tab.dataset.studioTab
+    if (!isStudioPanel(panel)) continue
+    tab.addEventListener('click', () => setActivePanel(panel))
+    tab.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      event.preventDefault()
+      const lastIndex = ui.panelTabs.length - 1
+      const nextIndex = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? lastIndex
+          : (index + (event.key === 'ArrowLeft' ? -1 : 1) + ui.panelTabs.length) % ui.panelTabs.length
+      const nextPanel = ui.panelTabs[nextIndex]?.dataset.studioTab
+      if (isStudioPanel(nextPanel)) setActivePanel(nextPanel, true)
+    })
+  }
   ui.newDeck.addEventListener('click', () => {
     void createDeck(normalizePath(ui.path.value)).catch((error) => setSaveStatus(errorMessage(error), 'error'))
   })
@@ -1505,40 +1484,12 @@ function bindEvents(): void {
     }
   })
 
-  ui.agentForm.addEventListener('submit', (event) => {
-    event.preventDefault()
-    const input = ui.agentPrompt.value.trim()
-    if (!input) return
-    ui.agentPrompt.value = ''
-    void sendAgent(input).catch((error) => setAgentStatus(errorMessage(error), 'error'))
-  })
-  ui.cancelAgent.addEventListener('click', () => {
-    if (!activeRunId) return
-    setAgentStatus('Cancelling…', 'saving')
-    void client.agent.cancel({ runId: activeRunId, reason: 'Cancelled from Presentation Studio' })
-      .catch((error) => setAgentStatus(errorMessage(error), 'error'))
-  })
   client.ui.onDidReceiveMessage((message) => void handleHostMessage(message))
   client.ui.onDidChangeTheme(applyTheme)
   client.ui.onDidChangeLocale((locale) => {
     document.documentElement.lang = locale.language
     document.documentElement.dir = locale.direction
   })
-}
-
-async function restoreAgent(runId: string): Promise<void> {
-  try {
-    const run = await client.agent.getRun(runId)
-    lastRunId = run.id
-    activeRunId = TERMINAL_RUN_STATES.has(run.state) ? null : run.id
-    setAgentStatus(run.state, run.state === 'completed' ? 'saved' : TERMINAL_RUN_STATES.has(run.state) ? 'error' : 'saving')
-    renderControls()
-    await observeRun(run.id, 0)
-  } catch {
-    lastRunId = null
-    activeRunId = null
-    setAgentStatus('Previous run unavailable')
-  }
 }
 
 async function initialize(): Promise<void> {
@@ -1551,16 +1502,24 @@ async function initialize(): Promise<void> {
   applyTheme(theme)
   document.documentElement.lang = locale.language
   document.documentElement.dir = locale.direction
+  setActivePanel(isStudioPanel(restored?.activePanel) ? restored.activePanel : 'canvas')
   renderAll()
-  if (restored?.path) {
-    ui.path.value = restored.path
+  let initialPath = restored?.path
+  if (!initialPath) {
     try {
-      await loadDeck(normalizePath(restored.path), restored.selectedSlideId)
+      initialPath = await latestWorkspaceDeckPath()
+    } catch {
+      // Workspace discovery is a convenience; an empty editor remains usable when it is unavailable.
+    }
+  }
+  if (initialPath) {
+    ui.path.value = initialPath
+    try {
+      await loadDeck(normalizePath(initialPath), restored?.selectedSlideId)
     } catch (error) {
       setSaveStatus(`Could not restore deck: ${errorMessage(error)}`, 'error')
     }
   }
-  if (restored?.lastRunId) await restoreAgent(restored.lastRunId)
 }
 
 window.addEventListener('pagehide', () => {
@@ -1570,7 +1529,6 @@ window.addEventListener('pagehide', () => {
     } catch {
       // The visible conflict/error state already explains why the save was not completed.
     }
-    await agentSubscription?.dispose()
     await client.dispose()
   })()
 }, { once: true })

@@ -1,14 +1,16 @@
-# Presentation Studio
+# Kun PPT
 
-Presentation Studio is a runnable Kun Extension API v1 example for repeatedly
-editing one standalone HTML slide deck with a person and a Kun Agent. Each deck
+Kun PPT is a runnable Kun Extension API v1 example for repeatedly
+editing one standalone HTML slide deck with a person and the main Kun Agent. Each deck
 is stored as a root-level `*.kun-ppt.html` workspace file. A bounded,
 schema-versioned model embedded in that file is authoritative; the visible HTML
 is a deterministic projection that remains useful in a regular browser.
 
-The extension contributes a full-page editor, four View commands, five narrow
-workspace tools, and a private `presentation-designer` Agent profile. Both
-visual and Agent changes use the same typed operation reducer. Host persistence
+The extension contributes a responsive right-sidebar Webview with a dedicated
+presentation icon, four View commands, and five narrow workspace tools. When
+installed, those tools are available to the main conversation Agent. The
+Webview contains no second prompt box, private Agent profile, or Agent run;
+visual and main-Agent changes use the same typed operation reducer. Host persistence
 requires an expected revision, serializes writes per path, records bounded
 idempotency receipts, and verifies every write by reading it back through the
 public workspace broker. Extension API v1 does not expose an atomic
@@ -55,6 +57,20 @@ message on channel `presentation.changed` with this payload:
 The source is either `command` or `tool`. A closed View does not turn a durable
 workspace write into a failed tool invocation.
 
+The sidebar has three focused tabs: Slides, Canvas, and Properties. Ask the main
+Kun Agent in the normal conversation to create or revise a deck; a successful
+tool mutation publishes `presentation.changed` and the open sidebar follows the
+Agent-written path and reloads the new revision automatically. When the sidebar
+opens without a restored deck, it discovers and loads the most recently modified
+root-level `.kun-ppt.html` file so a deck created while the View was closed is
+still rendered immediately.
+
+For `presentation-apply`, `operationId` is optional and Kun derives a bounded
+key from the tool invocation when it is omitted. Inserted slides default an
+omitted `backgroundColor` to `null` (the deck theme), and text elements may use
+an optional `fontFamily` override. These defaults keep normal main-Agent calls
+compact while the saved model remains canonical.
+
 ## Chat handoff
 
 When an Agent turn finishes after a successful presentation write, Kun shows a
@@ -65,7 +81,7 @@ opens in WPS, PowerPoint, LibreOffice, or whichever compatible application the
 user configured. The card can also reveal the exact workspace file in the
 platform file manager. Before opening a standalone HTML deck, Kun verifies its
 current SHA-256 against the digest returned by the successful Studio write, so
-a file changed afterward must be saved again in Presentation Studio. Kun never
+a file changed afterward must be saved again in Kun PPT. Kun never
 launches a presentation automatically and does not probe or execute
 application-specific commands.
 
@@ -84,10 +100,13 @@ node examples/extensions/validate-manifest.mjs \
 `npm run check:extension-examples` additionally validates and packs every
 example with the repository's Kun CLI.
 
-`npm run dev` and production builds also package Presentation Studio into the
+`npm run dev` and production builds also package Kun PPT into the
 product-owned bundled extension catalog. On startup, Kun seeds it through the
 normal extension registry beside Kun Video Editor. A user who explicitly
 uninstalls it remains in control; later launches do not silently reinstall it.
+The right-side activity rail shows the Kun PPT icon; selecting it
+opens the revision-aware editor in its sidebar layout without replacing the
+main conversation page.
 
 ## Clean-room reference note
 
@@ -95,5 +114,5 @@ The interaction vocabulary was informed by the separately inspected
 NQ-PPT-HTML-Editor project: a 16:9 canvas, slide rail, direct manipulation,
 property inspector, preview, and iterative Agent editing. No source code,
 runtime DOM snapshot format, temporary-ID scheme, iframe bridge, styling, or
-assets were copied. Presentation Studio was implemented against Kun's public
+assets were copied. Kun PPT was implemented against Kun's public
 Extension API v1 and this repository's OpenSpec artifacts.

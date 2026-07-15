@@ -2,10 +2,9 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import {
-  presentationAgentProfile,
   presentationCommandContributions,
-  presentationToolDeclarations,
-  presentationViewContribution
+  presentationSidebarViewContribution,
+  presentationToolDeclarations
 } from './tool-contracts.js'
 import { operationsFrom } from './extension.js'
 
@@ -18,30 +17,42 @@ test('runtime declarations exactly match the Manifest', async () => {
     activationEvents: string[]
     contributes: {
       commands: unknown[]
-      'views.fullPage': unknown[]
-      agentProfiles: unknown[]
+      'views.rightSidebar': unknown[]
       tools: unknown[]
     }
   }
   assert.deepEqual(manifest.contributes.commands, presentationCommandContributions)
-  assert.deepEqual(manifest.contributes['views.fullPage'], [presentationViewContribution])
-  assert.deepEqual(manifest.contributes.agentProfiles, [presentationAgentProfile])
+  assert.deepEqual(
+    manifest.contributes['views.rightSidebar'],
+    [presentationSidebarViewContribution]
+  )
   assert.deepEqual(manifest.contributes.tools, presentationToolDeclarations)
   assert.equal(manifest.main, 'dist/host/extension.js')
+  assert.ok(manifest.activationEvents.includes('onView:studio'))
+  assert.ok(manifest.activationEvents.every((event) => !event.startsWith('onAgentProfile:')))
+  assert.ok(!('agentProfiles' in manifest.contributes))
   assert.deepEqual(manifest.permissions, [
     'commands.register',
     'ui.views',
     'webview',
-    'agent.run',
     'tools.register',
     'workspace.read',
     'workspace.write'
   ])
-  assert.equal(presentationAgentProfile.visibility, 'private')
-  assert.deepEqual(
-    presentationAgentProfile.allowedTools,
-    presentationToolDeclarations.map(({ id }) => id)
-  )
+})
+
+test('the Webview is a sidebar workspace controlled by the main Agent tools', async () => {
+  const [markup, styles, controller] = await Promise.all([
+    readFile(new URL('../../../src/webview/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../../../src/webview/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../../src/webview/main.ts', import.meta.url), 'utf8')
+  ])
+  assert.equal(markup.match(/data-studio-tab=/gu)?.length, 3)
+  assert.doesNotMatch(markup, /agent-(?:form|panel|prompt|events)/u)
+  assert.match(styles, /data-active-panel="slides"/u)
+  assert.match(styles, /data-active-panel="canvas"/u)
+  assert.match(styles, /data-active-panel="properties"/u)
+  assert.doesNotMatch(controller, /client\.agent/u)
 })
 
 test('all tool schemas are strict, bounded, and side-effect classified', () => {
@@ -113,4 +124,60 @@ test('deep operation parsing reports a public validation failure', () => {
   }), (error: unknown) =>
     error instanceof Error &&
     'code' in error && error.code === 'VALIDATION_FAILED')
+})
+
+test('main Agent apply calls may omit operationId and slide background defaults', async () => {
+  const declaration = presentationToolDeclarations.find(({ id }) => id === 'presentation-apply')
+  assert.ok(declaration)
+  const validatorUrl = new URL(
+    '../../../../../../kun/dist/extensions/json-schema-validator.js',
+    import.meta.url
+  )
+  const runtime = await import(validatorUrl.href) as {
+    compileExtensionJsonSchema(
+      schema: Record<string, unknown>,
+      subject: string
+    ): { assert(value: unknown, subject: string): void }
+  }
+  const input = {
+    path: 'learning-theme.kun-ppt.html',
+    expectedRevision: 1,
+    operations: [{
+      kind: 'slide.insert',
+      slide: {
+        id: 'slide-2',
+        title: 'Learning plan',
+        elements: [{
+          id: 'title-2',
+          type: 'text',
+          x: 8,
+          y: 8,
+          width: 84,
+          height: 12,
+          rotation: 0,
+          opacity: 1,
+          text: 'Learn deliberately',
+          fontSize: 36,
+          fontWeight: 700,
+          fontFamily: 'sans',
+          color: '#F9FAFB',
+          align: 'left',
+          verticalAlign: 'top'
+        }]
+      }
+    }]
+  }
+  const validator = runtime.compileExtensionJsonSchema(
+    declaration.inputSchema as Record<string, unknown>,
+    'tools.presentation-apply.inputSchema'
+  )
+  assert.doesNotThrow(() => validator.assert(input, 'presentation-apply arguments'))
+  const operations = operationsFrom(input)
+  assert.equal(operations[0]?.kind, 'slide.insert')
+  if (operations[0]?.kind !== 'slide.insert') assert.fail('expected slide.insert')
+  assert.equal(operations[0].slide.backgroundColor, null)
+  const element = operations[0].slide.elements[0]
+  assert.equal(element?.type, 'text')
+  if (element?.type !== 'text') assert.fail('expected text element')
+  assert.equal(element.fontFamily, 'sans')
 })

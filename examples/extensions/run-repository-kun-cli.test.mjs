@@ -75,6 +75,7 @@ test('every repository example resolves validate and pack through the helper', a
     'direct-dom',
     'hello-sidebar',
     'kun-video-editor',
+    'presentation-studio',
     'streaming-model-provider',
     'tool-provider',
     'workspace-dashboard'

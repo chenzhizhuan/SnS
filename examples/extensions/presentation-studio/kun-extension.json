@@ -4,9 +4,9 @@
   "apiVersion": "1.0.0",
   "name": "presentation-studio",
   "publisher": "kun-examples",
-  "version": "0.1.0",
-  "displayName": "Presentation Studio",
-  "description": "A revision-aware visual HTML presentation workspace for people and Kun Agents.",
+  "version": "0.1.4",
+  "displayName": "Kun PPT",
+  "description": "A revision-aware Kun PPT display HTML workspace for people and the main Kun Agent.",
   "license": "MIT",
   "engines": {
     "kun": ">=0.1.0"
@@ -23,14 +23,13 @@
     "onTool:presentation-read",
     "onTool:presentation-apply",
     "onTool:presentation-validate",
-    "onTool:presentation-export-copy",
-    "onAgentProfile:presentation-designer"
+    "onTool:presentation-export-copy"
   ],
   "contributes": {
     "commands": [
       {
         "id": "presentation-create",
-        "title": "Presentation Studio: Create Deck",
+        "title": "Kun PPT: Create Deck",
         "description": "Create a new root-level standalone HTML presentation.",
         "inputSchema": {
           "type": "object",
@@ -55,7 +54,7 @@
       },
       {
         "id": "presentation-load",
-        "title": "Presentation Studio: Load Deck",
+        "title": "Kun PPT: Load Deck",
         "description": "Load a root-level standalone HTML presentation.",
         "inputSchema": {
           "type": "object",
@@ -75,7 +74,7 @@
       },
       {
         "id": "presentation-save",
-        "title": "Presentation Studio: Save Operations",
+        "title": "Kun PPT: Save Operations",
         "description": "Save one revision-aware batch of visual presentation operations.",
         "inputSchema": {
           "type": "object",
@@ -93,7 +92,8 @@
             "operationId": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 128
+              "maxLength": 128,
+              "description": "Optional idempotency key. Kun derives one from the tool invocation when omitted."
             },
             "operations": {
               "type": "array",
@@ -245,6 +245,13 @@
                                         500,
                                         600,
                                         700
+                                      ]
+                                    },
+                                    "fontFamily": {
+                                      "enum": [
+                                        "sans",
+                                        "serif",
+                                        "mono"
                                       ]
                                     },
                                     "color": {
@@ -450,7 +457,6 @@
                         "required": [
                           "id",
                           "title",
-                          "backgroundColor",
                           "elements"
                         ],
                         "additionalProperties": false
@@ -625,6 +631,13 @@
                                   500,
                                   600,
                                   700
+                                ]
+                              },
+                              "fontFamily": {
+                                "enum": [
+                                  "sans",
+                                  "serif",
+                                  "mono"
                                 ]
                               },
                               "color": {
@@ -865,7 +878,8 @@
                     "additionalProperties": false
                   }
                 ]
-              }
+              },
+              "description": "Use only the declared operation kinds. element.upsert requires a complete typed element."
             }
           },
           "required": [
@@ -878,7 +892,7 @@
       },
       {
         "id": "presentation-export-copy",
-        "title": "Presentation Studio: Export Copy",
+        "title": "Kun PPT: Export Copy",
         "description": "Copy the current revision to another root-level HTML presentation.",
         "inputSchema": {
           "type": "object",
@@ -909,39 +923,17 @@
         }
       }
     ],
-    "views.fullPage": [
+    "views.rightSidebar": [
       {
         "id": "studio",
-        "title": "Presentation Studio",
+        "title": "Kun PPT",
         "entry": "dist/webview/index.html",
+        "icon": "assets/presentation-studio.svg",
         "order": 40,
         "multiple": false,
         "localResourceRoots": [
           "dist/webview"
         ]
-      }
-    ],
-    "agentProfiles": [
-      {
-        "id": "presentation-designer",
-        "title": "Presentation Designer",
-        "description": "Privately edits the active structured HTML presentation with revision-aware tools.",
-        "instructions": "Work only on the root-level .kun-ppt.html path named by the user or View.\nAlways call presentation-read immediately before editing and use its current revision.\nPreserve stable slide and element IDs. Use bounded typed operations; never author arbitrary HTML or script.\nGive every presentation-apply batch a unique operationId and reuse it only for an exact retry.\nIf an operation reports a revision conflict, read again and deliberately rebase the requested changes.\nValidate the deck before declaring the task complete and fix actionable structural warnings.\nUse presentation-export-copy for a separate copy; choose another name if the destination conflicts.\nPPTX and PDF are separate workflows; do not claim that this extension exports either format.",
-        "allowedTools": [
-          "presentation-create",
-          "presentation-read",
-          "presentation-apply",
-          "presentation-validate",
-          "presentation-export-copy"
-        ],
-        "budget": {
-          "maxTokens": 16384,
-          "maxElapsedMs": 180000,
-          "maxModelRequests": 16,
-          "maxToolInvocations": 40,
-          "maxEvents": 1500
-        },
-        "visibility": "private"
       }
     ],
     "tools": [
@@ -1208,6 +1200,13 @@
                                     700
                                   ]
                                 },
+                                "fontFamily": {
+                                  "enum": [
+                                    "sans",
+                                    "serif",
+                                    "mono"
+                                  ]
+                                },
                                 "color": {
                                   "type": "string",
                                   "pattern": "^#[0-9A-Fa-f]{6}$"
@@ -1411,7 +1410,6 @@
                     "required": [
                       "id",
                       "title",
-                      "backgroundColor",
                       "elements"
                     ],
                     "additionalProperties": false
@@ -1481,7 +1479,7 @@
       },
       {
         "id": "presentation-apply",
-        "description": "Apply one bounded typed operation batch using expectedRevision and an idempotent operationId.",
+        "description": "Apply typed operations to the revision returned by presentation-read. operationId is optional. slide.insert defaults backgroundColor to null; element.upsert requires a complete text, shape, or image element and text fontFamily is optional.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1498,7 +1496,8 @@
             "operationId": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 128
+              "maxLength": 128,
+              "description": "Optional idempotency key. Kun derives one from the tool invocation when omitted."
             },
             "operations": {
               "type": "array",
@@ -1650,6 +1649,13 @@
                                         500,
                                         600,
                                         700
+                                      ]
+                                    },
+                                    "fontFamily": {
+                                      "enum": [
+                                        "sans",
+                                        "serif",
+                                        "mono"
                                       ]
                                     },
                                     "color": {
@@ -1855,7 +1861,6 @@
                         "required": [
                           "id",
                           "title",
-                          "backgroundColor",
                           "elements"
                         ],
                         "additionalProperties": false
@@ -2030,6 +2035,13 @@
                                   500,
                                   600,
                                   700
+                                ]
+                              },
+                              "fontFamily": {
+                                "enum": [
+                                  "sans",
+                                  "serif",
+                                  "mono"
                                 ]
                               },
                               "color": {
@@ -2270,13 +2282,13 @@
                     "additionalProperties": false
                   }
                 ]
-              }
+              },
+              "description": "Use only the declared operation kinds. element.upsert requires a complete typed element."
             }
           },
           "required": [
             "path",
             "expectedRevision",
-            "operationId",
             "operations"
           ],
           "additionalProperties": false
@@ -2591,7 +2603,6 @@
     "commands.register",
     "ui.views",
     "webview",
-    "agent.run",
     "tools.register",
     "workspace.read",
     "workspace.write"

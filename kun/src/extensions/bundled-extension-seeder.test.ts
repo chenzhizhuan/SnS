@@ -196,6 +196,29 @@ describe('bundled extension seeding', () => {
     expect((await harness.registry.get('acme.demo'))?.versions['2.0.0']).toBeUndefined()
   })
 
+  it('selects a bundled update that only removes permissions', async () => {
+    const harness = await createHarness()
+    await writeBundle(harness, '1.0.0', ['agent.run', 'commands.register'])
+    await seedBundledExtensions(seedOptions(harness))
+    await writeBundle(harness, '2.0.0', ['commands.register'])
+
+    expect(await seedBundledExtensions(seedOptions(harness))).toEqual([{
+      extensionId: 'acme.demo',
+      version: '2.0.0',
+      outcome: 'updated-selected'
+    }])
+    expect(await harness.registry.get('acme.demo')).toMatchObject({
+      selectedVersion: '2.0.0',
+      previousSelectedVersion: '1.0.0',
+      versions: {
+        '2.0.0': {
+          requestedPermissions: ['commands.register'],
+          grantedPermissions: ['commands.register']
+        }
+      }
+    })
+  })
+
   it('honors uninstall permanently across newer bundled versions', async () => {
     const harness = await createHarness()
     await writeBundle(harness, '1.0.0', [])

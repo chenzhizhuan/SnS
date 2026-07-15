@@ -4,17 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <title>Presentation Studio</title>
+    <title>Kun PPT</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="studio" class="studio" data-theme="dark">
+    <div id="studio" class="studio" data-theme="dark" data-active-panel="canvas">
       <header class="topbar">
-        <div class="brand" aria-label="Presentation Studio">
+        <div class="brand" aria-label="Kun PPT">
           <span class="brand-mark" aria-hidden="true">K</span>
           <span class="brand-copy">
-            <strong>Presentation Studio</strong>
-            <small>Agent-ready HTML decks</small>
+            <strong>Kun PPT</strong>
+            <small>Main Agent · display HTML</small>
           </span>
         </div>
 
@@ -49,8 +49,40 @@
         <button id="reload-conflict" type="button" class="button button-danger">Reload deck</button>
       </section>
 
+      <nav class="studio-tabs" role="tablist" aria-label="Presentation workspace">
+        <button
+          id="studio-tab-slides"
+          type="button"
+          class="studio-tab"
+          role="tab"
+          aria-controls="slides-panel"
+          aria-selected="false"
+          tabindex="-1"
+          data-studio-tab="slides"
+        >Slides</button>
+        <button
+          id="studio-tab-canvas"
+          type="button"
+          class="studio-tab"
+          role="tab"
+          aria-controls="canvas-panel"
+          aria-selected="true"
+          data-studio-tab="canvas"
+        >Canvas</button>
+        <button
+          id="studio-tab-properties"
+          type="button"
+          class="studio-tab"
+          role="tab"
+          aria-controls="properties-panel"
+          aria-selected="false"
+          tabindex="-1"
+          data-studio-tab="properties"
+        >Properties</button>
+      </nav>
+
       <main class="workspace-grid">
-        <aside class="slide-rail" aria-label="Slides">
+        <aside id="slides-panel" class="slide-rail" role="tabpanel" aria-labelledby="studio-tab-slides">
           <header class="panel-header">
             <div>
               <span class="eyebrow">Deck</span>
@@ -65,7 +97,7 @@
           </div>
         </aside>
 
-        <section class="editor-column" aria-label="Slide editor">
+        <section id="canvas-panel" class="editor-column" role="tabpanel" aria-labelledby="studio-tab-canvas">
           <div class="canvas-toolbar">
             <div class="toolbar-group" role="group" aria-label="Edit history">
               <button id="undo" type="button" class="icon-button" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)" disabled>↶</button>
@@ -84,8 +116,8 @@
           <div id="canvas-viewport" class="canvas-viewport">
             <div id="canvas-empty" class="empty-state">
               <div class="empty-icon" aria-hidden="true">▣</div>
-              <h1>Open or create a presentation</h1>
-              <p>Choose a workspace-relative <code>.kun-ppt.html</code> path above.</p>
+              <h1>Waiting for Kun PPT HTML</h1>
+              <p>Agent-generated <code>.kun-ppt.html</code> appears here automatically.</p>
             </div>
             <svg
               id="slide-canvas"
@@ -112,33 +144,9 @@
             <span id="selection-caption">Nothing selected</span>
           </footer>
 
-          <section class="agent-dock" aria-labelledby="agent-heading">
-            <header class="agent-header">
-              <div>
-                <span class="eyebrow">Private extension run</span>
-                <strong id="agent-heading">Presentation Agent</strong>
-              </div>
-              <div id="agent-state" class="agent-state" role="status" aria-live="polite">Idle</div>
-            </header>
-            <ol id="agent-events" class="agent-events" aria-label="Agent run events"></ol>
-            <form id="agent-form" class="agent-composer">
-              <label class="sr-only" for="agent-prompt">Ask the Presentation Agent</label>
-              <textarea
-                id="agent-prompt"
-                rows="2"
-                maxlength="12000"
-                placeholder="Ask the Agent to revise this deck…"
-                disabled
-              ></textarea>
-              <div class="agent-actions">
-                <button id="cancel-agent" type="button" class="button button-danger" disabled>Cancel</button>
-                <button id="send-agent" type="submit" class="button button-primary" disabled>Run Agent</button>
-              </div>
-            </form>
-          </section>
         </section>
 
-        <aside class="inspector" aria-label="Inspector">
+        <aside id="properties-panel" class="inspector" role="tabpanel" aria-labelledby="studio-tab-properties">
           <header class="panel-header inspector-header">
             <div>
               <span class="eyebrow">Properties</span>
