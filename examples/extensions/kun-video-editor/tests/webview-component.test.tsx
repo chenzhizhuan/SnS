@@ -59,6 +59,7 @@ describe('video editor docked workbench', () => {
     const expectedLabels = ['Script', 'Clips', 'Timeline', 'Properties', 'Output']
 
     expect(workbench).toBeDefined()
+    expect(attribute(workbench!, 'data-workspace')).toBe('script')
     expect(tags.some((tag) => attribute(tag, 'role') === 'tablist')).toBe(true)
     expect(tabs).toHaveLength(sections.length)
     expect(panes).toHaveLength(sections.length)
@@ -71,6 +72,9 @@ describe('video editor docked workbench', () => {
     expect(tags.some((tag) => hasClass(tag, 'project-action-buttons'))).toBe(true)
     expect((html.match(/class="workbench-icon"/gu) ?? []).length).toBeGreaterThanOrEqual(5)
     expect(html).toContain('class="selection-quick-summary"')
+    for (const disclosure of ['Background processing', 'Local intelligence', 'Caption editing', 'Multicam', 'Proof and preview', 'Revision history', 'Generated variants', 'Professional interchange', 'Project package']) {
+      expect(html).toContain(`<strong>${disclosure}</strong>`)
+    }
     expect(tabs.map((tag) => textForOpeningTag(html, tag))).toEqual(expectedLabels)
 
     for (const section of sections) {
@@ -312,7 +316,9 @@ describe('video editor docked workbench', () => {
     }
     const html = renderToStaticMarkup(<VideoEditorWorkbench controller={stubController(state)} />)
 
-    expect(html).toMatch(/<header class="panel-header"><h2>逐字稿<\/h2><div class="panel-actions">/u)
+    expect(html).toMatch(/<header class="panel-header"><h2>智能脚本<\/h2><\/header>/u)
+    expect(html).toContain('class="transcript-toolbar"')
+    expect(html).toContain('本地转写就绪')
     expect(html).toContain('导入逐字稿')
   })
 
@@ -659,6 +665,10 @@ describe('video editor docked workbench', () => {
     expect(hasClass(main!, 'empty-project')).toBe(true)
     expect(primaryAction).toBeDefined()
     expect(tags.some((tag) => hasClass(tag, 'workbench-tabs'))).toBe(false)
+    expect(tags.some((tag) => hasClass(tag, 'onboarding-project-card'))).toBe(true)
+    expect(html).toContain('Start your first story')
+    expect(html).toContain('Canvas ratio')
+    expect(html).toContain('Three-step editing workflow')
     expect(html).toContain('Create or open a project')
   })
 
@@ -735,7 +745,7 @@ describe('video editor docked workbench', () => {
     let mediaListener: (() => void) | undefined
     const mediaQuery = {
       get matches() { return compact },
-      media: '(max-width: 860px)',
+      media: '(max-width: 1180px)',
       onchange: null,
       addEventListener: vi.fn((_type: string, listener: () => void) => { mediaListener = listener }),
       removeEventListener: vi.fn(),

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const css = readFileSync(new URL('../src/webview/styles.css', import.meta.url), 'utf8')
-const compactCss = atRuleBlock(css, '@media (max-width: 860px)')
+const compactCss = atRuleBlock(css, '@media (max-width: 1180px)')
 const narrowCss = atRuleBlock(css, '@media (max-width: 540px)')
 
 describe('video editor right-sidebar responsive contract', () => {
@@ -55,7 +55,7 @@ describe('video editor right-sidebar responsive contract', () => {
     // All four supported Host widths resolve through the same compact-sidebar
     // contract. Wide source layouts must never leak their minimum columns into
     // the guest document at these widths.
-    expect(width).toBeLessThanOrEqual(860)
+    expect(width).toBeLessThanOrEqual(1180)
     expect(ruleDeclarations(compactCss, '.workbench')).toMatchObject({
       display: 'grid',
       'grid-template-columns': 'minmax(0, 1fr)'

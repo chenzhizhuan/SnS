@@ -7,6 +7,7 @@
 - [x] 1.5 Add semantic Host/Webview regression tests for flex fill, 280/360/560/760 px contracts, empty/active/error states, navigation, locale/theme, and accessibility
 - [x] 1.6 Exercise the real right-sidebar View in development and packaged macOS builds and capture actionable visual evidence at narrow and preferred widths
 - [x] 1.7 Redesign the complete sidebar workbench from an ImageGen visual reference and local OpenReel/Palmier interaction research, then implement the compact project chrome, preview transport, icon navigation, timeline hierarchy, contextual editing bar, and responsive empty state without changing editor authority contracts
+- [x] 1.8 Generate and version a dedicated ImageGen reference for initial setup plus every primary workspace, then align the live initialization, Script, Clips, Timeline, Properties, and Output layouts at current Host widths and advance the bundled extension patch version so existing managed installs receive the redesign
 
 ## 2. P0 shared editing command and project migration
 

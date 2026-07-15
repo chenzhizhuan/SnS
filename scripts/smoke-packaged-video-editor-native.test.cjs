@@ -246,7 +246,7 @@ test('requires exactly one video and one ordered deterministic SRT artifact', as
 test('accepts only the exact non-empty release archive for byte-identical lifecycle smoke', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'kun-native-release-archive-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const archive = join(directory, 'kun-video-editor-0.4.1.kunx')
+  const archive = join(directory, 'kun-video-editor-0.4.2.kunx')
   await writeFile(archive, 'release archive bytes')
   assert.doesNotThrow(() => assertReleaseArchive(archive))
   const wrong = join(directory, 'kun-video-editor-9.9.9.kunx')

@@ -65,7 +65,7 @@ export type VideoEditorWorkbenchProps = {
   controller: EditorController
 }
 
-const SIDEBAR_BREAKPOINT_QUERY = '(max-width: 860px)'
+const SIDEBAR_BREAKPOINT_QUERY = '(max-width: 1180px)'
 
 type WorkbenchIconName =
   | 'script'
@@ -301,7 +301,7 @@ export function VideoEditorWorkbench({ controller }: VideoEditorWorkbenchProps):
       ) : !project ? (
         <EmptyProject controller={controller} messages={messages} />
       ) : (
-        <main id="video-editor-main" className="workbench" data-layout="responsive-sidebar" aria-label={messages.appName} aria-busy={state.busy}>
+        <main id="video-editor-main" className="workbench" data-layout="responsive-sidebar" data-workspace={activeSection} aria-label={messages.appName} aria-busy={state.busy}>
           <details
             className="preview-drawer"
             open={previewExpanded}
@@ -361,8 +361,12 @@ export function VideoEditorWorkbench({ controller }: VideoEditorWorkbenchProps):
             hidden={compactSidebar && activeSection !== 'clips'}
           >
             <MediaLibrary controller={controller} messages={messages} />
-            <MediaIntelligencePanel controller={controller} messages={messages} />
-            <DerivedMediaPanel controller={controller} messages={messages} />
+            <WorkspaceDisclosure title={messages.workspaceMediaProcessing}>
+              <DerivedMediaPanel controller={controller} messages={messages} />
+            </WorkspaceDisclosure>
+            <WorkspaceDisclosure title={messages.workspaceMediaIntelligence}>
+              <MediaIntelligencePanel controller={controller} messages={messages} />
+            </WorkspaceDisclosure>
           </aside>
 
           <section
@@ -386,7 +390,12 @@ export function VideoEditorWorkbench({ controller }: VideoEditorWorkbenchProps):
             role={compactSidebar ? 'tabpanel' : undefined}
             hidden={compactSidebar && activeSection !== 'timeline'}
           >
-            <MulticamPanel
+            <TimelinePanel controller={controller} messages={messages} />
+            <WorkspaceDisclosure title={messages.workspaceCaptions}>
+              <CaptionPanel controller={controller} messages={messages} />
+            </WorkspaceDisclosure>
+            <WorkspaceDisclosure title={messages.workspaceMulticam}>
+              <MulticamPanel
               groups={project.multicamGroups.map((group) => ({
                 id: group.id,
                 sequenceId: group.sequenceId,
@@ -427,9 +436,8 @@ export function VideoEditorWorkbench({ controller }: VideoEditorWorkbenchProps):
               onMerge={controller.mergeMulticam}
               onApplyLayout={controller.applyMulticamLayout}
               onPreview={controller.previewMulticam}
-            />
-            <TimelinePanel controller={controller} messages={messages} />
-            <CaptionPanel controller={controller} messages={messages} />
+              />
+            </WorkspaceDisclosure>
           </section>
 
           <aside
@@ -454,8 +462,15 @@ export function VideoEditorWorkbench({ controller }: VideoEditorWorkbenchProps):
             role={compactSidebar ? 'tabpanel' : undefined}
             hidden={compactSidebar && activeSection !== 'output'}
           >
-            <RevisionPanel controller={controller} messages={messages} />
-            <GenerationPanel
+            <ExportPanel controller={controller} jobs={projectJobs} messages={messages} />
+            <WorkspaceDisclosure title={messages.workspacePreviewProof}>
+              <PreviewPanel controller={controller} artifacts={artifacts} messages={messages} />
+            </WorkspaceDisclosure>
+            <WorkspaceDisclosure title={messages.workspaceRevisionHistory}>
+              <RevisionPanel controller={controller} messages={messages} />
+            </WorkspaceDisclosure>
+            <WorkspaceDisclosure title={messages.workspaceGeneration}>
+              <GenerationPanel
               locale={state.locale}
               projectId={project.id}
               projectRevision={project.currentRevision}
@@ -475,11 +490,14 @@ export function VideoEditorWorkbench({ controller }: VideoEditorWorkbenchProps):
               onCancel={controller.cancelGeneration}
               onRetry={controller.retryGeneration}
               onInsert={controller.insertGeneratedVariant}
-            />
-            <PreviewPanel controller={controller} artifacts={artifacts} messages={messages} />
-            <ExportPanel controller={controller} jobs={projectJobs} messages={messages} />
-            <InterchangePanel controller={controller} messages={messages} />
-            <ProjectPackagePanel controller={controller} messages={messages} />
+              />
+            </WorkspaceDisclosure>
+            <WorkspaceDisclosure title={messages.workspaceInterchange}>
+              <InterchangePanel controller={controller} messages={messages} />
+            </WorkspaceDisclosure>
+            <WorkspaceDisclosure title={messages.workspaceProjectPackage}>
+              <ProjectPackagePanel controller={controller} messages={messages} />
+            </WorkspaceDisclosure>
           </section>
         </main>
       )}
@@ -729,6 +747,15 @@ function themeColorScheme(theme: EditorState['theme']): 'light' | 'dark' {
   return 'dark'
 }
 
+function WorkspaceDisclosure(props: PropsWithChildren<{ title: string }>): React.JSX.Element {
+  return (
+    <details className="workspace-disclosure">
+      <summary><strong>{props.title}</strong><span aria-hidden="true">⌄</span></summary>
+      <div className="workspace-disclosure-body">{props.children}</div>
+    </details>
+  )
+}
+
 function ProjectBar({ controller, messages }: { controller: EditorController; messages: Messages }): React.JSX.Element {
   const { state } = controller
   const [name, setName] = useState(messages.untitledInterview)
@@ -754,7 +781,7 @@ function ProjectBar({ controller, messages }: { controller: EditorController; me
         <span className="brand-mark" aria-hidden="true">K</span>
         <div><strong>{messages.appName}</strong><small>{messages.workbenchSubtitle}</small></div>
       </div>
-      <nav className="project-controls" aria-label={messages.projects}>
+      {state.project && <nav className="project-controls" aria-label={messages.projects}>
         <div className="project-switcher">
           <label>
             <span>{messages.projects}</span>
@@ -791,7 +818,7 @@ function ProjectBar({ controller, messages }: { controller: EditorController; me
           </select></label>
           <button type="submit" disabled={state.busy}>{messages.createProject}</button>
         </form>
-      </nav>
+      </nav>}
       <div className="project-actions">
         <div className="project-health" aria-label={messages.compactProjectStatus}>
           <span className={`connection connection-${state.connection}`}>{connectionLabel(messages, state.connection)}</span>
@@ -810,31 +837,53 @@ function ProjectBar({ controller, messages }: { controller: EditorController; me
 }
 
 function EmptyProject({ controller, messages }: { controller: EditorController; messages: Messages }): React.JSX.Element {
+  const [name, setName] = useState(messages.untitledInterview)
+  const [preset, setPreset] = useState<'16:9' | '9:16' | '1:1'>('16:9')
+  const [fpsPreset, setFpsPreset] = useState('30/1')
+  const create = (event: FormEvent): void => {
+    event.preventDefault()
+    const [numerator, denominator] = fpsPreset.split('/').map(Number)
+    void controller.createProject(name, preset, { numerator, denominator })
+  }
   return (
     <main id="video-editor-main" className="empty-project">
-      <div className="empty-project-copy">
+      <section className="onboarding-intro">
         <p className="eyebrow">{messages.localFirstEditing}</p>
-        <h1>{messages.emptyProjectTitle}</h1>
-        <p>{messages.noProject}</p>
-        <p className="boundary-note">{messages.unsupported}</p>
-        <div className="button-row">
-          <button
-            type="button"
-            className="empty-project-primary"
-            disabled={controller.state.busy}
-            onClick={() => void controller.createProject(messages.untitledInterview, '16:9', { numerator: 30, denominator: 1 })}
-          >
-            {messages.createProject}
-          </button>
-          {controller.state.projects.slice(0, 3).map((project) => (
-            <button type="button" key={project.id} onClick={() => void controller.openProject(project.id)}>
-              {formatMessage(messages.openProject, { name: project.name })}
-            </button>
-          ))}
+        <h1>{messages.onboardingTitle}</h1>
+        <p>{messages.onboardingSubtitle}</p>
+      </section>
+
+      <form className="onboarding-project-card" onSubmit={create}>
+        <div className="onboarding-card-heading">
+          <span className="onboarding-card-icon" aria-hidden="true">＋</span>
+          <div><strong>{messages.projectSetup}</strong><small>{messages.localOnly}</small></div>
         </div>
-      </div>
+        <label className="onboarding-name"><span>{messages.projectName}</span><input value={name} maxLength={160} onChange={(event) => setName(event.target.value)} required autoFocus /></label>
+        <fieldset className="onboarding-choice"><legend>{messages.canvasRatio}</legend><div>{(['16:9', '9:16', '1:1'] as const).map((value) => <button type="button" key={value} aria-pressed={preset === value} onClick={() => setPreset(value)}>{value}</button>)}</div></fieldset>
+        <fieldset className="onboarding-choice"><legend>{messages.frameRate}</legend><div>{[['24/1', '24'], ['30/1', '30'], ['60/1', '60']].map(([value, label]) => <button type="button" key={value} aria-pressed={fpsPreset === value} onClick={() => setFpsPreset(value!)}>{label} fps</button>)}</div></fieldset>
+        <button type="submit" className="empty-project-primary" disabled={controller.state.busy}>{messages.createAndStart}<span aria-hidden="true">→</span></button>
+      </form>
+
+      <section className="onboarding-recent" aria-labelledby="video-editor-recent-projects">
+        <div className="onboarding-section-heading"><h2 id="video-editor-recent-projects">{messages.recentProjects}</h2><span>{controller.state.projects.length}</span></div>
+        {controller.state.projects.length === 0 ? <p className="onboarding-empty-recent">{messages.noProject}</p> : <div className="onboarding-recent-list">{controller.state.projects.slice(0, 4).map((project) => (
+          <button type="button" key={project.id} onClick={() => void controller.openProject(project.id)}>
+            <span className="recent-project-thumb" aria-hidden="true"><i /><i /><i /></span>
+            <span><strong>{project.name}</strong><small>r{project.currentRevision}</small></span><b aria-hidden="true">→</b>
+          </button>
+        ))}</div>}
+      </section>
+
+      <section className="onboarding-steps" aria-label={messages.onboardingWorkflow}>
+        {[
+          [messages.onboardingStepCreate, messages.onboardingStepCreateBody, '01'],
+          [messages.onboardingStepImport, messages.onboardingStepImportBody, '02'],
+          [messages.onboardingStepEdit, messages.onboardingStepEditBody, '03']
+        ].map(([title, body, step]) => <article key={step}><span>{step}</span><div><strong>{title}</strong><p>{body}</p></div></article>)}
+      </section>
+
       <div className="empty-illustration" aria-hidden="true">
-        <div className="empty-preview-stage"><span className="empty-aspect">16:9</span><b>▶</b></div>
+        <div className="empty-preview-stage"><span className="empty-aspect">{preset}</span><b>▶</b></div>
         <div className="empty-preview-transport"><span>00:18</span><i /></div>
         <div className="empty-preview-timeline"><i /><i /><i /></div>
       </div>
@@ -866,6 +915,7 @@ function MediaLibrary({ controller, messages }: { controller: EditorController; 
   const project = controller.state.project!
   const [folderId, setFolderId] = useState('')
   const [query, setQuery] = useState('')
+  const [kindFilter, setKindFilter] = useState<'all' | 'video' | 'image' | 'audio'>('all')
   const [windowStart, setWindowStart] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
   const normalizedQuery = query.trim()
@@ -883,6 +933,7 @@ function MediaLibrary({ controller, messages }: { controller: EditorController; 
     : windowStart === 0 && !folderId && !normalizedQuery
       ? project.assets.slice(0, VIEW_LIMITS.virtualWindow)
       : []
+  const visibleAssets = assets.filter((asset) => kindFilter === 'all' || asset.kind === kindFilter || (kindFilter === 'image' && asset.kind === 'animation'))
   const total = filterMatches ? page!.total : project.assets.length
   const activeFolderNonEmpty = Boolean(folderId && (
     project.assets.some((asset) => asset.folderId === folderId) ||
@@ -903,7 +954,7 @@ function MediaLibrary({ controller, messages }: { controller: EditorController; 
       : [...current, assetId].slice(-64))
   }
   return (
-    <Panel title={messages.mediaLibrary} actions={<button type="button" className="quiet-button" onClick={() => void controller.importMedia({ folderId: folderId || undefined, addToTimeline: false })} disabled={controller.state.busy || !canImportMedia(controller.state)}>{messages.importMedia}</button>}>
+    <Panel title={messages.mediaLibrary} className="media-library-panel" actions={<button type="button" className="primary-action media-import-action" onClick={() => void controller.importMedia({ folderId: folderId || undefined, addToTimeline: false })} disabled={controller.state.busy || !canImportMedia(controller.state)}>{messages.importMedia}</button>}>
       <div className="media-library-toolbar">
         <label><span>{messages.folder}</span><select value={folderId} onChange={(event) => {
           setFolderId(event.target.value)
@@ -935,7 +986,15 @@ function MediaLibrary({ controller, messages }: { controller: EditorController; 
           >{messages.delete}</button>
         </>}
       </div>
-      <div className="media-organize-row">
+      <div className="media-kind-filters" role="group" aria-label={messages.mediaKinds}>
+        {([
+          ['all', messages.allKinds],
+          ['video', messages.videoKind],
+          ['image', messages.imageKind],
+          ['audio', messages.audioKind]
+        ] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={kindFilter === value} onClick={() => setKindFilter(value)}>{label}</button>)}
+      </div>
+      <div className="media-organize-row" data-active={selected.length > 0 ? 'true' : 'false'}>
         <span>{formatMessage(messages.mediaSelectedCount, { count: selected.length })}</span>
         <select aria-label={messages.moveSelectedToFolder} defaultValue="" onChange={(event) => {
           if (!selected.length) return
@@ -944,10 +1003,11 @@ function MediaLibrary({ controller, messages }: { controller: EditorController; 
           <option value="">{messages.moveToRoot}</option>
           {project.mediaFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
         </select>
+        {selected.length > 0 && <button type="button" className="quiet-button" onClick={() => setSelected([])}>{messages.clearSelection}</button>}
       </div>
-      {assets.length === 0 ? <EmptyState>{messages.noMedia}</EmptyState> : (
+      {visibleAssets.length === 0 ? <EmptyState>{messages.noMedia}</EmptyState> : (
         <ul className="media-list" aria-label={messages.importedMedia}>
-          {assets.map((asset) => {
+          {visibleAssets.map((asset) => {
             const revoked = asset.availability === 'revoked' || Boolean(asset.mediaHandleId && controller.state.revokedHandles.includes(asset.mediaHandleId))
             const offline = revoked || asset.availability === 'offline' || asset.availability === 'changed'
             return (
@@ -977,7 +1037,7 @@ function MediaLibrary({ controller, messages }: { controller: EditorController; 
         </ul>
       )}
       <VirtualControls start={windowStart} total={total} onChange={setWindowStart} messages={messages} />
-      {total > assets.length && <p className="subtle">{formatMessage(messages.filteredAssets, { visible: assets.length, total })}</p>}
+      {(total > visibleAssets.length || kindFilter !== 'all') && <p className="subtle">{formatMessage(messages.filteredAssets, { visible: visibleAssets.length, total })}</p>}
     </Panel>
   )
 }
@@ -1124,20 +1184,30 @@ function derivedStatusLabel(messages: Messages, status: DerivedMediaRecordProjec
 function TranscriptPanel({ controller, messages }: { controller: EditorController; messages: Messages }): React.JSX.Element {
   const { state } = controller
   const project = state.project!
+  const [query, setQuery] = useState('')
   const transcripts = state.selectedAssetId
     ? project.transcripts.filter(({ assetId }) => assetId === state.selectedAssetId)
     : project.transcripts
-  const segments = transcripts.flatMap((transcript) => transcript.segments.map((segment) => ({ ...segment, assetId: transcript.assetId })))
+  const allSegments = transcripts.flatMap((transcript) => transcript.segments.map((segment) => ({ ...segment, assetId: transcript.assetId })))
+  const normalizedQuery = query.trim().toLocaleLowerCase(state.locale?.language)
+  const segments = normalizedQuery
+    ? allSegments.filter((segment) => segment.text.toLocaleLowerCase(state.locale?.language).includes(normalizedQuery))
+    : allSegments
   const start = Math.min(state.transcriptWindowStart, Math.max(0, segments.length - 1))
   const visible = segments.slice(start, start + VIEW_LIMITS.virtualWindow)
   const active = activeTranscriptSegment(project, state.selectedAssetId, state.playheadFrame)
   return (
-    <Panel title={messages.transcript} actions={<>
-      <button type="button" className="quiet-button" onClick={() => void controller.importTranscript()}>{messages.importTranscript}</button>
-      <button type="button" className="quiet-button" onClick={() => void controller.checkLocalTranscriber()}>{messages.checkLocalTranscriber}</button>
-      <button type="button" className="quiet-button" disabled={segments.length === 0} onClick={() => void controller.generateCaptions()}>{messages.generateCaptions}</button>
-      <VirtualControls start={start} total={segments.length} onChange={controller.setTranscriptWindow} messages={messages} />
-    </>}>
+    <Panel title={messages.smartScript} className="transcript-panel">
+      <div className="transcript-toolbar">
+        <label className="transcript-search"><span className="sr-only">{messages.searchTranscript}</span><input type="search" value={query} placeholder={messages.searchTranscript} onChange={(event) => setQuery(event.target.value)} /></label>
+        <span className="local-ready-status"><i aria-hidden="true" />{messages.localTranscriptReady}</span>
+        <div className="transcript-actions">
+          <button type="button" className="quiet-button" onClick={() => void controller.importTranscript()}>{messages.importTranscript}</button>
+          <button type="button" className="quiet-button" onClick={() => void controller.checkLocalTranscriber()}>{messages.checkLocalTranscriber}</button>
+          <button type="button" className="primary-action" disabled={allSegments.length === 0} onClick={() => void controller.generateCaptions()}>{messages.generateCaptions}</button>
+        </div>
+        <VirtualControls start={start} total={segments.length} onChange={controller.setTranscriptWindow} messages={messages} />
+      </div>
       {segments.length === 0 ? <EmptyState>{messages.noTranscript}</EmptyState> : (
         <ol
           className="transcript-list"
@@ -1537,23 +1607,27 @@ function InspectorPanel(props: { controller: EditorController; item?: ItemProjec
   return (
     <Panel title={messages.inspector}>
       {!item && !caption ? <EmptyState>{messages.noSelection}</EmptyState> : item ? (
-        <div className="field-grid inspector-grid">
+        <div className="inspector-stack">
           <p className="selection-title"><strong>{item.id}</strong><span>{item.durationFrames} {messages.frames} · {item.trackId}</span></p>
           {item.nestedSequenceId && <div className="nested-sequence-actions wide-field"><strong>{messages.nestedSequence}</strong><span>{item.nestedSequenceId}</span><div className="button-row"><button type="button" onClick={() => void controller.selectSequence(item.nestedSequenceId!)}>{messages.openNestedSequence}</button><button type="button" onClick={() => window.confirm(messages.decomposeNestedConfirm) && void controller.decomposeNested(item.id)}>{messages.decomposeNestedSequence}</button></div></div>}
-          <label><span>X</span><input type="number" value={x} onChange={(event) => setX(Number(event.target.value))} /></label>
-          <label><span>Y</span><input type="number" value={y} onChange={(event) => setY(Number(event.target.value))} /></label>
-          <label><span>{messages.scale}</span><input type="number" min="0.01" max="10" step="0.05" value={scale} onChange={(event) => setScale(Number(event.target.value))} /></label>
-          <label><span>{messages.rotation}</span><input type="number" step="1" value={rotation} onChange={(event) => setRotation(Number(event.target.value))} /></label>
-          <label><span>{messages.opacity}</span><input type="number" min="0" max="1" step="0.05" value={opacity} onChange={(event) => setOpacity(Number(event.target.value))} /></label>
-          <label><span>{messages.speed}</span><input type="number" min="0.05" max="16" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /></label>
-          {(['left', 'top', 'right', 'bottom'] as const).map((edge) => <label key={edge}><span>{messages[`crop${edge[0]!.toUpperCase()}${edge.slice(1)}` as keyof Messages]}</span><input type="number" min="0" max="0.95" step="0.01" value={crop[edge]} onChange={(event) => setCrop((current) => ({ ...current, [edge]: Number(event.target.value) }))} /></label>)}
-          <label><span>{messages.blendMode}</span><select value={blendMode} onChange={(event) => setBlendMode(event.target.value as typeof blendMode)}><option value="normal">{messages.blendNormal}</option><option value="multiply">{messages.blendMultiply}</option><option value="screen">{messages.blendScreen}</option><option value="overlay">{messages.blendOverlay}</option></select></label>
-          <button type="button" onClick={applyComposition}>{messages.applyComposition}</button>
-          <fieldset className="wide-field effect-editor"><legend>{messages.effects}</legend><div className="button-row"><select aria-label={messages.effectCatalog} value={effectType} onChange={(event) => setEffectType(event.target.value)}>{EFFECT_CATALOG.map((effect) => <option key={effect.type} value={effect.type}>{effect.label(messages)}</option>)}</select><button type="button" onClick={addEffect}>{messages.addEffect}</button></div>{(item.effects ?? []).map((effect) => <EffectRow key={effect.id} item={item} effect={effect} controller={controller} messages={messages} />)}</fieldset>
-          <fieldset className="wide-field keyframe-editor"><legend>{messages.keyframes}</legend><label><span>{messages.keyframeProperty}</span><select value={keyframeProperty} onChange={(event) => setKeyframeProperty(event.target.value)}>{KEYFRAME_PROPERTIES.map((property) => <option key={property} value={property}>{property}</option>)}{(item.effects ?? []).flatMap((effect) => Object.entries(effect.parameters).filter(([, value]) => typeof value === 'number').map(([parameter]) => <option key={`${effect.id}.${parameter}`} value={`effect.${effect.id}.${parameter}`}>{effect.type} · {parameter}</option>))}</select></label><label><span>{messages.value}</span><input type="number" step="0.01" value={keyframeValue} onChange={(event) => setKeyframeValue(Number(event.target.value))} /></label><label><span>{messages.interpolation}</span><select value={keyframeInterpolation} onChange={(event) => setKeyframeInterpolation(event.target.value as typeof keyframeInterpolation)}><option value="hold">{messages.interpolationHold}</option><option value="linear">{messages.interpolationLinear}</option><option value="ease">{messages.interpolationEase}</option></select></label><button type="button" onClick={upsertKeyframe}>{messages.setKeyframeAtPlayhead}</button><ul>{(item.keyframes ?? []).map((track) => <li key={track.id}><span>{track.property} · {track.points.length}</span><button type="button" onClick={() => void controller.applyOperations([{ type: 'set-item-keyframes', itemId: item.id, keyframes: (item.keyframes ?? []).filter(({ id }) => id !== track.id) }], formatMessage(messages.removeKeyframeTrackSummary, { property: track.property }))}>{messages.remove}</button></li>)}</ul></fieldset>
+          <details className="inspector-section" open><summary>{messages.propertiesTransform}<span aria-hidden="true">⌄</span></summary><div className="field-grid inspector-grid">
+            <label><span>X</span><input type="number" value={x} onChange={(event) => setX(Number(event.target.value))} /></label>
+            <label><span>Y</span><input type="number" value={y} onChange={(event) => setY(Number(event.target.value))} /></label>
+            <label><span>{messages.scale}</span><input type="number" min="0.01" max="10" step="0.05" value={scale} onChange={(event) => setScale(Number(event.target.value))} /></label>
+            <label><span>{messages.rotation}</span><input type="number" step="1" value={rotation} onChange={(event) => setRotation(Number(event.target.value))} /></label>
+            <label><span>{messages.speed}</span><input type="number" min="0.05" max="16" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /></label>
+            {(['left', 'top', 'right', 'bottom'] as const).map((edge) => <label key={edge}><span>{messages[`crop${edge[0]!.toUpperCase()}${edge.slice(1)}` as keyof Messages]}</span><input type="number" min="0" max="0.95" step="0.01" value={crop[edge]} onChange={(event) => setCrop((current) => ({ ...current, [edge]: Number(event.target.value) }))} /></label>)}
+          </div></details>
+          <details className="inspector-section" open><summary>{messages.propertiesAppearance}<span aria-hidden="true">⌄</span></summary><div className="field-grid inspector-grid">
+            <label><span>{messages.opacity}</span><input type="number" min="0" max="1" step="0.05" value={opacity} onChange={(event) => setOpacity(Number(event.target.value))} /></label>
+            <label><span>{messages.blendMode}</span><select value={blendMode} onChange={(event) => setBlendMode(event.target.value as typeof blendMode)}><option value="normal">{messages.blendNormal}</option><option value="multiply">{messages.blendMultiply}</option><option value="screen">{messages.blendScreen}</option><option value="overlay">{messages.blendOverlay}</option></select></label>
+            <button type="button" className="primary-action" onClick={applyComposition}>{messages.applyComposition}</button>
+          </div></details>
+          <details className="inspector-section"><summary>{messages.effects}<span aria-hidden="true">⌄</span></summary><fieldset className="effect-editor"><legend className="sr-only">{messages.effects}</legend><div className="button-row"><select aria-label={messages.effectCatalog} value={effectType} onChange={(event) => setEffectType(event.target.value)}>{EFFECT_CATALOG.map((effect) => <option key={effect.type} value={effect.type}>{effect.label(messages)}</option>)}</select><button type="button" onClick={addEffect}>{messages.addEffect}</button></div>{(item.effects ?? []).map((effect) => <EffectRow key={effect.id} item={item} effect={effect} controller={controller} messages={messages} />)}</fieldset></details>
+          <details className="inspector-section"><summary>{messages.keyframes}<span aria-hidden="true">⌄</span></summary><fieldset className="keyframe-editor"><legend className="sr-only">{messages.keyframes}</legend><label><span>{messages.keyframeProperty}</span><select value={keyframeProperty} onChange={(event) => setKeyframeProperty(event.target.value)}>{KEYFRAME_PROPERTIES.map((property) => <option key={property} value={property}>{property}</option>)}{(item.effects ?? []).flatMap((effect) => Object.entries(effect.parameters).filter(([, value]) => typeof value === 'number').map(([parameter]) => <option key={`${effect.id}.${parameter}`} value={`effect.${effect.id}.${parameter}`}>{effect.type} · {parameter}</option>))}</select></label><label><span>{messages.value}</span><input type="number" step="0.01" value={keyframeValue} onChange={(event) => setKeyframeValue(Number(event.target.value))} /></label><label><span>{messages.interpolation}</span><select value={keyframeInterpolation} onChange={(event) => setKeyframeInterpolation(event.target.value as typeof keyframeInterpolation)}><option value="hold">{messages.interpolationHold}</option><option value="linear">{messages.interpolationLinear}</option><option value="ease">{messages.interpolationEase}</option></select></label><button type="button" onClick={upsertKeyframe}>{messages.setKeyframeAtPlayhead}</button><ul>{(item.keyframes ?? []).map((track) => <li key={track.id}><span>{track.property} · {track.points.length}</span><button type="button" onClick={() => void controller.applyOperations([{ type: 'set-item-keyframes', itemId: item.id, keyframes: (item.keyframes ?? []).filter(({ id }) => id !== track.id) }], formatMessage(messages.removeKeyframeTrackSummary, { property: track.property }))}>{messages.remove}</button></li>)}</ul></fieldset></details>
         </div>
       ) : <p>{messages.captionSelected}: <strong>{caption?.id}</strong>. {messages.captions}</p>}
-      <fieldset className="aspect-controls"><legend>{messages.canvasAndFit}</legend>{(['16:9', '9:16', '1:1'] as const).map((preset) => <button type="button" key={preset} aria-pressed={project.canvas.preset === preset} onClick={() => void controller.applyOperations([{ type: 'set-canvas', preset, fit: project.canvas.fit }], formatMessage(messages.canvasSummary, { preset }))}>{preset}</button>)}<label><span>{messages.fitPolicy}</span><select value={project.canvas.fit} onChange={(event) => void controller.applyOperations([{ type: 'set-canvas', preset: project.canvas.preset, fit: event.target.value as 'fit' | 'crop' | 'pad' }], messages.fitSummary)}><option value="fit">{messages.fit}</option><option value="crop">{messages.crop}</option><option value="pad">{messages.pad}</option></select></label></fieldset>
+      <details className="inspector-section canvas-section"><summary>{messages.canvasAndFit}<span aria-hidden="true">⌄</span></summary><fieldset className="aspect-controls"><legend className="sr-only">{messages.canvasAndFit}</legend>{(['16:9', '9:16', '1:1'] as const).map((preset) => <button type="button" key={preset} aria-pressed={project.canvas.preset === preset} onClick={() => void controller.applyOperations([{ type: 'set-canvas', preset, fit: project.canvas.fit }], formatMessage(messages.canvasSummary, { preset }))}>{preset}</button>)}<label><span>{messages.fitPolicy}</span><select value={project.canvas.fit} onChange={(event) => void controller.applyOperations([{ type: 'set-canvas', preset: project.canvas.preset, fit: event.target.value as 'fit' | 'crop' | 'pad' }], messages.fitSummary)}><option value="fit">{messages.fit}</option><option value="crop">{messages.crop}</option><option value="pad">{messages.pad}</option></select></label></fieldset></details>
       <p className="boundary-note">{messages.canvasBoundary}</p>
     </Panel>
   )
@@ -1831,10 +1905,23 @@ function PreviewComparisonElement({ resource }: { resource: PreviewResource }): 
 function ExportPanel({ controller, jobs, messages }: { controller: EditorController; jobs: JobSnapshot[]; messages: Messages }): React.JSX.Element {
   const [captionMode, setCaptionMode] = useState<'none' | 'burned' | 'sidecar' | 'both'>('none')
   const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt')
+  const project = controller.state.project!
+  const fps = project.fps.numerator / project.fps.denominator
   return (
-    <Panel title={messages.export} actions={<><label className="inline-field"><span>{messages.captionsLabel}</span><select value={captionMode} onChange={(event) => setCaptionMode(event.target.value as typeof captionMode)}><option value="none">{messages.captionModeNone}</option><option value="burned" disabled={!hasMediaFeature(controller.state, 'drawtext-filter')}>{messages.captionModeBurned}</option><option value="sidecar">{messages.captionModeSidecar}</option><option value="both" disabled={!hasMediaFeature(controller.state, 'drawtext-filter')}>{messages.captionModeBoth}</option></select></label>{(captionMode === 'sidecar' || captionMode === 'both') && <label className="inline-field"><span>{messages.format}</span><select value={subtitleFormat} onChange={(event) => setSubtitleFormat(event.target.value as typeof subtitleFormat)}><option value="srt">SRT</option><option value="vtt">WebVTT</option></select></label>}</>}>
-      <div className="button-row"><button type="button" disabled={!canRender(controller.state, 'h264-mp4', captionMode)} onClick={() => void controller.startRender('h264-mp4', captionMode, subtitleFormat)}>{messages.exportVideo}</button><button type="button" disabled={!canRender(controller.state, 'audio-aac', 'none')} onClick={() => void controller.startRender('audio-aac', 'none')}>{messages.exportAudio}</button><button type="button" disabled={!canRender(controller.state, 'subtitles', 'none')} onClick={() => void controller.startRender('subtitles', 'none', 'srt')}>{messages.exportSubRip}</button><button type="button" disabled={!canRender(controller.state, 'subtitles', 'none')} onClick={() => void controller.startRender('subtitles', 'none', 'vtt')}>{messages.exportWebVtt}</button></div>
+    <Panel title={messages.export} className="export-panel">
+      <section className="delivery-hero">
+        <span className="delivery-icon" aria-hidden="true">✓</span>
+        <div><p className="eyebrow">{messages.readyToDeliver}</p><h2>{project.name}</h2><p>{formatMessage(messages.deliverySummary, { revision: project.currentRevision, duration: formatTime(frameToSeconds(project, project.durationFrames)) })}</p></div>
+      </section>
+      <div className="export-settings-grid">
+        <label><span>{messages.captionsLabel}</span><select value={captionMode} onChange={(event) => setCaptionMode(event.target.value as typeof captionMode)}><option value="none">{messages.captionModeNone}</option><option value="burned" disabled={!hasMediaFeature(controller.state, 'drawtext-filter')}>{messages.captionModeBurned}</option><option value="sidecar">{messages.captionModeSidecar}</option><option value="both" disabled={!hasMediaFeature(controller.state, 'drawtext-filter')}>{messages.captionModeBoth}</option></select></label>
+        {(captionMode === 'sidecar' || captionMode === 'both') && <label><span>{messages.format}</span><select value={subtitleFormat} onChange={(event) => setSubtitleFormat(event.target.value as typeof subtitleFormat)}><option value="srt">SRT</option><option value="vtt">WebVTT</option></select></label>}
+        <dl className="export-facts"><div><dt>{messages.canvas}</dt><dd>{project.canvas.preset}</dd></div><div><dt>{messages.frameRate}</dt><dd>{Number.isInteger(fps) ? fps : fps.toFixed(2)} fps</dd></div><div><dt>{messages.activeRevision}</dt><dd>r{project.currentRevision}</dd></div></dl>
+      </div>
+      <div className="export-primary-row"><button type="button" className="primary-action export-video-action" disabled={!canRender(controller.state, 'h264-mp4', captionMode)} onClick={() => void controller.startRender('h264-mp4', captionMode, subtitleFormat)}>{messages.exportVideo}<span aria-hidden="true">→</span></button></div>
+      <div className="export-secondary-actions"><button type="button" disabled={!canRender(controller.state, 'audio-aac', 'none')} onClick={() => void controller.startRender('audio-aac', 'none')}>{messages.exportAudio}</button><button type="button" disabled={!canRender(controller.state, 'subtitles', 'none')} onClick={() => void controller.startRender('subtitles', 'none', 'srt')}>{messages.exportSubRip}</button><button type="button" disabled={!canRender(controller.state, 'subtitles', 'none')} onClick={() => void controller.startRender('subtitles', 'none', 'vtt')}>{messages.exportWebVtt}</button></div>
       {!hasMediaFeature(controller.state, 'drawtext-filter') && <p className="boundary-note">{messages.burnedCaptionsUnavailable}</p>}
+      <h3 className="export-jobs-title">{messages.exportQueue}</h3>
       {jobs.length === 0 ? <EmptyState>{messages.emptyJobs}</EmptyState> : <ul className="job-list">{jobs.map((job) => <JobRow key={job.id} job={job} controller={controller} messages={messages} />)}</ul>}
     </Panel>
   )
