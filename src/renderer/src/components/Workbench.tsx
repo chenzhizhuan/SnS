@@ -33,7 +33,7 @@ import { useSddDraftStore } from '../sdd/sdd-draft-store'
 import {
   releaseSddAssistantThread,
 } from '../sdd/sdd-thread-registry'
-import { CODE_PANEL_PREFERRED, useWorkbenchLayout } from './workbench-layout'
+import { useWorkbenchLayout } from './workbench-layout'
 import { useWorkbenchPlanController } from './workbench-plan-controller'
 import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../lib/workspace-path'
 import {
@@ -48,13 +48,13 @@ import {
 } from '../lib/browser-storage'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
-  isExtensionContributionId
+  isExtensionContributionId,
+  type RightPanelContributionId
 } from '../extensions/contribution-ids'
 import {
   isExtensionContributionSnapshotReady,
   refreshExtensionContributionSnapshot,
   useCommittedExtensionContributionLoadContext,
-  useExtensionRightRailContainerEntries,
   useExtensionRightRailViewEntries,
   useExtensionContributionLoadState,
   useWorkbenchContributions,
@@ -77,11 +77,9 @@ import {
   ExtensionViewOutlet
 } from '../extensions/ControlledContributionSurfaces'
 import {
-  firstRightRailEntryForContainer,
   isExtensionWorkbenchView,
   readStoredExtensionSurfaceId,
   resolveCommandOpenView,
-  type ExtensionRightContainerTarget,
   type ExtensionWorkbenchView,
   writeStoredExtensionSurfaceId
 } from '../extensions/ExtensionWorkbenchSurfaces'
@@ -184,10 +182,6 @@ export function Workbench(): ReactElement {
     contributionContext,
     extensionContributionSnapshotReady
   )
-  const extensionRightRailContainers = useExtensionRightRailContainerEntries(
-    contributionContext,
-    extensionContributionSnapshotReady
-  )
   const extensionAuxiliaryPanelItems = useWorkbenchContributions(
     'views.auxiliaryPanel',
     contributionContext,
@@ -226,11 +220,6 @@ export function Workbench(): ReactElement {
     extensionLeftSidebarItems,
     extensionRightPanelItems
   ])
-  const extensionRightContainerTargets = useMemo<ExtensionRightContainerTarget[]>(() =>
-    extensionRightRailContainers.flatMap((container) => {
-      const target = firstRightRailEntryForContainer(container, extensionRightRailItems)
-      return target ? [{ container, target }] : []
-    }), [extensionRightRailContainers, extensionRightRailItems])
   const extensionTopBarActions = useWorkbenchContributions(
     'actions.topBar', contributionContext, extensionContributionSnapshotReady)
   const extensionComposerActions = useWorkbenchContributions(
@@ -339,10 +328,11 @@ export function Workbench(): ReactElement {
     skillMenuOpen: getSlashQuery(input) !== null
   })
   const {
-    beginLeftResize, beginRightResize, beginTerminalResize, filePreviewTarget,
+    activateRightPanelTab, beginLeftResize, beginRightResize, closeRightPanelTab,
+    codeRightTabs, collapseRightPanel, expandRightPanel, filePreviewTarget,
     leftSidebarCollapsed, leftSidebarWidth, openDevPreview, rightPanelMode, rightPanelVisible,
-    rightSidebarWidth, setFilePreviewTarget, setRightPanelMode, setRightSidebarWidth, shellRef,
-    terminalHeight, terminalOpen, toggleLeftSidebar, toggleRightPanelMode, toggleTerminal,
+    openRightPanelTab, rightSidebarWidth, setFilePreviewTarget, setRightPanelMode,
+    setRightSidebarWidth, shellRef, toggleLeftSidebar, toggleTerminal,
   } = useWorkbenchLayout({
     activeThreadId,
     designAssistantOpen,
@@ -350,7 +340,7 @@ export function Workbench(): ReactElement {
     latestAutoOpenDevPreviewUrl,
     latestDevPreviewUrl,
     route,
-    workspaceRoot,
+    workspaceRoot: extensionWorkspaceRoot,
     writeAssistantOpen
   })
   const activeExtensionRightPanel = rightPanelMode && isExtensionContributionId(rightPanelMode)
@@ -374,8 +364,7 @@ export function Workbench(): ReactElement {
     if (view.point === 'views.rightSidebar') {
       selectExtensionSurface(null)
       if (isExtensionContributionId(view.id)) {
-        setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
-        setRightPanelMode(view.id)
+        openRightPanelTab(view.id)
       }
       return
     }
@@ -384,17 +373,16 @@ export function Workbench(): ReactElement {
     selectExtensionSurface(view.id)
   }, [
     leftSidebarCollapsed,
+    openRightPanelTab,
     selectExtensionSurface,
     setRightPanelMode,
-    setRightSidebarWidth,
     toggleLeftSidebar
   ])
 
   const selectRightRailExtension = useCallback((entry: ExtensionRightRailViewEntry): void => {
     const runnable = workbenchContributionRegistry.get(entry.id, contributionContext)
     if (isExtensionWorkbenchView(runnable) && runnable.point === 'views.rightSidebar') {
-      if (rightPanelMode === runnable.id) setRightPanelMode(null)
-      else openExtensionSurface(runnable)
+      openExtensionSurface(runnable)
       return
     }
     if (
@@ -464,9 +452,7 @@ export function Workbench(): ReactElement {
     extensionContributionLoadContextRef,
     extensionWorkspaceRoot,
     openExtensionSurface,
-    rightPanelMode,
     setError,
-    setRightPanelMode,
     t
   ])
 
@@ -510,15 +496,17 @@ export function Workbench(): ReactElement {
   }, [extensionWorkspaceRoot])
 
   useEffect(() => {
-    if (
-      extensionContributionSnapshotReady &&
-      rightPanelMode &&
-      isExtensionContributionId(rightPanelMode) &&
-      !activeExtensionRightPanel
-    ) {
-      setRightPanelMode(null)
+    if (!extensionContributionSnapshotReady) return
+    const availableIds = new Set(extensionRightPanelItems.map((contribution) => contribution.id))
+    for (const id of codeRightTabs.tabs) {
+      if (isExtensionContributionId(id) && !availableIds.has(id)) closeRightPanelTab(id)
     }
-  }, [activeExtensionRightPanel, extensionContributionSnapshotReady, rightPanelMode, setRightPanelMode])
+  }, [
+    closeRightPanelTab,
+    codeRightTabs.tabs,
+    extensionContributionSnapshotReady,
+    extensionRightPanelItems
+  ])
 
   useEffect(() => {
     if (
@@ -528,12 +516,12 @@ export function Workbench(): ReactElement {
     ) selectExtensionSurface(null)
   }, [activeExtensionSurface, activeExtensionSurfaceId, extensionContributionSnapshotReady, selectExtensionSurface])
   const {
-    composerFileReferences, fileTreeSidePanelOpen, fileTreeSidePanelView, openFilePreviewTargets,
+    composerFileReferences, fileTreeSidePanelView, openFilePreviewTargets,
     pinnedFilePreviewTargetKeys, preserveFilePreviewTargets, fileTreeWorkspaceRoot,
     clearComposerFileReferences, addComposerFileReference, pickComposerFileReferences,
     removeComposerFileReference, openWorkspaceFilePreviewTarget, previewWorkspaceFileFromSidebar,
     closeWorkspaceFilePreviewTarget, togglePinnedFilePreviewTarget, closeOtherFilePreviewTargets,
-    togglePreserveFilePreviewTargets, addWorkspaceReferenceFromSidebar, toggleFileTreeSidePanel,
+    togglePreserveFilePreviewTargets, addWorkspaceReferenceFromSidebar,
     openFileTreeSidePanel, openDesignFileTreeSidePanel, setFileTreeSidePanelView,
     clearFilePreviewTargets
   } = useWorkbenchFileTreeController({
@@ -546,7 +534,7 @@ export function Workbench(): ReactElement {
     filePreviewTarget,
     setFilePreviewTarget,
     setRightPanelMode,
-    setRightSidebarWidth
+    closeRightPanelTab
   })
   const {
     activeSddDraft, sddDraftContent, sddDraftOperationStatus, dismissActiveSddDraft,
@@ -619,24 +607,80 @@ export function Workbench(): ReactElement {
     }
   }, [activeThreadId, setSidePanelOpen, sidePanel.open])
 
-  const openSideChat = (): void => {
+  const openSideChat = useCallback((): void => {
     const latestSide = currentSideConversations.at(-1)
     if (latestSide) {
       selectSideConversation(latestSide.threadId)
       return
     }
     openSideConversationDraft()
-  }
+  }, [currentSideConversations, openSideConversationDraft, selectSideConversation])
+
+  const openWorkspaceFileTreeTab = useCallback((): void => {
+    openFileTreeSidePanel()
+    openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.files)
+  }, [openFileTreeSidePanel, openRightPanelTab])
+
+  const openDesignFileTreeTab = useCallback((): void => {
+    openDesignFileTreeSidePanel()
+    openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.files)
+  }, [openDesignFileTreeSidePanel, openRightPanelTab])
+
+  const openCodeRightTool = useCallback((id: RightPanelContributionId): void => {
+    if (id === BUILTIN_RIGHT_PANEL_IDS.sideConversations) openSideChat()
+    if (id === BUILTIN_RIGHT_PANEL_IDS.files) setFileTreeSidePanelView('workspace')
+    openRightPanelTab(id)
+  }, [openRightPanelTab, openSideChat, setFileTreeSidePanelView])
+
+  const closeCodeRightTool = useCallback((id: RightPanelContributionId): void => {
+    if (id === BUILTIN_RIGHT_PANEL_IDS.sideConversations) setSidePanelOpen(false)
+    closeRightPanelTab(id)
+  }, [closeRightPanelTab, setSidePanelOpen])
+
+  const toggleCodeRightWorkspace = useCallback((): void => {
+    if (codeRightTabs.expanded) {
+      collapseRightPanel()
+      return
+    }
+    if (codeRightTabs.tabs.length > 0) {
+      expandRightPanel()
+      return
+    }
+    openRightPanelTab(
+      fileTreeWorkspaceRoot ? BUILTIN_RIGHT_PANEL_IDS.files : BUILTIN_RIGHT_PANEL_IDS.browser
+    )
+  }, [
+    codeRightTabs.expanded,
+    codeRightTabs.tabs.length,
+    collapseRightPanel,
+    expandRightPanel,
+    fileTreeWorkspaceRoot,
+    openRightPanelTab
+  ])
 
   useEffect(() => {
     inputRef.current = input
   }, [input])
 
   useEffect(() => {
-    if (rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.plan && !activeGuiPlan) {
-      setRightPanelMode(null)
+    const unavailable: RightPanelContributionId[] = []
+    if (!activeGuiPlan) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.plan)
+    if (!fileTreeWorkspaceRoot) {
+      unavailable.push(BUILTIN_RIGHT_PANEL_IDS.files, BUILTIN_RIGHT_PANEL_IDS.terminal)
     }
-  }, [activeGuiPlan, rightPanelMode, setRightPanelMode])
+    if (!filePreviewTarget) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.file)
+    if (!activeThreadId) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
+    for (const id of unavailable) {
+      if (codeRightTabs.tabs.includes(id)) closeRightPanelTab(id)
+    }
+  }, [
+    activeGuiPlan,
+    activeThreadId,
+    closeRightPanelTab,
+    codeRightTabs.tabs,
+    filePreviewTarget,
+    fileTreeWorkspaceRoot
+  ])
 
   const {
     selectedModelSupportsImageInput,
@@ -782,7 +826,8 @@ export function Workbench(): ReactElement {
     extraFileMentionCandidates: designDocumentFileMentionCandidates, webAccessAvailable,
     composerExecutionSettings, composerExecutionApplying, composerChangeSummary, runtimeSkills, disabledSkillIds,
     handlePickAttachments, handlePasteClipboardImage, removeComposerAttachment, addComposerFileReference,
-    pickComposerFileReferences, openFileTreeSidePanel, openDesignFileTreeSidePanel,
+    pickComposerFileReferences, openFileTreeSidePanel: openWorkspaceFileTreeTab,
+    openDesignFileTreeSidePanel: openDesignFileTreeTab,
     removeComposerFileReference, queuedMessages,
     removeQueuedMessage, interrupt, handleGuiPlanCommand, useWorktreePool, worktreeBranch, setWorktreeBranch,
     setUseWorktreePool, createThread, activeSkillWorkspace, reviewActiveThread, updateComposerExecutionSettings,
@@ -826,7 +871,9 @@ export function Workbench(): ReactElement {
     busy,
     title: t('planPanelTitle'),
     cancelLabel: t('cancel'),
-    onClose: closeRightPanel,
+    onClose: route === 'chat'
+      ? () => closeRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.plan)
+      : closeRightPanel,
     onBuildPlan: () => void buildGuiPlan(),
     onVerifyPlan: () => void verifyGuiPlan(),
     onReplanChanged: (ids) => void replanChangedRequirements(ids),
@@ -858,7 +905,7 @@ export function Workbench(): ReactElement {
     writeAssistantOpen,
     shared: rightPanelSharedProps,
     planPanelProps,
-    onCollapse: closeRightPanel,
+    onCollapse: route === 'chat' ? collapseRightPanel : closeRightPanel,
     openSettings,
     onSend: handleSend,
     design: {
@@ -926,6 +973,34 @@ export function Workbench(): ReactElement {
       onTogglePreserveAcrossThreads: togglePreserveFilePreviewTargets
     },
     extensionView: activeExtensionRightPanel,
+    code: {
+      state: codeRightTabs,
+      planEnabled: Boolean(activeGuiPlan),
+      filesEnabled: Boolean(fileTreeWorkspaceRoot),
+      sideConversationsEnabled: runtimeConnection === 'ready' && Boolean(activeThreadId),
+      sideConversationCount: currentSideConversations.length,
+      sideConversationRunningCount: currentSideRunningCount,
+      terminalWorkspaceRoot: fileTreeWorkspaceRoot,
+      files: {
+        open: true,
+        view: fileTreeSidePanelView,
+        width: FILE_TREE_SIDEBAR_WIDTH,
+        workspaceRoot: fileTreeWorkspaceRoot,
+        designWorkspaceRoot: normalizeWorkspaceRoot(designWorkspaceRoot || workspaceRoot),
+        designDocuments,
+        activeDesignDocumentId: designActiveDocumentId,
+        selectedTarget: filePreviewTarget,
+        onViewChange: setFileTreeSidePanelView,
+        onPreviewFile: previewWorkspaceFileFromSidebar,
+        onAddReference: addWorkspaceReferenceFromSidebar
+      },
+      extensionItems: extensionRightRailItems,
+      extensionViews: extensionRightPanelItems,
+      onOpen: openCodeRightTool,
+      onActivate: activateRightPanelTab,
+      onClose: closeCodeRightTool,
+      onSelectExtension: selectRightRailExtension
+    },
     workspaceRoot: extensionWorkspaceRoot
   })
 
@@ -1083,9 +1158,7 @@ export function Workbench(): ReactElement {
             returnParentTitle: threads.find((thread) => thread.id === activeThreadParentId)?.title?.trim() ?? '',
             showReturnBar: activeThreadRelation === 'side' && Boolean(activeThreadParentId),
             composerProps: chatComposerProps,
-            terminalOpen,
-            terminalWorkspaceRoot: fileTreeWorkspaceRoot,
-            terminalHeight,
+            rightWorkspaceExpanded: codeRightTabs.expanded,
             onToggleLeftSidebar: toggleLeftSidebar,
             onRetryConnection: () => void probeRuntime('user', { restart: true }),
             onOpenSettings: () => openSettings('agents'),
@@ -1096,8 +1169,7 @@ export function Workbench(): ReactElement {
             onBackToParent: () => {
               if (activeThreadParentId) void selectThread(activeThreadParentId)
             },
-            onBeginTerminalResize: beginTerminalResize,
-            onToggleTerminal: toggleTerminal,
+            onToggleRightWorkspace: toggleCodeRightWorkspace,
             extensionTopBarActions,
             extensionComposerActions,
             extensionMessageActions,
@@ -1121,38 +1193,7 @@ export function Workbench(): ReactElement {
               return result
             }
           },
-          sideChat: {
-            open: sidePanel.open,
-            count: currentSideConversations.length,
-            runningCount: currentSideRunningCount,
-            enabled: runtimeConnection === 'ready' && Boolean(activeThreadId),
-            onOpen: openSideChat
-          },
-          rightPanel,
-          rightPanelDockedVisible,
-          rightSidebarWidth,
-          fileTree: {
-            open: fileTreeSidePanelOpen,
-            view: fileTreeSidePanelView,
-            width: FILE_TREE_SIDEBAR_WIDTH,
-            workspaceRoot: fileTreeWorkspaceRoot,
-            designWorkspaceRoot: normalizeWorkspaceRoot(designWorkspaceRoot || workspaceRoot),
-            designDocuments,
-            activeDesignDocumentId: designActiveDocumentId,
-            selectedTarget: filePreviewTarget,
-            onViewChange: setFileTreeSidePanelView,
-            onPreviewFile: previewWorkspaceFileFromSidebar,
-            onAddReference: addWorkspaceReferenceFromSidebar
-          },
-          sideRail: {
-            rightPanelMode,
-            onToggleRightPanelMode: toggleRightPanelMode,
-            planPanelEnabled: Boolean(activeGuiPlan),
-            onToggleFileTree: toggleFileTreeSidePanel,
-            extensionItems: extensionRightRailItems,
-            extensionContainers: extensionRightContainerTargets,
-            onSelectExtension: selectRightRailExtension
-          }
+          rightPanel
         }}
         imageAnnotationHost={imageAnnotationHost}
         planOverlay={planOverlay}

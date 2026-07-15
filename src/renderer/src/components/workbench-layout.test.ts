@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   captureResizePointer,
   fitWorkbenchWidths,
+  normalizeStoredCodeRightWidthsRegistry,
   WORKBENCH_RESIZE_CLASS,
   workbenchWidthConstraintsForRightPanel
 } from './workbench-layout'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../extensions/contribution-ids'
 
 describe('fitWorkbenchWidths', () => {
-  it('keeps ordinary right panels within the inspector width cap', () => {
+  it('lets ordinary Code tabs use the available workspace width', () => {
     const next = fitWorkbenchWidths(
       1800,
       304,
@@ -18,10 +19,10 @@ describe('fitWorkbenchWidths', () => {
     )
 
     expect(next.left).toBe(304)
-    expect(next.right).toBe(760)
+    expect(next.right).toBe(926)
   })
 
-  it('lets the code canvas grow into the available workspace', () => {
+  it('uses the same wide workspace constraints for the code canvas', () => {
     const next = fitWorkbenchWidths(
       1800,
       304,
@@ -32,7 +33,39 @@ describe('fitWorkbenchWidths', () => {
 
     expect(next.left).toBe(304)
     expect(next.right).toBeGreaterThan(760)
-    expect(next.right).toBe(1126)
+    expect(next.right).toBe(926)
+  })
+
+  it.each([1280, 1440, 2048])(
+    'keeps at least 560px for chat at a %dpx workbench width',
+    (containerWidth) => {
+      const next = fitWorkbenchWidths(
+        containerWidth,
+        304,
+        560,
+        { leftPanelVisible: true, rightPanelVisible: true },
+        workbenchWidthConstraintsForRightPanel('chat', BUILTIN_RIGHT_PANEL_IDS.files)
+      )
+      const handleWidth = 10
+      expect(containerWidth - handleWidth - next.left - next.right).toBeGreaterThanOrEqual(560)
+      expect(next.right).toBeGreaterThanOrEqual(280)
+    }
+  )
+})
+
+describe('code right workspace widths', () => {
+  it('normalizes isolated workspace widths and ignores invalid entries', () => {
+    expect(normalizeStoredCodeRightWidthsRegistry({
+      version: 1,
+      workspaces: { alpha: 640.4, beta: 'wide', gamma: 120 }
+    })).toEqual({
+      version: 1,
+      workspaces: { alpha: 640, gamma: 280 }
+    })
+    expect(normalizeStoredCodeRightWidthsRegistry({ version: 2 })).toEqual({
+      version: 1,
+      workspaces: {}
+    })
   })
 })
 

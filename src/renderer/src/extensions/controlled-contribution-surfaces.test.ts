@@ -371,9 +371,14 @@ describe('controlled workbench contribution rendering', () => {
       const [webview] = renderer.root.findAllByType('webview')
       expect(webview).toBeDefined()
       const webviewClasses = String(webview!.props.className).split(/\s+/)
+      expect(webviewClasses).toContain('ds-no-drag')
       expect(webviewClasses).toContain('flex')
       expect(webviewClasses).toContain('w-full')
       expect(webviewClasses).not.toContain('block')
+      const [host] = renderer.root.findAllByProps({
+        'data-contribution-id': contribution.id
+      })
+      expect(String(host!.props.className).split(/\s+/)).toContain('ds-no-drag')
       expect(disposeSession).not.toHaveBeenCalled()
 
       const changedEntry = {

@@ -88,6 +88,7 @@ type WorkbenchRightPanelElementOptions = Pick<
     | 'onTogglePreserveAcrossThreads'
   >
   extensionView?: RightPanelHostProps['extensionView']
+  code?: RightPanelHostProps['code']
   workspaceRoot?: string
 }
 
@@ -127,6 +128,7 @@ export function useWorkbenchRightPanelElement({
   canvas,
   file,
   extensionView,
+  code,
   workspaceRoot
 }: WorkbenchRightPanelElementOptions): ReactElement | null {
   const designPanelMode = resolveDesignPanelMode({
@@ -200,6 +202,7 @@ export function useWorkbenchRightPanelElement({
         onClose: onCollapse
       }}
       extensionView={extensionView}
+      code={code}
       workspaceRoot={workspaceRoot}
       onCollapse={onCollapse}
     />

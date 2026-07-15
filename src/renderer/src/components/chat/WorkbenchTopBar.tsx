@@ -18,6 +18,7 @@ import {
   LockKeyhole,
   Loader2,
   MessageCircleMore,
+  PanelRight,
   Puzzle,
   RefreshCw,
   Shapes,
@@ -59,8 +60,8 @@ type Props = {
 }
 
 type WorkbenchTopActionsProps = {
-  terminalOpen?: boolean
-  onToggleTerminal?: () => void
+  rightWorkspaceExpanded?: boolean
+  onToggleRightWorkspace?: () => void
 }
 
 const TOPBAR_ICON_CLASS = 'h-4 w-4'
@@ -81,8 +82,8 @@ function topbarActionButtonClass(active: boolean, extra?: string): string {
 }
 
 export function WorkbenchTopActions({
-  terminalOpen = false,
-  onToggleTerminal
+  rightWorkspaceExpanded = false,
+  onToggleRightWorkspace
 }: WorkbenchTopActionsProps): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
   const [editors, setEditors] = useState<EditorInfo[]>([])
@@ -345,16 +346,16 @@ export function WorkbenchTopActions({
         ) : null}
       </div>
 
-      {onToggleTerminal ? (
+      {onToggleRightWorkspace ? (
         <button
           type="button"
-          onClick={onToggleTerminal}
-          className={topbarActionButtonClass(terminalOpen)}
-          data-tooltip={t('rightPanelTerminal')}
-          aria-label={t('rightPanelTerminal')}
-          aria-pressed={terminalOpen}
+          onClick={onToggleRightWorkspace}
+          className={topbarActionButtonClass(rightWorkspaceExpanded)}
+          data-tooltip={t('rightPanelWorkspaceToggle')}
+          aria-label={t('rightPanelWorkspaceToggle')}
+          aria-pressed={rightWorkspaceExpanded}
         >
-          <Terminal className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+          <PanelRight className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
     </div>

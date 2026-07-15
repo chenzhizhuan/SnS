@@ -1,6 +1,6 @@
 ## Context
 
-Kun already has a typed `views.rightSidebar` contribution, isolated View Sessions, direct right-rail rendering for right-sidebar Views, extension tools in the Agent catalog, and workspace-scoped extension storage. The recently added aggregate extension launcher duplicates the native rail and encourages full-page/editor placement; the bundled video editor currently follows that older full-page model and also embeds a second private Agent UI inside its Webview.
+Kun already has a typed `views.rightSidebar` contribution, isolated View Sessions, direct Host-owned navigation for right-sidebar Views, extension tools in the Agent catalog, and workspace-scoped extension storage. The aggregate extension launcher encourages full-page/editor placement; the bundled video editor currently follows that older full-page model and also embeds a second private Agent UI inside its Webview.
 
 The desired model is closer to an IDE tool window: an extension declares one right-sidebar View with its own icon, Kun renders that icon beside built-in tools, and the main conversation remains visible while the extension panel opens. The main Agent and panel coordinate through the extension's public tools, workspace state, and bounded events. They do not share React components, DOM, runtime tokens, or private Electron IPC.
 
@@ -8,7 +8,7 @@ The desired model is closer to an IDE tool window: an extension declares one rig
 
 **Goals:**
 
-- Give every enabled `views.rightSidebar` contribution a direct, independently selectable right-rail icon.
+- Give every enabled `views.rightSidebar` contribution a direct, independently selectable Code tool-menu item and top-level tab.
 - Make right-sidebar Views the canonical extension UI shown by the host, with deterministic ordering and normal right-panel resize/collapse behavior.
 - Keep the negotiated Extension API v1 manifest compatible for existing non-right View keys while removing the aggregate launcher that advertises them.
 - Keep the main Agent visible and able to operate on the same workspace-scoped extension project as the open panel.
@@ -26,7 +26,7 @@ The desired model is closer to an IDE tool window: an extension declares one rig
 
 ### 1. `views.rightSidebar` is the self-registration contract
 
-The workbench will render each visible right-sidebar View (or a right-sidebar container's first owned View) as a direct button in the existing `WorkbenchSideRail`. The button uses the manifest icon when valid and a host fallback otherwise; clicking it selects the fully qualified View ID as `rightPanelMode` and opens the isolated View in `WorkbenchRightPanel`.
+The workbench will render each visible right-sidebar View as a direct row in the Code right workspace's `+` menu. The row uses the manifest icon when valid and a host fallback otherwise; clicking it selects the fully qualified View ID through the tab controller and opens the isolated View in its own Host-owned tab.
 
 The aggregate `ExtensionViewRailLauncher` and its popover will be removed. This avoids a second navigation hierarchy and makes ownership obvious. `views.leftSidebar`, `views.auxiliaryPanel`, `views.editorTab`, and `views.fullPage` remain parseable and invokable for API v1 compatibility, but Kun documentation and bundled examples will no longer present them as the standard extension UI path.
 
@@ -34,7 +34,7 @@ Host-rendered icons use an explicit host-image resource request. The resource pr
 
 An installed version that has not yet been reviewed for the active workspace remains discoverable as an inert locked launcher. The Runtime projects only the localized ID, title, icon, grouping, order, and visibility expression for that launcher; it withholds View entry paths and resource roots. The renderer stores this metadata outside the executable contribution registry, and clicking it invokes Main's protected permission review. Normal `get`, `has`, layout restoration, activation, and View Session creation remain fail-closed until the reviewed grant is persisted. A later explicit permission revocation still removes the runnable entry as before.
 
-Alternative considered: retain one puzzle menu and place it at the bottom of the right rail. Rejected because it still makes users choose an extension twice and prevents an extension's own icon from becoming a stable muscle-memory target.
+Alternative considered: retain a nested puzzle picker inside the tool menu. Rejected because it still makes users choose an extension twice and prevents an extension's own direct row from becoming a stable target.
 
 ### 2. The Host continues to own panel geometry
 
@@ -102,7 +102,7 @@ Alternative considered: ask users to paste transcript contents or asset IDs into
 
 ### 12. Manifest localization is a generic Extension API capability
 
-Extension manifests MAY declare bounded locale overlays for extension metadata and contribution copy. Kun resolves the best supported locale for Host-rendered chrome such as right-rail tooltips, panel titles, Extension Center cards, settings, and result previews; Webview localization remains controlled by the existing appearance API. The mechanism is generic and versioned in the public manifest schema, not special-cased to the bundled video editor.
+Extension manifests MAY declare bounded locale overlays for extension metadata and contribution copy. Kun resolves the best supported locale for Host-rendered chrome such as tool-menu rows, tab titles, Extension Center cards, settings, and result previews; Webview localization remains controlled by the existing appearance API. The mechanism is generic and versioned in the public manifest schema, not special-cased to the bundled video editor.
 
 Alternative considered: translate only the Webview body. Rejected because the panel title and other Host-rendered surfaces would still contradict Kun's selected language.
 
@@ -140,7 +140,7 @@ The packaged smoke path SHALL open `kun-examples.kun-video-editor` through its r
 2. Route direct right-sidebar extension buttons through the existing right-panel selection and widen-on-open behavior.
 3. Migrate the video manifest, icon, Host command catalog, active-project tool contract, Agent instructions, and Webview layout; bump and regenerate the deterministic bundled package.
 4. Update Chinese/English extension guidance and release/version fixtures.
-5. Validate old non-right manifests still parse and command-open, while the bundled video editor appears as a direct right-rail icon and shares revisions with Agent tools.
+5. Validate old non-right manifests still parse and command-open, while the bundled video editor appears as a direct tool-menu item and independent tab and shares revisions with Agent tools.
 6. Isolate workspace-scoped Host instances, registered tools, and View events, then add cross-workspace security regressions.
 7. Complete the executable video workflow, public bounded transcript read, generic manifest localization, and real packaged View smoke before advancing the bundled package version again.
 

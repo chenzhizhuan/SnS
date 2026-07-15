@@ -187,7 +187,7 @@ export function ExtensionWebview({
   const title = boundedPlainText(contribution.payload.title, 128)
   return (
     <section
-      className="ds-extension-view flex h-full min-h-0 w-full flex-col bg-ds-sidebar"
+      className="ds-extension-view ds-no-drag flex h-full min-h-0 w-full flex-col bg-ds-sidebar"
       aria-label={t('extensionViewAriaLabel', { title })}
       data-contribution-id={contribution.id}
     >
@@ -235,7 +235,7 @@ export function ExtensionWebview({
           webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes"
           data-extension-view-session={session.sessionId}
           data-contribution-id={session.contributionId}
-          className="flex min-h-0 w-full flex-1 bg-white"
+          className="ds-no-drag flex min-h-0 w-full flex-1 bg-white"
         />
       ) : (
         <div role="status" className="flex min-h-0 flex-1 items-center justify-center text-[12px] text-ds-muted">

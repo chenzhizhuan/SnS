@@ -232,7 +232,10 @@ const BUILTIN_PANEL_DEFINITIONS: readonly [string, string][] = [
   [BUILTIN_RIGHT_PANEL_IDS.plan, 'Plan'],
   [BUILTIN_RIGHT_PANEL_IDS.changes, 'Changes'],
   [BUILTIN_RIGHT_PANEL_IDS.browser, 'Preview'],
-  [BUILTIN_RIGHT_PANEL_IDS.file, 'Files'],
+  [BUILTIN_RIGHT_PANEL_IDS.terminal, 'Terminal'],
+  [BUILTIN_RIGHT_PANEL_IDS.files, 'Files'],
+  [BUILTIN_RIGHT_PANEL_IDS.file, 'File preview'],
+  [BUILTIN_RIGHT_PANEL_IDS.sideConversations, 'Branch conversations'],
   [BUILTIN_RIGHT_PANEL_IDS.sddAi, 'Requirement assistant'],
   [BUILTIN_RIGHT_PANEL_IDS.canvas, 'Whiteboard'],
   [BUILTIN_RIGHT_PANEL_IDS.subagents, 'Subagents']
