@@ -50,6 +50,7 @@ TestResults.xml
 ### Tool data
 .workbuddy/
 .kun-design/
+openspec/
 
 ### Internal docs
 docs/R2_RELEASE.md

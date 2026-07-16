@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Check,
@@ -7,9 +7,9 @@ import {
   Copy,
   Loader2,
   Monitor,
+  MoreHorizontal,
   RefreshCw,
   Smartphone,
-  Sparkles,
   TriangleAlert
 } from 'lucide-react'
 import type { ComponentPrototypeMetadata, ToolBlock } from '../../agent/types'
@@ -85,8 +85,16 @@ export function componentPrototypeFrameSize(
   prototype: ComponentPrototypeMetadata,
   mode: PreviewMode
 ): { width: number | '100%'; height: number } {
-  if (mode === 'mobile') return { width: Math.min(390, prototype.viewport.width), height: Math.min(620, Math.max(420, prototype.viewport.height)) }
-  return { width: '100%', height: Math.min(560, Math.max(320, prototype.viewport.height)) }
+  if (mode === 'mobile') {
+    return {
+      width: Math.min(360, prototype.viewport.width),
+      height: Math.min(420, Math.max(240, Math.round(prototype.viewport.height * 0.65)))
+    }
+  }
+  return {
+    width: '100%',
+    height: Math.min(160, Math.max(124, Math.round(prototype.viewport.height * 0.25)))
+  }
 }
 
 export function componentPrototypeFollowUpPrompt(
@@ -121,6 +129,26 @@ export function ComponentPrototypeCard({
   const [mode, setMode] = useState<PreviewMode>('desktop')
   const [mountNonce, setMountNonce] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRootRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!menuOpen || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target
+      if (target instanceof Node && !menuRootRef.current?.contains(target)) setMenuOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [menuOpen])
+
   if (!prototype) return null
 
   const running = prototype.status === 'preparing' || prototype.status === 'running'
@@ -132,7 +160,13 @@ export function ComponentPrototypeCard({
   const producerSummary = prototype.producer === 'main-agent'
     ? t('componentPrototypeGeneratedByMainAgent')
     : t('componentPrototypeGeneratedBy')
+  const statusLabel = failed
+    ? t('componentPrototypeFailed')
+    : running
+      ? t('componentPrototypeDesigning')
+      : t('componentPrototypeInteractive')
   const prompt = (action: 'adopt' | 'iterate'): void => {
+    setMenuOpen(false)
     onPrompt?.(componentPrototypeFollowUpPrompt(
       prototype,
       action,
@@ -140,9 +174,11 @@ export function ComponentPrototypeCard({
     ))
   }
   const inspectCode = (): void => {
+    setMenuOpen(false)
     previewWorkspaceFile({ path: prototype.relativePath, workspaceRoot })
   }
   const copyCode = async (): Promise<void> => {
+    setMenuOpen(false)
     if (typeof window.kunGui?.readWorkspaceFile !== 'function') {
       setCopyState('error')
       return
@@ -164,98 +200,114 @@ export function ComponentPrototypeCard({
 
   return (
     <article
-      className="ds-component-prototype-card w-full min-w-0 overflow-hidden rounded-[16px] border border-ds-border bg-ds-card/95 shadow-[0_14px_40px_rgba(36,68,112,0.08)]"
+      className="ds-component-prototype-card relative mx-auto w-full max-w-[600px] min-w-0 rounded-[11px] border border-ds-border bg-ds-card/95 shadow-[0_5px_18px_rgba(36,68,112,0.06)]"
       data-component-prototype-id={prototype.artifactId}
     >
-      <header className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-ds-border-muted px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-accent/12 text-accent">
-            <Sparkles className="h-4 w-4" strokeWidth={1.9} />
-          </span>
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h3 className="truncate text-[14px] font-semibold text-ds-ink">{prototype.title}</h3>
-              <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[10.5px] font-medium text-accent">
-                {producerLabel}
-              </span>
-            </div>
-            <p className="mt-0.5 truncate text-[11.5px] text-ds-faint">{prototype.relativePath}</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <header className="flex h-8 items-center justify-between gap-2 rounded-t-[11px] border-b border-ds-border-muted px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-[12.5px] font-semibold leading-none text-ds-ink">{prototype.title}</h3>
           <span
-            className={`mr-1 inline-flex items-center gap-1.5 text-[11.5px] font-medium ${
-              failed ? 'text-rose-600 dark:text-rose-300' : running ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300'
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              failed ? 'bg-rose-500' : running ? 'bg-amber-500' : 'bg-emerald-500'
             }`}
-          >
-            {failed ? (
-              <TriangleAlert className="h-3.5 w-3.5" />
-            ) : running ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            )}
-            {failed
-              ? t('componentPrototypeFailed')
-              : running
-                ? t('componentPrototypeDesigning')
-                : t('componentPrototypeInteractive')}
-          </span>
-          <div className="inline-flex rounded-lg border border-ds-border-muted bg-ds-subtle p-0.5">
-            <button
-              type="button"
-              className={`inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] transition ${mode === 'desktop' ? 'bg-ds-card text-accent shadow-sm' : 'text-ds-muted hover:text-ds-ink'}`}
-              onClick={() => setMode('desktop')}
-              aria-pressed={mode === 'desktop'}
-              title={t('componentPrototypeDesktop')}
-            >
-              <Monitor className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('componentPrototypeDesktop')}</span>
-            </button>
-            <button
-              type="button"
-              className={`inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] transition ${mode === 'mobile' ? 'bg-ds-card text-accent shadow-sm' : 'text-ds-muted hover:text-ds-ink'}`}
-              onClick={() => setMode('mobile')}
-              aria-pressed={mode === 'mobile'}
-              title={t('componentPrototypeMobile')}
-            >
-              <Smartphone className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('componentPrototypeMobile')}</span>
-            </button>
-          </div>
+            title={statusLabel}
+            aria-label={statusLabel}
+          />
+        </div>
+        <div ref={menuRootRef} className="relative shrink-0">
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-            onClick={() => setMountNonce((value) => value + 1)}
-            title={t('componentPrototypeRefresh')}
-            aria-label={t('componentPrototypeRefresh')}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label={t('browserMore')}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
-          <button
-            type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-            onClick={() => void copyCode()}
-            title={t('componentPrototypeCopyCode')}
-            aria-label={t('componentPrototypeCopyCode')}
-          >
-            {copyState === 'copied' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : copyState === 'error' ? <TriangleAlert className="h-3.5 w-3.5 text-rose-500" /> : <Copy className="h-3.5 w-3.5" />}
-          </button>
+          {menuOpen ? (
+            <div
+              className="absolute right-0 top-7 z-30 w-48 rounded-[10px] border border-ds-border bg-ds-card p-1.5 shadow-[0_14px_36px_rgba(27,45,76,0.16)]"
+              role="menu"
+              data-component-prototype-menu
+            >
+              <p className="truncate px-2 py-1 text-[10.5px] text-ds-faint" title={producerSummary}>{producerLabel}</p>
+              <div className="my-1 h-px bg-ds-border-muted" />
+              <PrototypeMenuButton
+                icon={<Monitor className="h-3.5 w-3.5" />}
+                label={t('componentPrototypeDesktop')}
+                active={mode === 'desktop'}
+                onClick={() => {
+                  setMode('desktop')
+                  setMenuOpen(false)
+                }}
+              />
+              <PrototypeMenuButton
+                icon={<Smartphone className="h-3.5 w-3.5" />}
+                label={t('componentPrototypeMobile')}
+                active={mode === 'mobile'}
+                onClick={() => {
+                  setMode('mobile')
+                  setMenuOpen(false)
+                }}
+              />
+              <PrototypeMenuButton
+                icon={<RefreshCw className="h-3.5 w-3.5" />}
+                label={t('componentPrototypeRefresh')}
+                onClick={() => {
+                  setMountNonce((value) => value + 1)
+                  setMenuOpen(false)
+                }}
+              />
+              <div className="my-1 h-px bg-ds-border-muted" />
+              <PrototypeMenuButton
+                icon={<Code2 className="h-3.5 w-3.5" />}
+                label={t('componentPrototypeViewCode')}
+                onClick={inspectCode}
+              />
+              <PrototypeMenuButton
+                icon={copyState === 'copied'
+                  ? <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  : copyState === 'error'
+                    ? <TriangleAlert className="h-3.5 w-3.5 text-rose-500" />
+                    : <Copy className="h-3.5 w-3.5" />}
+                label={t('componentPrototypeCopyCode')}
+                onClick={() => void copyCode()}
+              />
+              {onPrompt ? (
+                <>
+                  <div className="my-1 h-px bg-ds-border-muted" />
+                  <PrototypeMenuButton
+                    icon={<Clipboard className="h-3.5 w-3.5" />}
+                    label={t('componentPrototypeIterate')}
+                    onClick={() => prompt('iterate')}
+                    disabled={running || failed}
+                  />
+                  <PrototypeMenuButton
+                    icon={<Check className="h-3.5 w-3.5" />}
+                    label={t('componentPrototypeAdopt')}
+                    onClick={() => prompt('adopt')}
+                    disabled={running || failed}
+                  />
+                </>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </header>
 
-      <div className="flex min-h-[320px] justify-center overflow-auto bg-[radial-gradient(circle_at_center,rgba(111,132,165,0.18)_0.7px,transparent_0.8px)] bg-[length:16px_16px] p-3 sm:p-5">
+      <div className="flex justify-center overflow-auto rounded-b-[11px] bg-ds-subtle/35 p-2">
         {failed ? (
-          <div className="flex min-h-[300px] w-full items-center justify-center rounded-xl border border-rose-300/50 bg-ds-card/90 p-6 text-center dark:border-rose-800/50">
-            <div className="max-w-lg">
-              <TriangleAlert className="mx-auto h-7 w-7 text-rose-500" />
-              <p className="mt-3 text-[13px] font-medium text-ds-ink">{t('componentPrototypeFailed')}</p>
-              <p className="mt-1 break-words text-[12px] leading-5 text-ds-muted">{prototype.error || t('componentPrototypeLoadFailed')}</p>
+          <div className="flex min-h-[124px] w-full items-center justify-center px-5 py-4 text-center">
+            <div className="max-w-md">
+              <TriangleAlert className="mx-auto h-4 w-4 text-rose-500" />
+              <p className="mt-2 text-[12px] font-medium text-ds-ink">{t('componentPrototypeFailed')}</p>
+              <p className="mt-1 break-words text-[11px] leading-4 text-ds-muted">{prototype.error || t('componentPrototypeLoadFailed')}</p>
             </div>
           </div>
         ) : (
           <div
-            className="min-w-0 overflow-hidden rounded-xl border border-ds-border-muted bg-white shadow-[0_10px_30px_rgba(34,59,94,0.09)] transition-[width] duration-200"
+            className="min-w-0 overflow-hidden bg-white transition-[width,height] duration-200"
             style={{ width: frame.width, height: frame.height, maxWidth: '100%' }}
           >
             <DesignHtmlPreviewHost
@@ -270,8 +322,8 @@ export function ComponentPrototypeCard({
               {({ state, renderWebview }) => {
                 if (!state.webviewUrl) {
                   return (
-                    <div className="flex h-full w-full items-center justify-center bg-[#f7f9fc] text-[12.5px] text-slate-500">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin text-accent" />
+                    <div className="flex h-full w-full items-center justify-center bg-[#f7f9fc] text-[11.5px] text-slate-500">
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin text-accent" />
                       {state.error && !running ? state.error : t('componentPrototypeDesigning')}
                     </div>
                   )
@@ -286,47 +338,36 @@ export function ComponentPrototypeCard({
           </div>
         )}
       </div>
-
-      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-ds-border-muted px-4 py-2.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] text-ds-faint">
-          <span className="inline-flex items-center gap-1"><Sparkles className="h-3 w-3" />{producerSummary}</span>
-          <span aria-hidden>·</span>
-          <span>HTML/CSS/JS</span>
-          {prototype.byteSize !== undefined ? <><span aria-hidden>·</span><span>{Math.max(1, Math.round(prototype.byteSize / 1024))} KB</span></> : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-ds-border-muted px-3 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-            onClick={inspectCode}
-          >
-            <Code2 className="h-3.5 w-3.5" />
-            {t('componentPrototypeViewCode')}
-          </button>
-          {onPrompt ? (
-            <>
-              <button
-                type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-ds-border-muted px-3 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-50"
-                onClick={() => prompt('iterate')}
-                disabled={running || failed}
-              >
-                <Clipboard className="h-3.5 w-3.5" />
-                {t('componentPrototypeIterate')}
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[11.5px] font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-50"
-                onClick={() => prompt('adopt')}
-                disabled={running || failed}
-              >
-                <Check className="h-3.5 w-3.5" />
-                {t('componentPrototypeAdopt')}
-              </button>
-            </>
-          ) : null}
-        </div>
-      </footer>
     </article>
+  )
+}
+
+function PrototypeMenuButton({
+  icon,
+  label,
+  active = false,
+  disabled = false,
+  onClick
+}: {
+  icon: ReactElement
+  label: string
+  active?: boolean
+  disabled?: boolean
+  onClick: () => void
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[11.5px] transition disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? 'bg-accent/10 text-accent' : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+      }`}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {active ? <Check className="h-3 w-3 shrink-0" /> : null}
+    </button>
   )
 }
