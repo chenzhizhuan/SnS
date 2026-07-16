@@ -425,11 +425,17 @@ export class KunRuntimeProvider implements AgentProvider {
     }
   }
 
-  async steerUserMessage(threadId: string, turnId: string, text: string): Promise<void> {
+  async steerUserMessage(
+    threadId: string,
+    turnId: string,
+    text: string,
+    options?: { displayText?: string }
+  ): Promise<void> {
+    const displayText = options?.displayText?.trim()
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadSteerPath(threadId, turnId),
       'POST',
-      JSON.stringify({ text })
+      JSON.stringify({ text, ...(displayText ? { displayText } : {}) })
     )
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to queue message'))

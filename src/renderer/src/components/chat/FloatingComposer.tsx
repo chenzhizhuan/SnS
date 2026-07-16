@@ -157,6 +157,7 @@ type Props = {
   modelControlVariant?: 'combined' | 'split'
   queuedMessages: QueuedComposerMessage[]
   onRemoveQueuedMessage: (id: string) => void
+  onGuideQueuedMessage?: (id: string) => void | Promise<unknown>
   attachments?: AttachmentReference[]
   attachmentUploadEnabled?: boolean
   attachmentUploadBusy?: boolean
@@ -288,6 +289,7 @@ export function FloatingComposer({
   modelControlVariant = 'combined',
   queuedMessages,
   onRemoveQueuedMessage,
+  onGuideQueuedMessage,
   attachments = EMPTY_ATTACHMENTS,
   attachmentUploadEnabled = false,
   attachmentUploadBusy = false,
@@ -1102,6 +1104,7 @@ export function FloatingComposer({
       <FloatingComposerQueuedMessages
         messages={queuedMessages}
         onRemove={onRemoveQueuedMessage}
+        onGuide={onGuideQueuedMessage}
       />
 
       <div className="relative">

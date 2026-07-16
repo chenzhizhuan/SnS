@@ -45,6 +45,7 @@ import type {
   ChatStoreSet,
   WriteAssistantMessageContext
 } from './chat-store-types'
+import { canGuideQueuedMessage } from './queued-message-guidance'
 import {
   accountIdForComposerSelection,
   activeClawChannel,
@@ -131,6 +132,7 @@ type StoreActionContext = {
 }
 
 let drainingQueuedMessages = false
+const guidingQueuedMessageIds = new Set<string>()
 const checkpointGitAvailability = new GitCheckpointAvailabilityCache()
 
 function activeChatWorkspaceRoot(state: ChatState): string {
@@ -181,7 +183,7 @@ function activeWriteMessageContextMatches(context: WriteAssistantMessageContext)
 
 export function createThreadActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
+): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'guideQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
   return {
   createThread: async (options = {}) => {
     if (get().runtimeConnection !== 'ready') {
@@ -673,6 +675,51 @@ export function createThreadActions(
     set((s) => ({
       queuedMessages: s.queuedMessages.filter((message) => message.id !== id)
     })),
+
+  guideQueuedMessage: async (id) => {
+    if (guidingQueuedMessageIds.has(id)) return false
+    const state = get()
+    const message = state.queuedMessages.find((candidate) => candidate.id === id)
+    if (!message) return false
+    if (!canGuideQueuedMessage(message)) {
+      set({ error: i18n.t('common:guideQueuedMessageTextOnly') })
+      return false
+    }
+    if (!state.busy || !state.activeThreadId || !state.currentTurnId) {
+      set({ error: i18n.t('common:guideQueuedMessageNoActiveTurn') })
+      if (!state.busy) void get().drainQueuedMessages()
+      return false
+    }
+    const provider = getProvider()
+    if (typeof provider.steerUserMessage !== 'function') {
+      set({ error: i18n.t('common:guideQueuedMessageUnsupported') })
+      return false
+    }
+
+    guidingQueuedMessageIds.add(id)
+    try {
+      await provider.steerUserMessage(
+        state.activeThreadId,
+        state.currentTurnId,
+        message.text,
+        message.displayText ? { displayText: message.displayText } : undefined
+      )
+      set((current) => ({
+        queuedMessages: current.queuedMessages.filter((candidate) => candidate.id !== id),
+        error: null
+      }))
+      return true
+    } catch (error) {
+      const messageText = formatRuntimeError(error)
+      set({
+        error: i18n.t('common:guideQueuedMessageFailed', { message: messageText })
+      })
+      if (!get().busy) void get().drainQueuedMessages()
+      return false
+    } finally {
+      guidingQueuedMessageIds.delete(id)
+    }
+  },
 
   sendMessage: async (text, mode, overrides) => {
     const trimmedText = text.trim()

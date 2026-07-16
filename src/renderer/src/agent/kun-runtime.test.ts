@@ -652,6 +652,32 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
+  it('posts mid-turn guidance with its user-facing display text', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      body: '{}'
+    }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+
+    await provider.steerUserMessage(
+      'thr_1',
+      'turn_1',
+      'use the compact logo instead',
+      { displayText: 'Use the compact logo instead' }
+    )
+
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thr_1/turns/turn_1/steer',
+      'POST',
+      JSON.stringify({
+        text: 'use the compact logo instead',
+        displayText: 'Use the compact logo instead'
+      })
+    )
+  })
+
   it('loads runtime diagnostics and uploads image attachments through Kun endpoints', async () => {
     const runtimeRequest = vi.fn(async (path: string) => {
       if (path === '/v1/runtime/info') {

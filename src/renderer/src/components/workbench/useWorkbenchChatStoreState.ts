@@ -54,6 +54,7 @@ export function useWorkbenchChatStoreState() {
       attachExtensionComposerContext: s.attachExtensionComposerContext,
       removeExtensionComposerContext: s.removeExtensionComposerContext,
       removeQueuedMessage: s.removeQueuedMessage,
+      guideQueuedMessage: s.guideQueuedMessage,
       interrupt: s.interrupt,
       probeRuntime: s.probeRuntime,
       composerModel: s.composerModel,

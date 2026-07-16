@@ -309,19 +309,25 @@ export class TurnService {
     displayText?: string
     messageSource?: UserMessageSource
   }): Promise<void> {
-    const turn = await this.getTurn(input.threadId, input.turnId)
-    if (!turn) throw new Error(`turn not found: ${input.turnId}`)
-    if (turn.status !== 'running' || !this.inflightTurns.has(input.turnId)) {
-      throw new TurnConflictError(`turn is not active: ${input.turnId}`)
-    }
-    const accepted = this.deps.steering.enqueue(input.turnId, {
-      text: input.text,
-      ...(input.displayText ? { displayText: input.displayText } : {}),
-      ...(input.messageSource ? { messageSource: input.messageSource } : {})
+    await this.withThreadMutation(input.threadId, async () => {
+      const current = await this.deps.threadStore.get(input.threadId)
+      const turn = current?.turns.find((candidate) => candidate.id === input.turnId)
+      if (!turn) throw new Error(`turn not found: ${input.turnId}`)
+      if (turn.status !== 'running' || !this.inflightTurns.has(input.turnId)) {
+        throw new TurnConflictError(`turn is not active: ${input.turnId}`)
+      }
+      const accepted = this.deps.steering.enqueue(input.turnId, {
+        text: input.text,
+        ...(input.displayText ? { displayText: input.displayText } : {}),
+        ...(input.messageSource ? { messageSource: input.messageSource } : {})
+      })
+      if (!accepted) {
+        if (this.deps.steering.isSealed(input.turnId)) {
+          throw new TurnConflictError(`turn is no longer accepting steering: ${input.turnId}`)
+        }
+        throw new TurnConflictError(`steering queue capacity reached for active turn: ${input.turnId}`)
+      }
     })
-    if (!accepted) {
-      throw new TurnConflictError(`steering queue capacity reached for active turn: ${input.turnId}`)
-    }
     await this.deps.events.record({
       kind: 'turn_steered',
       threadId: input.threadId,
@@ -898,7 +904,14 @@ export class TurnService {
     turnId: string,
     options: { abort?: boolean } = {}
   ): void {
-    if (this.admittedTurnThreads.get(turnId) !== threadId) return
+    const admittedThreadId = this.admittedTurnThreads.get(turnId)
+    if (admittedThreadId !== threadId) {
+      // An external interrupt may already have released admission before the
+      // model loop observes the abort and seals its terminal boundary. The
+      // loop's later idempotent finish must still clear that transient seal.
+      if (admittedThreadId === undefined) this.deps.steering.clear(turnId)
+      return
+    }
     if (options.abort) this.inflightTurns.get(turnId)?.abort()
     this.inflightTurns.delete(turnId)
     this.deps.inflight.end(turnId)

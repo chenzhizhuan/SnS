@@ -356,6 +356,70 @@ describe('chat-store-thread-actions queued messages', () => {
     })
   })
 
+  it('guides an eligible queued message into the active turn before removing it', async () => {
+    const steerUserMessage = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = buildHarness()
+    state.currentTurnId = 'turn_active'
+    state.queuedMessages = [{
+      id: 'q-guide',
+      text: 'use the compact logo instead',
+      displayText: 'Use the compact logo instead',
+      mode: 'agent'
+    }]
+
+    await expect(actions.guideQueuedMessage('q-guide')).resolves.toBe(true)
+
+    expect(steerUserMessage).toHaveBeenCalledWith(
+      'thr_existing',
+      'turn_active',
+      'use the compact logo instead',
+      { displayText: 'Use the compact logo instead' }
+    )
+    expect(state.queuedMessages).toEqual([])
+    expect(state.error).toBeNull()
+  })
+
+  it('keeps structured queued input when text-only guidance is ineligible', async () => {
+    const steerUserMessage = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = buildHarness()
+    state.currentTurnId = 'turn_active'
+    state.queuedMessages = [{
+      id: 'q-attachment',
+      text: 'inspect this image',
+      mode: 'agent',
+      attachmentIds: ['attachment-1']
+    }]
+
+    await expect(actions.guideQueuedMessage('q-attachment')).resolves.toBe(false)
+
+    expect(steerUserMessage).not.toHaveBeenCalled()
+    expect(state.queuedMessages).toHaveLength(1)
+    expect(state.error).toBeTruthy()
+  })
+
+  it('keeps queued input when the active turn rejects guidance', async () => {
+    const steerUserMessage = vi.fn(async () => {
+      throw new Error('turn is no longer accepting steering')
+    })
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = buildHarness()
+    state.currentTurnId = 'turn_active'
+    state.queuedMessages = [{
+      id: 'q-race',
+      text: 'do not lose this follow-up',
+      mode: 'agent'
+    }]
+
+    await expect(actions.guideQueuedMessage('q-race')).resolves.toBe(false)
+
+    expect(state.queuedMessages).toEqual([
+      expect.objectContaining({ id: 'q-race', text: 'do not lose this follow-up' })
+    ])
+    expect(state.error).toContain('turn is no longer accepting steering')
+  })
+
   it('sends the selected composer provider with the turn without switching the global runtime provider', async () => {
     const provider = {
       connect: vi.fn(async () => undefined),

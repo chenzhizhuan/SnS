@@ -618,7 +618,12 @@ export interface AgentProvider {
   ): Promise<CoreMemoryRecordJson>
   deleteMemory?(memoryId: string, options?: { workspace?: string }): Promise<CoreMemoryRecordJson>
   getMemoryDiagnostics?(): Promise<CoreMemoryDiagnosticsJson>
-  steerUserMessage?(threadId: string, turnId: string, text: string): Promise<void>
+  steerUserMessage?(
+    threadId: string,
+    turnId: string,
+    text: string,
+    options?: { displayText?: string }
+  ): Promise<void>
   interruptTurn(threadId: string, turnId: string, options?: { discard?: boolean }): Promise<void>
   /**
    * Rename a thread. `auto` marks the title as provisional/auto (true, e.g. the
