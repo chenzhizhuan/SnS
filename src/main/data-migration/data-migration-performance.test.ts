@@ -2,6 +2,8 @@ import { mkdtemp, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { runInNewContext } from 'node:vm'
+import { setFlagsFromString } from 'node:v8'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   parsePackageRelativePath,
@@ -18,6 +20,15 @@ import {
 } from './kunpack-zip'
 
 const roots: string[] = []
+
+function createGarbageCollector(): () => void {
+  setFlagsFromString('--expose_gc')
+  try {
+    return runInNewContext('gc') as () => void
+  } finally {
+    setFlagsFromString('--no-expose_gc')
+  }
+}
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -41,24 +52,31 @@ describe('data migration streaming performance', () => {
     }])
     await writeZip64Archive({ outputPath: archivePath, entries: prepared })
 
+    // Node 22 may defer collecting already-consumed zlib Buffer wrappers until
+    // their cumulative external allocation approaches the input size. Sample
+    // after collection so this assertion measures live stream buffers instead
+    // of GC scheduling, which differs across supported Node versions.
+    const collectGarbage = createGarbageCollector()
+    collectGarbage()
     const baseline = process.memoryUsage().arrayBuffers
     let peak = baseline
-    const sampler = setInterval(() => {
+    const sampleLiveBuffers = () => {
+      collectGarbage()
       peak = Math.max(peak, process.memoryUsage().arrayBuffers)
-    }, 2)
+    }
     const progress: Array<{ bytes: number; entries: number }> = []
     const started = performance.now()
-    try {
-      await extractZip64ArchiveEntries({
-        archivePath,
-        destinationRoot,
-        entries: prepared.map((entry) => entry.metadata),
-        destinationPath: () => destinationPath,
-        onProgress: (value) => progress.push({ bytes: value.bytes, entries: value.entries })
-      })
-    } finally {
-      clearInterval(sampler)
-    }
+    await extractZip64ArchiveEntries({
+      archivePath,
+      destinationRoot,
+      entries: prepared.map((entry) => entry.metadata),
+      destinationPath: () => destinationPath,
+      onProgress: (value) => {
+        progress.push({ bytes: value.bytes, entries: value.entries })
+        sampleLiveBuffers()
+      }
+    })
+    sampleLiveBuffers()
     const elapsedMs = performance.now() - started
 
     expect((await stat(destinationPath)).size).toBe(logicalBytes)
