@@ -17,6 +17,7 @@ import { spawnSync } from 'node:child_process'
 import { isBuiltin } from 'node:module'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runRequiredNpm } from './lib/extension-release-execution.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const extensionRoot = join(root, 'examples', 'extensions', 'kun-video-editor')
@@ -285,8 +286,11 @@ export async function packVideoEditor({ output, catalog = false } = {}) {
   const first = join(temporary, 'first.kunx')
   const second = join(temporary, 'second.kunx')
   try {
-    const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-    runRequired(npm, ['--prefix', extensionRoot, 'run', 'build'])
+    runRequiredNpm({
+      label: 'Kun Video Editor build',
+      args: ['--prefix', extensionRoot, 'run', 'build'],
+      cwd: root
+    })
     await assertStandaloneVideoEditorHostBundle(join(extensionRoot, 'dist', 'host'))
     runRequired(process.execPath, [
       cliPath,

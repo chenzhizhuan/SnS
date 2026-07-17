@@ -16,6 +16,7 @@ import {
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runRequiredNpm } from './lib/extension-release-execution.mjs'
 import { assertStandaloneVideoEditorHostBundle } from './pack-kun-video-editor.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -118,8 +119,11 @@ async function packBundledExtension(definition, directory) {
   const first = join(temporary, 'first.kunx')
   const second = join(temporary, 'second.kunx')
   try {
-    const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-    runRequired(npm, ['--prefix', definition.root, 'run', 'build'])
+    runRequiredNpm({
+      label: `${definition.name} build`,
+      args: ['--prefix', definition.root, 'run', 'build'],
+      cwd: root
+    })
     if (definition.id === 'kun-examples.kun-video-editor') {
       await assertStandaloneVideoEditorHostBundle(join(definition.root, 'dist', 'host'))
     }
