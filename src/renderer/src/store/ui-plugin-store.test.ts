@@ -2,6 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { UI_MODE_DEFAULT, UI_MODE_STORAGE_KEY } from '../lib/ui-mode'
 import { useUiPluginStore } from './ui-plugin-store'
 
+const dedicatedCharacterChromeRecipes = [
+  'botanical',
+  'fortune-ledger',
+  'dream-gate',
+  'washi',
+  'scrapbook',
+  'aurora',
+  'synth',
+  'midnight-pass',
+  'nautical',
+  'dimension-lab',
+  'starlight'
+] as const
+
 function createDomFixture(storedMode?: string) {
   const attributes = new Map<string, string>()
   const storage = new Map<string, string>()
@@ -184,6 +198,157 @@ describe('UI plugin CDP theme activation', () => {
     expect(
       [...attributes.keys()].filter((key) => key.startsWith('data-ui-plugin-'))
     ).toEqual([])
+  })
+
+  it('applies and clears only normalized scene v1.6 root attributes', async () => {
+    const { attributes, localStorage } = createDomFixture()
+    const sceneManifest = {
+      id: 'scene-theme',
+      name: 'Scene',
+      version: '1.0.0',
+      figures: { portrait: 'img/portrait.png' },
+      presentation: {
+        character: {
+          anchor: 'right',
+          size: 'large',
+          offsetX: 0,
+          offsetY: 0,
+          opacity: 1,
+          frame: 'soft-card',
+          motion: 'none',
+          contentReserve: 'wide'
+        },
+        readability: { scrim: 'opposite-character', strength: 'medium' },
+        surfaces: {
+          sidebar: 'glass',
+          topbar: 'glass',
+          composer: 'strong-glass',
+          cards: 'translucent'
+        }
+      },
+      scene: {
+        apiVersion: '1.6',
+        layout: 'rail-left',
+        character: {
+          scale: 'hero',
+          fit: 'contain',
+          focalPoint: 'bottom',
+          mask: 'arch',
+          offsetX: 1,
+          offsetY: -2,
+          opacity: 0.96,
+          flipX: true,
+          motion: { preset: 'sway', speed: 'slow', phase: 'b' }
+        },
+        artwork: {
+          frame: {
+            path: 'scene/frame.png',
+            anchor: 'center',
+            size: 'large',
+            fit: 'contain',
+            offsetX: 0,
+            offsetY: 0,
+            opacity: 1,
+            blend: 'normal',
+            motion: { preset: 'none', speed: 'normal', phase: 'a' }
+          }
+        },
+        chrome: {
+          sidebar: 'paper',
+          topbar: 'editorial',
+          composer: 'hologram',
+          cards: 'ticket'
+        }
+      }
+    } as const
+    const activateUiPluginTheme = vi.fn(async (id: string) => {
+      const recipe = dedicatedCharacterChromeRecipes.find(
+        (candidate) => id === `scene-recipe-${candidate}`
+      )
+      const activeSceneManifest = recipe
+        ? {
+            ...sceneManifest,
+            id,
+            scene: {
+              ...sceneManifest.scene,
+              chrome: {
+                sidebar: recipe,
+                topbar: recipe,
+                composer: recipe,
+                cards: recipe
+              }
+            }
+          }
+        : id === sceneManifest.id
+          ? sceneManifest
+          : null
+      return {
+        ok: true as const,
+        manifest: activeSceneManifest
+          ?? { id, name: 'Plain', version: '1.0.0', figures: {} },
+        figures: activeSceneManifest ? { portrait: 'data:image/png;base64,AAAA' } : {},
+        sceneAssets: activeSceneManifest
+          ? { assets: { 'scene/frame.png': 'data:image/png;base64,AAAA' } }
+          : {}
+      }
+    })
+    vi.stubGlobal('window', {
+      localStorage,
+      kunGui: {
+        activateUiPluginTheme,
+        deactivateUiPluginTheme: vi.fn(async () => ({ ok: true as const }))
+      }
+    })
+
+    await useUiPluginStore.getState().activateUiMode('scene-theme')
+
+    expect(Object.fromEntries(attributes)).toMatchObject({
+      'data-ui-plugin-presentation': 'on',
+      'data-ui-plugin-readability-scrim': 'opposite-character',
+      'data-ui-plugin-readability-strength': 'medium',
+      'data-ui-plugin-scene': 'on',
+      'data-ui-plugin-scene-layout': 'rail-left',
+      'data-ui-plugin-scene-character-scale': 'hero',
+      'data-ui-plugin-scene-character-fit': 'contain',
+      'data-ui-plugin-scene-character-focal-point': 'bottom',
+      'data-ui-plugin-scene-character-mask': 'arch',
+      'data-ui-plugin-scene-character-flip-x': 'on',
+      'data-ui-plugin-scene-character-motion': 'sway',
+      'data-ui-plugin-scene-character-motion-speed': 'slow',
+      'data-ui-plugin-scene-character-motion-phase': 'b',
+      'data-ui-plugin-scene-chrome-sidebar': 'paper',
+      'data-ui-plugin-scene-chrome-topbar': 'editorial',
+      'data-ui-plugin-scene-chrome-composer': 'hologram',
+      'data-ui-plugin-scene-chrome-cards': 'ticket'
+    })
+    for (const legacyAttribute of [
+      'data-ui-plugin-character-frame',
+      'data-ui-plugin-character-motion',
+      'data-ui-plugin-content-reserve',
+      'data-ui-plugin-surface-sidebar',
+      'data-ui-plugin-surface-topbar',
+      'data-ui-plugin-surface-composer',
+      'data-ui-plugin-surface-cards'
+    ]) {
+      expect(attributes.has(legacyAttribute)).toBe(false)
+    }
+    expect(useUiPluginStore.getState().activeRuntime?.sceneAssets.assets?.['scene/frame.png'])
+      .toBe('data:image/png;base64,AAAA')
+
+    await useUiPluginStore.getState().activateUiMode('plain-theme')
+
+    expect([...attributes.keys()].some((key) => key.startsWith('data-ui-plugin-scene')))
+      .toBe(false)
+
+    for (const recipe of dedicatedCharacterChromeRecipes) {
+      await useUiPluginStore.getState().activateUiMode(`scene-recipe-${recipe}`)
+      expect(Object.fromEntries(attributes), recipe).toMatchObject({
+        'data-ui-plugin-scene-chrome-sidebar': recipe,
+        'data-ui-plugin-scene-chrome-topbar': recipe,
+        'data-ui-plugin-scene-chrome-composer': recipe,
+        'data-ui-plugin-scene-chrome-cards': recipe
+      })
+    }
   })
 
   it('waits for activation before removing that plugin and leaves the default mode active', async () => {

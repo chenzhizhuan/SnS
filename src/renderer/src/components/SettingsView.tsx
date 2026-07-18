@@ -34,7 +34,7 @@ import {
   applyWriteTypography
 } from '../lib/apply-theme'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
-import type { SkillRootListItem } from '@shared/kun-gui-api'
+import type { KunProjectConfigFileResult, SkillRootListItem } from '@shared/kun-gui-api'
 import { defaultConversationWorkspaceRoot, normalizeWorkspaceRoot } from '../lib/workspace-path'
 import {
   compactHomePathForSettingsDisplay,
@@ -150,6 +150,16 @@ type InlineNotice = {
   tone: 'success' | 'error' | 'info'
   message: string
 }
+const DEFAULT_PROJECT_CONFIG_TEXT = `${JSON.stringify({
+  version: 1,
+  mcp: { servers: {} },
+  skills: {
+    enabled: true,
+    includeConventional: true,
+    roots: [],
+    disabledIds: []
+  }
+}, null, 2)}\n`
 export function SettingsView(): ReactElement {
   const { t, i18n } = useTranslation('settings')
   const { t: tCommon } = useTranslation('common')
@@ -197,6 +207,11 @@ export function SettingsView(): ReactElement {
   const [mcpLoaded, setMcpLoaded] = useState(false)
   const [mcpBusy, setMcpBusy] = useState(false)
   const [mcpNotice, setMcpNotice] = useState<InlineNotice | null>(null)
+  const [projectConfig, setProjectConfig] = useState<KunProjectConfigFileResult | null>(null)
+  const [projectConfigText, setProjectConfigText] = useState(DEFAULT_PROJECT_CONFIG_TEXT)
+  const [projectConfigLoading, setProjectConfigLoading] = useState(false)
+  const [projectConfigBusy, setProjectConfigBusy] = useState(false)
+  const [projectConfigNotice, setProjectConfigNotice] = useState<InlineNotice | null>(null)
   const [runtimeInfo, setRuntimeInfo] = useState<CoreRuntimeInfoJson | null>(null)
   const [toolDiagnostics, setToolDiagnostics] = useState<CoreRuntimeToolDiagnosticsJson | null>(null)
   const [memoryRecords, setMemoryRecords] = useState<CoreMemoryRecordJson[]>([])
@@ -261,6 +276,14 @@ export function SettingsView(): ReactElement {
     compactHomePathListForSettingsDisplay(values, settingsHomeDir, settingsPlatform), [settingsHomeDir, settingsPlatform])
   const expandHomePathList = useCallback((values: readonly string[]): string[] =>
     expandHomePathListForSettingsUse(values, settingsHomeDir, settingsPlatform), [settingsHomeDir, settingsPlatform])
+  const activeProjectWorkspaceRoot = useMemo(
+    () => expandHomePath(workspaceRoot || form?.workspaceRoot || ''),
+    [expandHomePath, form?.workspaceRoot, workspaceRoot]
+  )
+  const projectConfigGrantFingerprint = useMemo(
+    () => JSON.stringify(formKun?.projectConfig.grants ?? []),
+    [formKun?.projectConfig.grants]
+  )
   const {
     checkingGuiUpdate,
     checkGuiUpdate,
@@ -605,6 +628,105 @@ export function SettingsView(): ReactElement {
     const result = await window.kunGui.openKunConfigDir()
     if (!result.ok) {
       setMcpNotice({ tone: 'error', message: result.message ?? t('applyFailed') })
+    }
+  }
+
+  const loadProjectConfig = useCallback(async (): Promise<void> => {
+    if (!activeProjectWorkspaceRoot || typeof window.kunGui?.getKunProjectConfigFile !== 'function') {
+      setProjectConfig(null)
+      setProjectConfigText(DEFAULT_PROJECT_CONFIG_TEXT)
+      return
+    }
+    setProjectConfigLoading(true)
+    setProjectConfigNotice(null)
+    try {
+      const result = await window.kunGui.getKunProjectConfigFile(activeProjectWorkspaceRoot)
+      setProjectConfig(result)
+      setProjectConfigText(result.exists ? result.content : DEFAULT_PROJECT_CONFIG_TEXT)
+    } catch (error) {
+      setProjectConfigNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setProjectConfigLoading(false)
+    }
+  }, [activeProjectWorkspaceRoot])
+
+  useEffect(() => {
+    if (category !== 'agents') return
+    void loadProjectConfig()
+  }, [category, loadProjectConfig, projectConfigGrantFingerprint])
+
+  const saveProjectConfig = async (): Promise<void> => {
+    if (!activeProjectWorkspaceRoot || typeof window.kunGui?.setKunProjectConfigFile !== 'function') return
+    setProjectConfigBusy(true)
+    setProjectConfigNotice(null)
+    try {
+      const result = await window.kunGui.setKunProjectConfigFile(
+        activeProjectWorkspaceRoot,
+        projectConfigText
+      )
+      setProjectConfig(result)
+      setProjectConfigText(result.content)
+      setProjectConfigNotice({
+        tone: 'success',
+        message: result.trust === 'stale'
+          ? t('projectConfigSavedStale')
+          : t('projectConfigSaved', { path: compactHomePath(result.path) })
+      })
+    } catch (error) {
+      setProjectConfigNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setProjectConfigBusy(false)
+    }
+  }
+
+  const syncSettingsAfterProjectTrust = async (): Promise<void> => {
+    const saved = coerceRendererSettings(await rendererRuntimeClient.getSettings({ forceRefresh: true }))
+    persistedSettingsRef.current = saved
+    setForm(saved)
+    emitRendererSettingsChanged(saved)
+    void reloadUiSettings()
+  }
+
+  const setProjectConfigTrust = async (trusted: boolean): Promise<void> => {
+    if (!activeProjectWorkspaceRoot || typeof window.kunGui?.setKunProjectConfigTrust !== 'function') return
+    if (trusted && projectConfig?.status !== 'valid') return
+    setProjectConfigBusy(true)
+    setProjectConfigNotice(null)
+    try {
+      const result = await window.kunGui.setKunProjectConfigTrust(
+        activeProjectWorkspaceRoot,
+        trusted,
+        trusted ? projectConfig?.digest : undefined
+      )
+      setProjectConfig(result)
+      setProjectConfigText(result.exists ? result.content : DEFAULT_PROJECT_CONFIG_TEXT)
+      if (trusted ? result.trust !== 'trusted' : result.trust !== 'untrusted') return
+      await syncSettingsAfterProjectTrust()
+      setProjectConfigNotice({
+        tone: 'success',
+        message: trusted ? t('projectConfigApproved') : t('projectConfigRevoked')
+      })
+    } catch (error) {
+      setProjectConfigNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setProjectConfigBusy(false)
+    }
+  }
+
+  const openProjectConfigDir = async (): Promise<void> => {
+    if (!activeProjectWorkspaceRoot || typeof window.kunGui?.openKunProjectConfigDir !== 'function') return
+    const result = await window.kunGui.openKunProjectConfigDir(activeProjectWorkspaceRoot)
+    if (!result.ok) {
+      setProjectConfigNotice({ tone: 'error', message: result.message ?? t('applyFailed') })
     }
   }
 
@@ -1178,6 +1300,17 @@ export function SettingsView(): ReactElement {
     saveMcpConfig,
     loadMcpConfig,
     openMcpConfigDir,
+    activeProjectWorkspaceRoot,
+    projectConfig,
+    projectConfigText,
+    setProjectConfigText,
+    projectConfigLoading,
+    projectConfigBusy,
+    projectConfigNotice,
+    loadProjectConfig,
+    saveProjectConfig,
+    setProjectConfigTrust,
+    openProjectConfigDir,
     runtimeInfo,
     toolDiagnostics,
     memoryRecords,

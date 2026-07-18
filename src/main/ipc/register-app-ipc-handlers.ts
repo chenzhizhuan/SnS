@@ -75,6 +75,9 @@ import {
   worktreePathSchema,
   runtimeRequestPayloadSchema,
   kunProtectedApprovalPayloadSchema,
+  kunProjectConfigTrustPayloadSchema,
+  kunProjectConfigWorkspacePayloadSchema,
+  kunProjectConfigWritePayloadSchema,
   scheduleTaskFromTextPayloadSchema,
   shellOpenExternalUrlSchema,
   skillGithubImportPayloadSchema,
@@ -183,6 +186,7 @@ import { UiPluginCdpThemeController } from '../services/ui-plugin-cdp-theme-cont
 import {
   buildUiPluginBackgroundCss,
   buildUiPluginPresentationCss,
+  buildUiPluginSceneCss,
   buildUiPluginTokenCss
 } from '../../shared/ui-plugin'
 import { ensureBundledUiPlugins } from '../ui-plugin-bundled'
@@ -246,6 +250,13 @@ import {
   listGuiSkills,
   normalizeSkillRootPath
 } from '../services/skill-service'
+import {
+  ensureKunProjectConfigDirectory,
+  loadKunProjectConfig,
+  readKunProjectConfigSource,
+  writeKunProjectConfig
+} from '../../../kun/src/config/project-config.js'
+import { readProjectConfigState } from '../services/project-config-service'
 
 type GuiUpdaterModule = typeof import('../gui-updater')
 
@@ -299,6 +310,7 @@ type RegisterAppIpcHandlersOptions = {
   pollWeixinInstall: (deviceCode: string, weixinBridgeUrl?: string) => Promise<ClawImInstallPollResult>
   resolveKunConfigPath: () => string
   onKunMcpConfigWritten?: (path: string, content: string) => Promise<void> | void
+  onKunProjectConfigChanged?: (path: string, content: string) => Promise<void> | void
   showTurnCompleteNotification: (
     payload: TurnCompleteNotificationPayload
   ) => Promise<SystemNotificationResult>
@@ -314,6 +326,20 @@ function parseIpcPayload<T>(channel: string, schema: z.ZodType<T>, payload: unkn
   if (parsed.success) return parsed.data
   const issue = parsed.error.issues[0]
   throw new Error(`Invalid payload for ${channel}: ${issue?.message ?? 'Bad request.'}`)
+}
+
+function withoutRendererProjectConfigGrants(partial: AppSettingsPatch): AppSettingsPatch {
+  const kun = partial.agents?.kun
+  if (!kun || kun.projectConfig === undefined) return partial
+  const { projectConfig: _projectConfig, ...safeKun } = kun
+  void _projectConfig
+  return {
+    ...partial,
+    agents: {
+      ...partial.agents,
+      kun: safeKun
+    }
+  }
 }
 
 function assertTrustedWorkbenchSender(
@@ -426,6 +452,14 @@ function validateMcpConfigContent(content: string): void {
   }
 }
 
+function sameProjectWorkspace(left: string, right: string): boolean {
+  const normalize = (value: string): string => {
+    const path = resolve(value).replaceAll('\\', '/').replace(/\/+$/g, '')
+    return process.platform === 'win32' ? path.toLowerCase() : path
+  }
+  return normalize(left) === normalize(right)
+}
+
 function runDesktopCommand(
   command: DesktopCommand,
   sender: WebContents,
@@ -508,6 +542,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     pollWeixinInstall,
     resolveKunConfigPath,
     onKunMcpConfigWritten,
+    onKunProjectConfigChanged,
     showTurnCompleteNotification,
     getAppVersion,
     readGuiUpdateState,
@@ -742,13 +777,17 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   ipcMain.handle('settings:set', async (event, partial: unknown) =>
     applyProtectedSettingsPatch(
       event,
-      parseIpcPayload('settings:set', settingsPatchSchema, partial) as AppSettingsPatch,
+      withoutRendererProjectConfigGrants(
+        parseIpcPayload('settings:set', settingsPatchSchema, partial) as AppSettingsPatch
+      ),
       applySettingsPatch
     ))
   ipcMain.handle('settings:save-silent', async (event, partial: unknown) =>
     applyProtectedSettingsPatch(
       event,
-      parseIpcPayload('settings:save-silent', settingsPatchSchema, partial) as AppSettingsPatch,
+      withoutRendererProjectConfigGrants(
+        parseIpcPayload('settings:save-silent', settingsPatchSchema, partial) as AppSettingsPatch
+      ),
       saveSettingsPatch
     ))
 
@@ -1322,6 +1361,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       const css = [
         buildUiPluginTokenCss(loaded.manifest),
         buildUiPluginPresentationCss(loaded.manifest),
+        buildUiPluginSceneCss(loaded.manifest),
         buildUiPluginBackgroundCss(loaded.manifest, loaded.backgrounds)
       ]
         .filter(Boolean)
@@ -1331,7 +1371,8 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
         return {
           ok: true as const,
           manifest: loaded.manifest,
-          figures: loaded.figures
+          figures: loaded.figures,
+          sceneAssets: loaded.sceneAssets
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -1398,6 +1439,147 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       const dirPath = dirname(path)
       await mkdir(dirPath, { recursive: true })
       return openPathWithShell(dirPath)
+    } catch (error) {
+      return {
+        ok: false as const,
+        message: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })
+
+  const projectConfigFileResult = async (
+    workspaceRoot: string,
+    settingsOverride?: AppSettingsV1
+  ) => {
+    const settings = settingsOverride ?? await store.load()
+    const state = await readProjectConfigState(settings, workspaceRoot)
+    const source = await readKunProjectConfigSource(workspaceRoot).catch(() => null)
+    return {
+      ...state,
+      content: source?.content ?? '',
+      exists: source?.exists ?? false
+    }
+  }
+
+  ipcMain.handle('kun:project-config:read', async (_, payload: unknown) => {
+    const request = parseIpcPayload(
+      'kun:project-config:read',
+      kunProjectConfigWorkspacePayloadSchema,
+      payload
+    )
+    return projectConfigFileResult(request.workspaceRoot)
+  })
+
+  ipcMain.handle('kun:project-config:write', async (_, payload: unknown) => {
+    const request = parseIpcPayload(
+      'kun:project-config:write',
+      kunProjectConfigWritePayloadSchema,
+      payload
+    )
+    const written = await writeKunProjectConfig(request.workspaceRoot, request.content)
+    try {
+      await onKunProjectConfigChanged?.(written.path, request.content)
+    } catch (error) {
+      logError('project-config', 'Failed to apply project config change after write', {
+        path: written.path,
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
+    return projectConfigFileResult(written.workspaceRoot)
+  })
+
+  ipcMain.handle('kun:project-config:trust', async (_, payload: unknown) => {
+    const request = parseIpcPayload(
+      'kun:project-config:trust',
+      kunProjectConfigTrustPayloadSchema,
+      payload
+    )
+    const current = await store.load()
+    const loaded = await loadKunProjectConfig(request.workspaceRoot)
+    if (request.trusted && loaded.status !== 'valid') {
+      throw new Error(
+        loaded.status === 'invalid'
+          ? loaded.message
+          : 'Project config must exist and be valid before it can be approved.'
+      )
+    }
+    if (request.trusted && loaded.status === 'valid' &&
+      loaded.digest !== request.expectedDigest.toLowerCase()) {
+      throw new Error('Project config changed after confirmation. Refresh, review, and approve it again.')
+    }
+    const canonicalRoot = loaded.workspaceRoot
+    const currentState = await readProjectConfigState(current, canonicalRoot)
+    const enabledServers = currentState.serverSummaries.filter((server) => server.enabled)
+    const isChinese = current.locale.toLowerCase().startsWith('zh')
+    const detail = request.trusted
+      ? [
+          isChinese ? `工作区：${canonicalRoot}` : `Workspace: ${canonicalRoot}`,
+          isChinese ? '将启用的 MCP：' : 'Enabled MCP servers:',
+          enabledServers.length > 0
+            ? enabledServers.map((server) => `${server.id}: ${server.target}`).join('\n')
+            : isChinese ? '（无）' : '(none)',
+          loaded.status === 'valid' ? `SHA-256: ${loaded.digest}` : '',
+          isChinese
+            ? '仅批准你已审查且信任的项目配置。批准后，Kun 可以启动其中声明的命令。'
+            : 'Approve only a project configuration you reviewed and trust. Kun may start its declared commands.'
+        ].filter(Boolean).join('\n\n')
+      : isChinese
+        ? `工作区：${canonicalRoot}\n\n撤销后，项目 MCP 将在下一次配置应用时被移除。`
+        : `Workspace: ${canonicalRoot}\n\nProject MCP will be removed on the next configuration apply.`
+    const confirmationOptions: Electron.MessageBoxOptions = {
+      type: 'warning',
+      title: request.trusted
+        ? isChinese ? '批准项目 MCP' : 'Approve project MCP'
+        : isChinese ? '撤销项目 MCP' : 'Revoke project MCP',
+      message: request.trusted
+        ? isChinese ? '批准当前项目 MCP 配置？' : 'Approve the current project MCP configuration?'
+        : isChinese ? '撤销当前项目 MCP 授权？' : 'Revoke the current project MCP grant?',
+      detail,
+      buttons: request.trusted
+        ? [isChinese ? '批准' : 'Approve', isChinese ? '取消' : 'Cancel']
+        : [isChinese ? '撤销' : 'Revoke', isChinese ? '取消' : 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    }
+    const mainWindow = getMainWindow()
+    const confirmation = mainWindow
+      ? await dialog.showMessageBox(mainWindow, confirmationOptions)
+      : await dialog.showMessageBox(confirmationOptions)
+    if (confirmation.response !== 0) {
+      return projectConfigFileResult(canonicalRoot, current)
+    }
+    let confirmedDigest: string | undefined
+    if (request.trusted) {
+      const confirmed = await loadKunProjectConfig(canonicalRoot)
+      if (confirmed.status !== 'valid' ||
+        !sameProjectWorkspace(confirmed.workspaceRoot, canonicalRoot) ||
+        confirmed.digest !== request.expectedDigest.toLowerCase()) {
+        throw new Error('Project config changed during confirmation. Refresh, review, and approve it again.')
+      }
+      confirmedDigest = confirmed.digest
+    }
+    const grants = getKunRuntimeSettings(current).projectConfig.grants.filter((grant) =>
+      !sameProjectWorkspace(grant.workspaceRoot, canonicalRoot)
+    )
+    if (request.trusted && confirmedDigest) {
+      grants.push({ workspaceRoot: canonicalRoot, configDigest: confirmedDigest })
+    }
+    const saved = await applySettingsPatch({
+      agents: { kun: { projectConfig: { grants } } }
+    })
+    return projectConfigFileResult(canonicalRoot, saved)
+  })
+
+  ipcMain.handle('kun:project-config:open-dir', async (_, payload: unknown) => {
+    const request = parseIpcPayload(
+      'kun:project-config:open-dir',
+      kunProjectConfigWorkspacePayloadSchema,
+      payload
+    )
+    try {
+      const directory = await ensureKunProjectConfigDirectory(request.workspaceRoot)
+      return openPathWithShell(directory)
     } catch (error) {
       return {
         ok: false as const,

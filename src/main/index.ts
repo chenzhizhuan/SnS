@@ -1828,6 +1828,10 @@ app.whenReady().then(async () => {
       const settings = await store.load()
       queueRuntimeMcpConfigApply(settings)
     },
+    onKunProjectConfigChanged: async () => {
+      const settings = await store.load()
+      queueRuntimeMcpConfigApply(settings)
+    },
     showTurnCompleteNotification,
     getAppVersion: () => app.getVersion(),
     readGuiUpdateState,

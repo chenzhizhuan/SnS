@@ -112,6 +112,8 @@ describe('WorkbenchSideRail', () => {
     }
 
     expect(html).toContain('data-tooltip="Issues"')
+    expect(html).toContain('data-tooltip="MCP &amp; Skills"')
+    expect(html).toContain('aria-label="MCP &amp; Skills"')
     expect(html).toContain('data-contribution-id="extension:acme.issues/issues"')
     expect(html).toContain(
       'src="kun-extension://acme.issues/assets/issues.svg?kunHostResource=icon"'
@@ -120,6 +122,12 @@ describe('WorkbenchSideRail', () => {
     expect(html).toContain('data-contribution-id="extension:acme.issues/summary"')
     expect(html.indexOf('data-contribution-id="extension:acme.issues/summary"')).toBeLessThan(
       html.indexOf('data-contribution-id="extension:acme.issues/issues"')
+    )
+    expect(html.indexOf('data-tooltip="MCP &amp; Skills"')).toBeLessThan(
+      html.indexOf('data-contribution-id="extension:acme.issues/summary"')
+    )
+    expect(html.indexOf('data-tooltip="MCP &amp; Skills"')).toBeLessThan(
+      html.indexOf('data-tooltip="Files"')
     )
     expect(html).not.toContain('data-tooltip="Extension Views"')
     expect(html).not.toContain('aria-label="Open extension Views"')

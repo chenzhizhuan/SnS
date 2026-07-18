@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildUiPluginBackgroundCss,
   buildUiPluginPresentationCss,
+  buildUiPluginSceneCss,
   buildUiPluginTokenCss,
   isSafeUiPluginBackgroundPath,
   isSafeUiPluginFigurePath,
@@ -55,6 +56,80 @@ const validPresentationManifest = {
   }
 }
 
+const sceneMotion = {
+  preset: 'float',
+  speed: 'slow',
+  phase: 'b'
+} as const
+
+const dedicatedCharacterChromeRecipes = [
+  'botanical',
+  'fortune-ledger',
+  'dream-gate',
+  'washi',
+  'scrapbook',
+  'aurora',
+  'synth',
+  'midnight-pass',
+  'nautical',
+  'dimension-lab',
+  'starlight'
+] as const
+
+const validSceneManifest = {
+  ...validPresentationManifest,
+  scene: {
+    apiVersion: '1.6',
+    layout: 'rail-left',
+    character: {
+      scale: 'hero',
+      fit: 'contain',
+      focalPoint: 'bottom',
+      mask: 'arch',
+      offsetX: 3,
+      offsetY: -2,
+      opacity: 0.96,
+      flipX: false,
+      motion: {
+        preset: 'sway',
+        speed: 'slow',
+        phase: 'b'
+      }
+    },
+    artwork: {
+      backdrop: {
+        path: 'scene/backdrop.webp',
+        darkPath: 'scene/backdrop-dark.webp',
+        anchor: 'center',
+        size: 'full',
+        fit: 'cover',
+        offsetX: 0,
+        offsetY: 0,
+        opacity: 0.72,
+        blend: 'screen',
+        motion: { ...sceneMotion, preset: 'drift-x' }
+      },
+      frame: {
+        path: 'scene/frame.png',
+        anchor: 'center',
+        size: 'large',
+        fit: 'contain',
+        offsetX: 1,
+        offsetY: -1,
+        opacity: 1,
+        blend: 'normal',
+        motion: { ...sceneMotion, preset: 'none', speed: 'normal', phase: 'a' }
+      }
+    },
+    chrome: {
+      sidebar: 'paper',
+      topbar: 'editorial',
+      composer: 'hologram',
+      cards: 'ticket'
+    }
+  }
+} as const
+
 describe('normalizeUiPluginManifest', () => {
   it('accepts a fully-featured valid manifest', () => {
     const result = normalizeUiPluginManifest(validManifest)
@@ -73,6 +148,123 @@ describe('normalizeUiPluginManifest', () => {
     if (!result.ok) return
     expect(result.manifest.figures.portrait).toBe('img/portrait.png')
     expect(result.manifest.presentation).toEqual(validPresentationManifest.presentation)
+  })
+
+  it('strictly normalizes a complete host-rendered scene v1.6', () => {
+    const result = normalizeUiPluginManifest(validSceneManifest)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.manifest.scene).toEqual(validSceneManifest.scene)
+    expect(result.manifest.presentation).toEqual(validPresentationManifest.presentation)
+    expect(result.manifest.figures.portrait).toBe('img/portrait.png')
+  })
+
+  it('accepts every host-owned per-character chrome recipe on all four surfaces', () => {
+    for (const recipe of dedicatedCharacterChromeRecipes) {
+      const chrome = {
+        sidebar: recipe,
+        topbar: recipe,
+        composer: recipe,
+        cards: recipe
+      }
+      const result = normalizeUiPluginManifest({
+        ...validSceneManifest,
+        scene: { ...validSceneManifest.scene, chrome }
+      })
+      expect(result.ok, recipe).toBe(true)
+      if (result.ok) expect(result.manifest.scene?.chrome).toEqual(chrome)
+    }
+  })
+
+  it('rejects unlisted chrome recipes on each scene surface', () => {
+    for (const surface of ['sidebar', 'topbar', 'composer', 'cards'] as const) {
+      const result = normalizeUiPluginManifest({
+        ...validSceneManifest,
+        scene: {
+          ...validSceneManifest.scene,
+          chrome: {
+            ...validSceneManifest.scene.chrome,
+            [surface]: 'user-supplied-css'
+          }
+        }
+      })
+      expect(result.ok, surface).toBe(false)
+    }
+  })
+
+  it('requires portrait, v1.5 fallback, and at least one artwork layer for scene v1.6', () => {
+    const noPortrait = normalizeUiPluginManifest({
+      ...validSceneManifest,
+      figures: validManifest.figures
+    })
+    expect(noPortrait.ok).toBe(false)
+    if (!noPortrait.ok) expect(noPortrait.errors).toContain('scene 需要同时声明 figures.portrait 人物图片')
+
+    const noFallback = normalizeUiPluginManifest({
+      ...validSceneManifest,
+      presentation: undefined
+    })
+    expect(noFallback.ok).toBe(false)
+    if (!noFallback.ok) expect(noFallback.errors).toContain('scene 需要同时声明 presentation 作为 v1.5 fallback')
+
+    const noArtwork = normalizeUiPluginManifest({
+      ...validSceneManifest,
+      scene: { ...validSceneManifest.scene, artwork: {} }
+    })
+    expect(noArtwork.ok).toBe(false)
+    if (!noArtwork.ok) expect(noArtwork.errors).toContain('scene.artwork 至少需要声明一个专属图片槽位')
+  })
+
+  it('rejects unknown scene keys, active assets, invalid blend roles, and arbitrary motion', () => {
+    const invalidScenes = [
+      { ...validSceneManifest.scene, selector: '.ds-chat-stage' },
+      {
+        ...validSceneManifest.scene,
+        character: { ...validSceneManifest.scene.character, easing: 'linear' }
+      },
+      {
+        ...validSceneManifest.scene,
+        artwork: {
+          frame: { ...validSceneManifest.scene.artwork.frame, path: 'scene/frame.gif' }
+        }
+      },
+      {
+        ...validSceneManifest.scene,
+        artwork: {
+          frame: { ...validSceneManifest.scene.artwork.frame, blend: 'screen' }
+        }
+      },
+      {
+        ...validSceneManifest.scene,
+        artwork: {
+          frame: {
+            ...validSceneManifest.scene.artwork.frame,
+            motion: { ...sceneMotion, preset: 'spring(1,2)' }
+          }
+        }
+      }
+    ]
+    for (const scene of invalidScenes) {
+      expect(normalizeUiPluginManifest({ ...validSceneManifest, scene }).ok).toBe(false)
+    }
+  })
+
+  it('enforces bounded scene numeric fields and a boolean flip flag', () => {
+    for (const [key, value] of [
+      ['offsetX', 13],
+      ['offsetY', -13],
+      ['opacity', Number.NaN],
+      ['opacity', 1.01],
+      ['flipX', 'yes']
+    ] as const) {
+      expect(normalizeUiPluginManifest({
+        ...validSceneManifest,
+        scene: {
+          ...validSceneManifest.scene,
+          character: { ...validSceneManifest.scene.character, [key]: value }
+        }
+      }).ok, `${key}=${String(value)}`).toBe(false)
+    }
   })
 
   it('requires a portrait whenever presentation is declared', () => {
@@ -334,7 +526,12 @@ describe('normalizeUiPluginManifest', () => {
       totalAssetBytes: 48 * 1024 * 1024,
       backgroundMaxDimension: 8192,
       backgroundMaxPixels: 24_000_000,
-      totalBackgroundPixels: 64_000_000
+      totalBackgroundPixels: 64_000_000,
+      sceneAssetBytes: 4 * 1024 * 1024,
+      totalSceneAssetBytes: 16 * 1024 * 1024,
+      sceneAssetMaxDimension: 4096,
+      sceneAssetMaxPixels: 12_000_000,
+      totalSceneAssetPixels: 40_000_000
     })
   })
 })
@@ -435,6 +632,42 @@ describe('buildUiPluginPresentationCss', () => {
         }
       })
     ).toBe('')
+  })
+})
+
+describe('buildUiPluginSceneCss', () => {
+  it('emits only scoped bounded numeric scene variables', () => {
+    const result = normalizeUiPluginManifest(validSceneManifest)
+    if (!result.ok) throw new Error(result.errors.join('\n'))
+    const css = buildUiPluginSceneCss(result.manifest)
+    expect(css).toContain("html[data-ui-plugin='starlight']")
+    expect(css).toContain('--kun-ui-plugin-scene-character-offset-x: 3%;')
+    expect(css).toContain('--kun-ui-plugin-scene-character-offset-y: -2%;')
+    expect(css).toContain('--kun-ui-plugin-scene-character-opacity: 0.96;')
+    expect(css).toContain('--kun-ui-plugin-scene-frame-offset-x: 1%;')
+    expect(css).toContain('--kun-ui-plugin-scene-backdrop-opacity: 0.72;')
+    expect(css).not.toContain('scene/frame.png')
+    expect(css).not.toContain('rail-left')
+    expect(css).not.toContain('sway')
+  })
+
+  it('returns no CSS without scene and rejects unnormalized scene numbers', () => {
+    const legacy = normalizeUiPluginManifest(validPresentationManifest)
+    if (!legacy.ok) throw new Error(legacy.errors.join('\n'))
+    expect(buildUiPluginSceneCss(legacy.manifest)).toBe('')
+
+    const scene = normalizeUiPluginManifest(validSceneManifest)
+    if (!scene.ok) throw new Error(scene.errors.join('\n'))
+    expect(buildUiPluginSceneCss({
+      ...scene.manifest,
+      scene: {
+        ...scene.manifest.scene!,
+        artwork: {
+          ...scene.manifest.scene!.artwork,
+          frame: { ...scene.manifest.scene!.artwork.frame!, offsetX: 99 }
+        }
+      }
+    })).toBe('')
   })
 })
 

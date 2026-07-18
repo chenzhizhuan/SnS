@@ -5,7 +5,8 @@ import {
   type UiPluginLabelKey,
   type UiPluginListItem,
   type UiPluginManifestV1,
-  type UiPluginRuntimeFigures
+  type UiPluginRuntimeFigures,
+  type UiPluginRuntimeSceneAssets
 } from '@shared/ui-plugin'
 import {
   UI_MODE_DEFAULT,
@@ -24,6 +25,7 @@ import {
 export type UiPluginRuntime = {
   manifest: UiPluginManifestV1
   figures: UiPluginRuntimeFigures
+  sceneAssets: UiPluginRuntimeSceneAssets
 }
 
 type UiPluginState = {
@@ -58,6 +60,22 @@ const UI_PLUGIN_PRESENTATION_ATTRIBUTES = [
   'data-ui-plugin-surface-composer',
   'data-ui-plugin-surface-cards'
 ] as const
+const UI_PLUGIN_SCENE_ATTRIBUTES = [
+  'data-ui-plugin-scene',
+  'data-ui-plugin-scene-layout',
+  'data-ui-plugin-scene-character-scale',
+  'data-ui-plugin-scene-character-fit',
+  'data-ui-plugin-scene-character-focal-point',
+  'data-ui-plugin-scene-character-mask',
+  'data-ui-plugin-scene-character-flip-x',
+  'data-ui-plugin-scene-character-motion',
+  'data-ui-plugin-scene-character-motion-speed',
+  'data-ui-plugin-scene-character-motion-phase',
+  'data-ui-plugin-scene-chrome-sidebar',
+  'data-ui-plugin-scene-chrome-topbar',
+  'data-ui-plugin-scene-chrome-composer',
+  'data-ui-plugin-scene-chrome-cards'
+] as const
 let activationRequestId = 0
 let activationQueue: Promise<void> = Promise.resolve()
 
@@ -76,26 +94,51 @@ function applyUiModeDom(mode: string, runtime: UiPluginRuntime | null): void {
   for (const attribute of UI_PLUGIN_PRESENTATION_ATTRIBUTES) {
     root.removeAttribute(attribute)
   }
+  for (const attribute of UI_PLUGIN_SCENE_ATTRIBUTES) {
+    root.removeAttribute(attribute)
+  }
   if (runtime && mode === runtime.manifest.id) {
     root.setAttribute('data-ui-plugin', runtime.manifest.id)
     const presentation = runtime.manifest.presentation
+    const scene = runtime.manifest.scene
     if (presentation) {
       const { character, readability, surfaces } = presentation
       root.setAttribute('data-ui-plugin-presentation', 'on')
-      root.setAttribute('data-ui-plugin-character-anchor', character.anchor)
-      root.setAttribute('data-ui-plugin-character-size', character.size)
-      root.setAttribute('data-ui-plugin-character-offset-x', String(character.offsetX))
-      root.setAttribute('data-ui-plugin-character-offset-y', String(character.offsetY))
-      root.setAttribute('data-ui-plugin-character-opacity', String(character.opacity))
-      root.setAttribute('data-ui-plugin-character-frame', character.frame)
-      root.setAttribute('data-ui-plugin-character-motion', character.motion)
-      root.setAttribute('data-ui-plugin-content-reserve', character.contentReserve)
       root.setAttribute('data-ui-plugin-readability-scrim', readability.scrim)
       root.setAttribute('data-ui-plugin-readability-strength', readability.strength)
-      root.setAttribute('data-ui-plugin-surface-sidebar', surfaces.sidebar)
-      root.setAttribute('data-ui-plugin-surface-topbar', surfaces.topbar)
-      root.setAttribute('data-ui-plugin-surface-composer', surfaces.composer)
-      root.setAttribute('data-ui-plugin-surface-cards', surfaces.cards)
+      // v1.6 scene owns character geometry and chrome. Keep only the v1.5
+      // readability fallback active so old frame/surface recipes cannot bleed
+      // into a scene recipe such as `inherit` or `paper`.
+      if (!scene) {
+        root.setAttribute('data-ui-plugin-character-anchor', character.anchor)
+        root.setAttribute('data-ui-plugin-character-size', character.size)
+        root.setAttribute('data-ui-plugin-character-offset-x', String(character.offsetX))
+        root.setAttribute('data-ui-plugin-character-offset-y', String(character.offsetY))
+        root.setAttribute('data-ui-plugin-character-opacity', String(character.opacity))
+        root.setAttribute('data-ui-plugin-character-frame', character.frame)
+        root.setAttribute('data-ui-plugin-character-motion', character.motion)
+        root.setAttribute('data-ui-plugin-content-reserve', character.contentReserve)
+        root.setAttribute('data-ui-plugin-surface-sidebar', surfaces.sidebar)
+        root.setAttribute('data-ui-plugin-surface-topbar', surfaces.topbar)
+        root.setAttribute('data-ui-plugin-surface-composer', surfaces.composer)
+        root.setAttribute('data-ui-plugin-surface-cards', surfaces.cards)
+      }
+    }
+    if (scene) {
+      root.setAttribute('data-ui-plugin-scene', 'on')
+      root.setAttribute('data-ui-plugin-scene-layout', scene.layout)
+      root.setAttribute('data-ui-plugin-scene-character-scale', scene.character.scale)
+      root.setAttribute('data-ui-plugin-scene-character-fit', scene.character.fit)
+      root.setAttribute('data-ui-plugin-scene-character-focal-point', scene.character.focalPoint)
+      root.setAttribute('data-ui-plugin-scene-character-mask', scene.character.mask)
+      root.setAttribute('data-ui-plugin-scene-character-flip-x', scene.character.flipX ? 'on' : 'off')
+      root.setAttribute('data-ui-plugin-scene-character-motion', scene.character.motion.preset)
+      root.setAttribute('data-ui-plugin-scene-character-motion-speed', scene.character.motion.speed)
+      root.setAttribute('data-ui-plugin-scene-character-motion-phase', scene.character.motion.phase)
+      root.setAttribute('data-ui-plugin-scene-chrome-sidebar', scene.chrome.sidebar)
+      root.setAttribute('data-ui-plugin-scene-chrome-topbar', scene.chrome.topbar)
+      root.setAttribute('data-ui-plugin-scene-chrome-composer', scene.chrome.composer)
+      root.setAttribute('data-ui-plugin-scene-chrome-cards', scene.chrome.cards)
     }
   } else {
     root.removeAttribute('data-ui-plugin')
@@ -213,7 +256,8 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
 
         const runtime: UiPluginRuntime = {
           manifest: themeResult.manifest,
-          figures: themeResult.figures
+          figures: themeResult.figures,
+          sceneAssets: themeResult.sceneAssets ?? {}
         }
         writeUiModePreference(normalized)
         set({ busy: false, uiMode: normalized, activeRuntime: runtime, lastError: null })

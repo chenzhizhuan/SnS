@@ -58,6 +58,9 @@ const SddAssistantPanel = lazy(() =>
 const SideConversationPanel = lazy(() =>
   import('../chat/SideConversationPanel').then((module) => ({ default: module.SideConversationPanel }))
 )
+const McpSkillsPanel = lazy(() =>
+  import('./McpSkillsPanel').then((module) => ({ default: module.McpSkillsPanel }))
+)
 
 type WriteAssistantPanelProps = ComponentProps<typeof WriteAssistantPanel>
 type SddAssistantPanelProps = ComponentProps<typeof SddAssistantPanel>
@@ -96,6 +99,9 @@ export type WorkbenchRightPanelProps = {
   planPanel: ReactElement
   canvas: Omit<CodeCanvasPanelProps, 'className'>
   file: Omit<WorkspaceFilePreviewPanelProps, 'className'>
+  mcpSkills: {
+    onOpenSettings: () => void
+  }
   extensionView?: RegisteredContribution<'views.rightSidebar'>
   code?: WorkbenchCodeRightWorkspaceProps
   workspaceRoot?: string
@@ -118,6 +124,7 @@ export function WorkbenchRightPanel({
   planPanel,
   canvas,
   file,
+  mcpSkills,
   extensionView,
   code,
   workspaceRoot,
@@ -137,6 +144,7 @@ export function WorkbenchRightPanel({
         planPanel={planPanel}
         canvas={canvas}
         file={file}
+        mcpSkills={mcpSkills}
         workspaceRoot={workspaceRoot}
         onCollapse={onCollapse}
       />
@@ -173,6 +181,8 @@ export function WorkbenchRightPanel({
             <CodeCanvasPanel {...canvas} className="h-full max-h-full w-full" />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.file ? (
             <WorkspaceFilePreviewPanel {...file} className="h-full max-h-full w-full" />
+          ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.mcpSkills ? (
+            <McpSkillsPanel workspaceRoot={workspaceRoot} onOpenSettings={mcpSkills.onOpenSettings} />
           ) : rightPanelMode && isExtensionContributionId(rightPanelMode) && extensionView?.id === rightPanelMode ? (
             <ExtensionViewOutlet contribution={extensionView} workspaceRoot={workspaceRoot} onClose={onCollapse} />
           ) : (
@@ -197,6 +207,7 @@ function CodeRightPanelWorkspace({
   planPanel,
   canvas,
   file,
+  mcpSkills,
   workspaceRoot,
   onCollapse
 }: Pick<
@@ -210,6 +221,7 @@ function CodeRightPanelWorkspace({
   | 'planPanel'
   | 'canvas'
   | 'file'
+  | 'mcpSkills'
   | 'workspaceRoot'
   | 'onCollapse'
 > & { code: WorkbenchCodeRightWorkspaceProps }): ReactElement {
@@ -283,6 +295,9 @@ function CodeRightPanelWorkspace({
           onTitleChange={(title) => updateTitle(id, title)}
         />
       )
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.mcpSkills) {
+      return <McpSkillsPanel workspaceRoot={workspaceRoot} onOpenSettings={mcpSkills.onOpenSettings} />
     }
     if (isExtensionContributionId(id)) {
       const contribution = code.extensionViews.find((view) => view.id === id)

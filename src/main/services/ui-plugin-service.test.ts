@@ -187,6 +187,60 @@ function portraitManifest(path = 'img/portrait.png') {
   }
 }
 
+function sceneManifest() {
+  return {
+    ...portraitManifest(),
+    id: 'scene-theme',
+    name: 'Scene theme',
+    scene: {
+      apiVersion: '1.6',
+      layout: 'rail-left',
+      character: {
+        scale: 'hero',
+        fit: 'contain',
+        focalPoint: 'bottom',
+        mask: 'arch',
+        offsetX: 1,
+        offsetY: -2,
+        opacity: 0.96,
+        flipX: false,
+        motion: { preset: 'sway', speed: 'slow', phase: 'b' }
+      },
+      artwork: {
+        backdrop: {
+          path: 'scene/shared.png',
+          darkPath: 'scene/dark.png',
+          anchor: 'center',
+          size: 'full',
+          fit: 'cover',
+          offsetX: 0,
+          offsetY: 0,
+          opacity: 0.7,
+          blend: 'screen',
+          motion: { preset: 'drift-x', speed: 'slow', phase: 'a' }
+        },
+        frame: {
+          path: 'scene/shared.png',
+          anchor: 'center',
+          size: 'large',
+          fit: 'contain',
+          offsetX: 1,
+          offsetY: 0,
+          opacity: 1,
+          blend: 'normal',
+          motion: { preset: 'none', speed: 'normal', phase: 'a' }
+        }
+      },
+      chrome: {
+        sidebar: 'paper',
+        topbar: 'editorial',
+        composer: 'hologram',
+        cards: 'ticket'
+      }
+    }
+  }
+}
+
 const backgroundOnlyManifest = {
   id: 'dream-background',
   name: '梦境背景',
@@ -237,6 +291,55 @@ describe('installUiPluginFromDirectory', () => {
     expect(plugins).toHaveLength(1)
     expect(plugins[0]?.manifest.id).toBe('starlight')
     expect(plugins[0]?.previewDataUrl?.startsWith('data:image/png;base64,')).toBe(true)
+  })
+
+  it('installs only referenced static scene assets and deduplicates reused paths', async () => {
+    await writeSourceAssets(sceneManifest(), {
+      'img/portrait.png': PNG_BYTES,
+      'scene/shared.png': PNG_BYTES,
+      'scene/dark.png': PNG_BYTES,
+      'scene/unreferenced.png': PNG_BYTES
+    })
+
+    const result = await installUiPluginFromDirectory(userDataDir, sourceDir)
+    expect(result.ok, JSON.stringify(result)).toBe(true)
+    if (!result.ok) return
+
+    const installedRoot = join(uiPluginsRootDir(userDataDir), 'scene-theme')
+    const installedFiles = (await readdir(installedRoot, { recursive: true })).map(String)
+    expect(installedFiles).toContain(join('scene', 'shared.png'))
+    expect(installedFiles).toContain(join('scene', 'dark.png'))
+    expect(installedFiles).not.toContain(join('scene', 'unreferenced.png'))
+
+    const loaded = await loadUiPluginFigures(userDataDir, 'scene-theme')
+    expect(loaded.ok, JSON.stringify(loaded)).toBe(true)
+    if (!loaded.ok) return
+    expect(Object.keys(loaded.sceneAssets.assets ?? {}).sort()).toEqual([
+      'scene/dark.png',
+      'scene/shared.png'
+    ])
+    expect(loaded.sceneAssets.assets?.['scene/shared.png']).toBe(
+      `data:image/png;base64,${PNG_BYTES.toString('base64')}`
+    )
+  })
+
+  it('rejects animated and symlinked scene assets', async () => {
+    await writeSourceAssets(sceneManifest(), {
+      'img/portrait.png': PNG_BYTES,
+      'scene/shared.png': apngBytes(),
+      'scene/dark.png': PNG_BYTES
+    })
+    const animated = await installUiPluginFromDirectory(userDataDir, sourceDir)
+    expect(animated.ok).toBe(false)
+    if (!animated.ok) expect(animated.errors.join(';')).toContain('scene 图片仅支持静态')
+
+    await rm(join(sourceDir, 'scene', 'shared.png'))
+    const outside = join(userDataDir, 'outside.png')
+    await writeFile(outside, PNG_BYTES)
+    await symlink(outside, join(sourceDir, 'scene', 'shared.png'))
+    const symlinked = await installUiPluginFromDirectory(userDataDir, sourceDir)
+    expect(symlinked.ok).toBe(false)
+    if (!symlinked.ok) expect(symlinked.errors.join(';')).toContain('符号链接')
   })
 
   it('rejects manifests with missing figures or invalid content', async () => {
@@ -586,6 +689,7 @@ describe('loadUiPluginFigures', () => {
     if (!result.ok) return
     expect(result.figures.swim?.startsWith('data:image/png;base64,')).toBe(true)
     expect(result.backgrounds).toEqual({})
+    expect(result.sceneAssets).toEqual({})
   })
 
   it('validates and returns the presentation portrait through the figure pipeline', async () => {
@@ -740,6 +844,39 @@ describe('seedUiPlugin (bundled plugins like ikun)', () => {
     expect(loaded.ok, JSON.stringify(loaded)).toBe(true)
     if (!loaded.ok) return
     expect(loaded.backgrounds.assets?.['img/stage.png']?.startsWith('data:image/png;base64,')).toBe(true)
+  })
+
+  it('seeds and loads scene v1.6 assets through the optional fifth argument', async () => {
+    const result = await seedUiPlugin(
+      userDataDir,
+      sceneManifest(),
+      { portrait: PNG_BYTES },
+      {},
+      {
+        'scene/shared.png': PNG_BYTES,
+        'scene/dark.png': PNG_BYTES
+      }
+    )
+    expect(result.ok, JSON.stringify(result)).toBe(true)
+
+    const loaded = await loadUiPluginFigures(userDataDir, 'scene-theme')
+    expect(loaded.ok, JSON.stringify(loaded)).toBe(true)
+    if (!loaded.ok) return
+    expect(loaded.manifest.scene?.layout).toBe('rail-left')
+    expect(Object.keys(loaded.sceneAssets.assets ?? {}).sort()).toEqual([
+      'scene/dark.png',
+      'scene/shared.png'
+    ])
+  })
+
+  it('rejects seeding when declared scene bytes are missing', async () => {
+    const result = await seedUiPlugin(
+      userDataDir,
+      sceneManifest(),
+      { portrait: PNG_BYTES }
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors.join(';')).toContain('scene backdrop.default 缺少预装图片数据')
   })
 
   it('rejects seeding when declared background bytes are missing', async () => {

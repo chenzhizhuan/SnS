@@ -119,7 +119,10 @@ export function WorkbenchChatStage({
 }: WorkbenchChatStageProps): ReactElement {
   const { t } = useTranslation('common')
   return (
-    <section className="ds-chat-stage ds-drag relative isolate flex min-h-0 min-w-0 flex-1 flex-col">
+    <section
+      className="ds-chat-stage ds-drag relative isolate flex min-h-0 min-w-0 flex-1 flex-col"
+      data-terminal-open={terminalOpen ? 'true' : 'false'}
+    >
       <ActiveUiPluginStagePresentation />
       <div
         className={`${stageInsetClass} ds-ui-plugin-stage-content relative z-[3] flex min-h-0 min-w-0 flex-1 flex-col`}

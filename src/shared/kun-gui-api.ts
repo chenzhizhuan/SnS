@@ -107,7 +107,8 @@ import type {
   UiPluginListItem,
   UiPluginManifestV1,
   UiPluginRuntimeBackgrounds,
-  UiPluginRuntimeFigures
+  UiPluginRuntimeFigures,
+  UiPluginRuntimeSceneAssets
 } from './ui-plugin'
 import type {
   WriteRetrievalRequest,
@@ -225,6 +226,7 @@ export type UiPluginLoadIpcResult =
       manifest: UiPluginManifestV1
       figures: UiPluginRuntimeFigures
       backgrounds: UiPluginRuntimeBackgrounds
+      sceneAssets: UiPluginRuntimeSceneAssets
     }
   | { ok: false; error: string }
 export type UiPluginThemeActivateIpcResult =
@@ -232,6 +234,7 @@ export type UiPluginThemeActivateIpcResult =
       ok: true
       manifest: UiPluginManifestV1
       figures: UiPluginRuntimeFigures
+      sceneAssets: UiPluginRuntimeSceneAssets
     }
   | { ok: false; error: string }
 export type UiPluginThemeDeactivateIpcResult =
@@ -239,6 +242,25 @@ export type UiPluginThemeDeactivateIpcResult =
   | { ok: false; error: string }
 export type DeepseekConfigFileResult = { path: string; content: string; exists: boolean }
 export type DeepseekConfigSaveResult = { ok: true; path: string }
+export type KunProjectConfigServerSummary = {
+  id: string
+  transport: 'stdio' | 'streamable-http' | 'sse'
+  target: string
+  enabled: boolean
+}
+export type KunProjectConfigFileResult = {
+  workspaceRoot: string
+  path: string
+  content: string
+  exists: boolean
+  status: 'missing' | 'invalid' | 'valid'
+  trust: 'untrusted' | 'trusted' | 'stale'
+  message?: string
+  digest?: string
+  serverSummaries: KunProjectConfigServerSummary[]
+  skillRootCount: number
+  disabledSkillCount: number
+}
 export type TurnCompleteNotificationPayload = {
   threadId?: string
   title: string
@@ -511,6 +533,14 @@ export type KunGuiApi = ExtensionIpcApi & {
   getKunConfigFile: () => Promise<DeepseekConfigFileResult>
   setKunConfigFile: (content: string) => Promise<DeepseekConfigSaveResult>
   openKunConfigDir: () => Promise<PathOpenResult>
+  getKunProjectConfigFile: (workspaceRoot: string) => Promise<KunProjectConfigFileResult>
+  setKunProjectConfigFile: (workspaceRoot: string, content: string) => Promise<KunProjectConfigFileResult>
+  setKunProjectConfigTrust: (
+    workspaceRoot: string,
+    trusted: boolean,
+    expectedDigest?: string
+  ) => Promise<KunProjectConfigFileResult>
+  openKunProjectConfigDir: (workspaceRoot: string) => Promise<PathOpenResult>
   getGitBranches: (workspaceRoot: string) => Promise<GitBranchesResult>
   switchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
   createAndSwitchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>

@@ -89,6 +89,143 @@ export type UiPluginPresentation = {
   }
 }
 
+/**
+ * UI Plugin scene v1.6 is an additive, host-rendered scene description.
+ * `presentation` remains the v1.5 fallback; older hosts can ignore this
+ * top-level object without accepting plugin markup, CSS, or executable code.
+ */
+export const UI_PLUGIN_SCENE_API_VERSION = '1.6' as const
+
+export const UI_PLUGIN_SCENE_LAYOUTS = [
+  'rail-right',
+  'rail-left',
+  'card-right',
+  'card-left',
+  'backdrop-right',
+  'backdrop-center'
+] as const
+export type UiPluginSceneLayout = (typeof UI_PLUGIN_SCENE_LAYOUTS)[number]
+
+export const UI_PLUGIN_SCENE_CHARACTER_SCALES = ['compact', 'standard', 'hero'] as const
+export type UiPluginSceneCharacterScale = (typeof UI_PLUGIN_SCENE_CHARACTER_SCALES)[number]
+
+export const UI_PLUGIN_SCENE_CHARACTER_MASKS = [
+  'none',
+  'soft-card',
+  'circle',
+  'arch',
+  'diamond',
+  'hologram',
+  'portal',
+  'polaroid',
+  'ticket'
+] as const
+export type UiPluginSceneCharacterMask = (typeof UI_PLUGIN_SCENE_CHARACTER_MASKS)[number]
+
+export const UI_PLUGIN_SCENE_CHARACTER_MOTIONS = ['none', 'breathe', 'float', 'sway'] as const
+export type UiPluginSceneCharacterMotion = (typeof UI_PLUGIN_SCENE_CHARACTER_MOTIONS)[number]
+
+export const UI_PLUGIN_SCENE_ARTWORK_SLOTS = [
+  'backdrop',
+  'ambient',
+  'frame',
+  'foreground',
+  'emblem'
+] as const
+export type UiPluginSceneArtworkSlot = (typeof UI_PLUGIN_SCENE_ARTWORK_SLOTS)[number]
+
+export const UI_PLUGIN_SCENE_ARTWORK_SIZES = ['small', 'medium', 'large', 'full'] as const
+export type UiPluginSceneArtworkSize = (typeof UI_PLUGIN_SCENE_ARTWORK_SIZES)[number]
+
+export const UI_PLUGIN_SCENE_ARTWORK_BLENDS = ['normal', 'screen', 'soft-light'] as const
+export type UiPluginSceneArtworkBlend = (typeof UI_PLUGIN_SCENE_ARTWORK_BLENDS)[number]
+
+export const UI_PLUGIN_SCENE_ARTWORK_MOTIONS = [
+  'none',
+  'float',
+  'drift-x',
+  'drift-y',
+  'pulse',
+  'orbit',
+  'twinkle',
+  'scan'
+] as const
+export type UiPluginSceneArtworkMotion = (typeof UI_PLUGIN_SCENE_ARTWORK_MOTIONS)[number]
+
+export const UI_PLUGIN_SCENE_MOTION_SPEEDS = ['slow', 'normal', 'fast'] as const
+export type UiPluginSceneMotionSpeed = (typeof UI_PLUGIN_SCENE_MOTION_SPEEDS)[number]
+
+export const UI_PLUGIN_SCENE_MOTION_PHASES = ['a', 'b', 'c'] as const
+export type UiPluginSceneMotionPhase = (typeof UI_PLUGIN_SCENE_MOTION_PHASES)[number]
+
+export const UI_PLUGIN_SCENE_CHROME_RECIPES = [
+  'inherit',
+  'soft',
+  'editorial',
+  'paper',
+  'crystal',
+  'hologram',
+  'backstage',
+  'portal',
+  'polaroid',
+  'ticket',
+  'seal',
+  'botanical',
+  'fortune-ledger',
+  'dream-gate',
+  'washi',
+  'scrapbook',
+  'aurora',
+  'synth',
+  'midnight-pass',
+  'nautical',
+  'dimension-lab',
+  'starlight'
+] as const
+export type UiPluginSceneChromeRecipe = (typeof UI_PLUGIN_SCENE_CHROME_RECIPES)[number]
+
+export type UiPluginSceneMotion<TPreset extends string> = {
+  preset: TPreset
+  speed: UiPluginSceneMotionSpeed
+  phase: UiPluginSceneMotionPhase
+}
+
+export type UiPluginSceneArtworkLayer = {
+  path: string
+  darkPath?: string
+  anchor: UiPluginBackgroundPosition
+  size: UiPluginSceneArtworkSize
+  fit: UiPluginBackgroundFit
+  offsetX: number
+  offsetY: number
+  opacity: number
+  blend: UiPluginSceneArtworkBlend
+  motion: UiPluginSceneMotion<UiPluginSceneArtworkMotion>
+}
+
+export type UiPluginSceneV16 = {
+  apiVersion: typeof UI_PLUGIN_SCENE_API_VERSION
+  layout: UiPluginSceneLayout
+  character: {
+    scale: UiPluginSceneCharacterScale
+    fit: UiPluginBackgroundFit
+    focalPoint: UiPluginBackgroundPosition
+    mask: UiPluginSceneCharacterMask
+    offsetX: number
+    offsetY: number
+    opacity: number
+    flipX: boolean
+    motion: UiPluginSceneMotion<UiPluginSceneCharacterMotion>
+  }
+  artwork: Partial<Record<UiPluginSceneArtworkSlot, UiPluginSceneArtworkLayer>>
+  chrome: {
+    sidebar: UiPluginSceneChromeRecipe
+    topbar: UiPluginSceneChromeRecipe
+    composer: UiPluginSceneChromeRecipe
+    cards: UiPluginSceneChromeRecipe
+  }
+}
+
 /** 可换肤的应用表面:整窗、侧栏和主舞台 */
 export const UI_PLUGIN_BACKGROUND_SLOTS = ['app', 'sidebar', 'stage'] as const
 
@@ -154,6 +291,8 @@ export type UiPluginManifestV1 = {
   backgrounds?: UiPluginBackgrounds
   /** 可选:由宿主固定组件渲染的人物主题舞台 */
   presentation?: UiPluginPresentation
+  /** 可选:UI Plugin v1.6 固定图层人物场景;presentation 仍是旧宿主 fallback */
+  scene?: UiPluginSceneV16
   /** 可选:进行中状态文案(按语言、按泳姿键) */
   labels?: Partial<Record<UiPluginLabelLocale, Partial<Record<UiPluginLabelKey, string>>>>
   /** 可选:主题 token 覆盖(仅 --ds-*) */
@@ -187,6 +326,11 @@ export type UiPluginRuntimeBackgrounds = {
   dark?: Partial<Record<UiPluginBackgroundSlot, string>>
 }
 
+/** 主进程验证后的 v1.6 scene 图片，按 manifest 相对路径去重。 */
+export type UiPluginRuntimeSceneAssets = {
+  assets?: Record<string, string>
+}
+
 export type UiPluginValidationResult =
   | { ok: true; manifest: UiPluginManifestV1 }
   | { ok: false; errors: string[] }
@@ -206,6 +350,11 @@ export const UI_PLUGIN_LIMITS = {
   backgroundMaxDimension: 8192,
   backgroundMaxPixels: 24_000_000,
   totalBackgroundPixels: 64_000_000,
+  sceneAssetBytes: 4 * 1024 * 1024,
+  totalSceneAssetBytes: 16 * 1024 * 1024,
+  sceneAssetMaxDimension: 4096,
+  sceneAssetMaxPixels: 12_000_000,
+  totalSceneAssetPixels: 40_000_000,
   tokenEntries: 60,
   labelChars: 24
 } as const
@@ -558,6 +707,321 @@ function normalizeUiPluginPresentation(
   }
 }
 
+function normalizeUiPluginSceneMotion<TPreset extends string>(
+  raw: unknown,
+  presets: readonly TPreset[],
+  path: string,
+  errors: string[]
+): UiPluginSceneMotion<TPreset> | null {
+  if (!isPlainObject(raw)) {
+    errors.push(`${path} 需为对象`)
+    return null
+  }
+  let valid = rejectUnknownKeys(raw, ['preset', 'speed', 'phase'], path, errors)
+  const preset = readRequiredEnum(raw.preset, presets, `${path}.preset`, errors)
+  const speed = readRequiredEnum(raw.speed, UI_PLUGIN_SCENE_MOTION_SPEEDS, `${path}.speed`, errors)
+  const phase = readRequiredEnum(raw.phase, UI_PLUGIN_SCENE_MOTION_PHASES, `${path}.phase`, errors)
+  valid = valid && preset !== null && speed !== null && phase !== null
+  return valid && preset && speed && phase ? { preset, speed, phase } : null
+}
+
+function normalizeUiPluginSceneArtworkLayer(
+  raw: unknown,
+  slot: UiPluginSceneArtworkSlot,
+  errors: string[]
+): UiPluginSceneArtworkLayer | null {
+  const prefix = `scene.artwork.${slot}`
+  if (!isPlainObject(raw)) {
+    errors.push(`${prefix} 需为对象`)
+    return null
+  }
+  let valid = rejectUnknownKeys(
+    raw,
+    [
+      'path',
+      'darkPath',
+      'anchor',
+      'size',
+      'fit',
+      'offsetX',
+      'offsetY',
+      'opacity',
+      'blend',
+      'motion'
+    ],
+    prefix,
+    errors
+  )
+
+  const path = typeof raw.path === 'string' ? raw.path.trim() : ''
+  if (!isSafeUiPluginBackgroundPath(path)) {
+    errors.push(`${prefix}.path 不合法(需为插件内静态 png/webp/jpg/jpeg 相对路径)`)
+    valid = false
+  }
+  let darkPath: string | undefined
+  if (raw.darkPath !== undefined) {
+    darkPath = typeof raw.darkPath === 'string' ? raw.darkPath.trim() : ''
+    if (!isSafeUiPluginBackgroundPath(darkPath)) {
+      errors.push(`${prefix}.darkPath 不合法(需为插件内静态 png/webp/jpg/jpeg 相对路径)`)
+      valid = false
+    }
+  }
+
+  const anchor = readRequiredEnum(
+    raw.anchor,
+    UI_PLUGIN_BACKGROUND_POSITIONS,
+    `${prefix}.anchor`,
+    errors
+  )
+  const size = readRequiredEnum(raw.size, UI_PLUGIN_SCENE_ARTWORK_SIZES, `${prefix}.size`, errors)
+  const fit = readRequiredEnum(raw.fit, UI_PLUGIN_BACKGROUND_FITS, `${prefix}.fit`, errors)
+  const offsetX = readRequiredInteger(raw.offsetX, -12, 12, `${prefix}.offsetX`, errors)
+  const offsetY = readRequiredInteger(raw.offsetY, -12, 12, `${prefix}.offsetY`, errors)
+  const opacity = readRequiredUnitNumber(raw.opacity, `${prefix}.opacity`, errors)
+  const blend = readRequiredEnum(
+    raw.blend,
+    UI_PLUGIN_SCENE_ARTWORK_BLENDS,
+    `${prefix}.blend`,
+    errors
+  )
+  if (blend && blend !== 'normal' && slot !== 'backdrop' && slot !== 'ambient') {
+    errors.push(`${prefix}.blend 仅 backdrop/ambient 可使用 screen 或 soft-light`)
+    valid = false
+  }
+  const motion = normalizeUiPluginSceneMotion(
+    raw.motion,
+    UI_PLUGIN_SCENE_ARTWORK_MOTIONS,
+    `${prefix}.motion`,
+    errors
+  )
+
+  if (
+    !valid ||
+    !path ||
+    anchor === null ||
+    size === null ||
+    fit === null ||
+    offsetX === null ||
+    offsetY === null ||
+    opacity === null ||
+    blend === null ||
+    motion === null
+  ) {
+    return null
+  }
+
+  return {
+    path,
+    ...(darkPath ? { darkPath } : {}),
+    anchor,
+    size,
+    fit,
+    offsetX,
+    offsetY,
+    opacity,
+    blend,
+    motion
+  }
+}
+
+function normalizeUiPluginScene(raw: unknown, errors: string[]): UiPluginSceneV16 | null {
+  if (!isPlainObject(raw)) {
+    errors.push('scene 需为对象')
+    return null
+  }
+  let valid = rejectUnknownKeys(
+    raw,
+    ['apiVersion', 'layout', 'character', 'artwork', 'chrome'],
+    'scene',
+    errors
+  )
+  if (raw.apiVersion !== UI_PLUGIN_SCENE_API_VERSION) {
+    errors.push(`scene.apiVersion 仅支持 ${UI_PLUGIN_SCENE_API_VERSION}`)
+    valid = false
+  }
+  const layout = readRequiredEnum(raw.layout, UI_PLUGIN_SCENE_LAYOUTS, 'scene.layout', errors)
+
+  const character = raw.character
+  if (!isPlainObject(character)) {
+    errors.push('scene.character 需为对象')
+    valid = false
+  }
+  const artwork = raw.artwork
+  if (!isPlainObject(artwork)) {
+    errors.push('scene.artwork 需为对象')
+    valid = false
+  }
+  const chrome = raw.chrome
+  if (!isPlainObject(chrome)) {
+    errors.push('scene.chrome 需为对象')
+    valid = false
+  }
+  if (!isPlainObject(character) || !isPlainObject(artwork) || !isPlainObject(chrome)) {
+    return null
+  }
+
+  valid = rejectUnknownKeys(
+    character,
+    [
+      'scale',
+      'fit',
+      'focalPoint',
+      'mask',
+      'offsetX',
+      'offsetY',
+      'opacity',
+      'flipX',
+      'motion'
+    ],
+    'scene.character',
+    errors
+  ) && valid
+  const scale = readRequiredEnum(
+    character.scale,
+    UI_PLUGIN_SCENE_CHARACTER_SCALES,
+    'scene.character.scale',
+    errors
+  )
+  const fit = readRequiredEnum(
+    character.fit,
+    UI_PLUGIN_BACKGROUND_FITS,
+    'scene.character.fit',
+    errors
+  )
+  const focalPoint = readRequiredEnum(
+    character.focalPoint,
+    UI_PLUGIN_BACKGROUND_POSITIONS,
+    'scene.character.focalPoint',
+    errors
+  )
+  const mask = readRequiredEnum(
+    character.mask,
+    UI_PLUGIN_SCENE_CHARACTER_MASKS,
+    'scene.character.mask',
+    errors
+  )
+  const offsetX = readRequiredInteger(
+    character.offsetX,
+    -12,
+    12,
+    'scene.character.offsetX',
+    errors
+  )
+  const offsetY = readRequiredInteger(
+    character.offsetY,
+    -12,
+    12,
+    'scene.character.offsetY',
+    errors
+  )
+  const opacity = readRequiredUnitNumber(
+    character.opacity,
+    'scene.character.opacity',
+    errors
+  )
+  const flipX = character.flipX
+  if (typeof flipX !== 'boolean') {
+    errors.push('scene.character.flipX 需为 boolean')
+    valid = false
+  }
+  const characterMotion = normalizeUiPluginSceneMotion(
+    character.motion,
+    UI_PLUGIN_SCENE_CHARACTER_MOTIONS,
+    'scene.character.motion',
+    errors
+  )
+
+  valid = rejectUnknownKeys(
+    artwork,
+    UI_PLUGIN_SCENE_ARTWORK_SLOTS,
+    'scene.artwork',
+    errors
+  ) && valid
+  const normalizedArtwork: UiPluginSceneV16['artwork'] = {}
+  for (const [slot, layerRaw] of Object.entries(artwork)) {
+    if (!(UI_PLUGIN_SCENE_ARTWORK_SLOTS as readonly string[]).includes(slot)) continue
+    const layer = normalizeUiPluginSceneArtworkLayer(
+      layerRaw,
+      slot as UiPluginSceneArtworkSlot,
+      errors
+    )
+    if (layer) normalizedArtwork[slot as UiPluginSceneArtworkSlot] = layer
+  }
+  if (Object.keys(normalizedArtwork).length === 0) {
+    errors.push('scene.artwork 至少需要声明一个专属图片槽位')
+    valid = false
+  }
+
+  valid = rejectUnknownKeys(
+    chrome,
+    ['sidebar', 'topbar', 'composer', 'cards'],
+    'scene.chrome',
+    errors
+  ) && valid
+  const sidebar = readRequiredEnum(
+    chrome.sidebar,
+    UI_PLUGIN_SCENE_CHROME_RECIPES,
+    'scene.chrome.sidebar',
+    errors
+  )
+  const topbar = readRequiredEnum(
+    chrome.topbar,
+    UI_PLUGIN_SCENE_CHROME_RECIPES,
+    'scene.chrome.topbar',
+    errors
+  )
+  const composer = readRequiredEnum(
+    chrome.composer,
+    UI_PLUGIN_SCENE_CHROME_RECIPES,
+    'scene.chrome.composer',
+    errors
+  )
+  const cards = readRequiredEnum(
+    chrome.cards,
+    UI_PLUGIN_SCENE_CHROME_RECIPES,
+    'scene.chrome.cards',
+    errors
+  )
+
+  if (
+    !valid ||
+    layout === null ||
+    scale === null ||
+    fit === null ||
+    focalPoint === null ||
+    mask === null ||
+    offsetX === null ||
+    offsetY === null ||
+    opacity === null ||
+    typeof flipX !== 'boolean' ||
+    characterMotion === null ||
+    sidebar === null ||
+    topbar === null ||
+    composer === null ||
+    cards === null
+  ) {
+    return null
+  }
+
+  return {
+    apiVersion: UI_PLUGIN_SCENE_API_VERSION,
+    layout,
+    character: {
+      scale,
+      fit,
+      focalPoint,
+      mask,
+      offsetX,
+      offsetY,
+      opacity,
+      flipX,
+      motion: characterMotion
+    },
+    artwork: normalizedArtwork,
+    chrome: { sidebar, topbar, composer, cards }
+  }
+}
+
 export function normalizeUiPluginManifest(raw: unknown): UiPluginValidationResult {
   const errors: string[] = []
   if (!isPlainObject(raw)) {
@@ -651,6 +1115,17 @@ export function normalizeUiPluginManifest(raw: unknown): UiPluginValidationResul
     presentation = normalizeUiPluginPresentation(raw.presentation, errors) ?? undefined
     if (!figures.portrait) {
       errors.push('presentation 需要同时声明 figures.portrait 人物图片')
+    }
+  }
+
+  let scene: UiPluginManifestV1['scene']
+  if (raw.scene !== undefined) {
+    scene = normalizeUiPluginScene(raw.scene, errors) ?? undefined
+    if (!figures.portrait) {
+      errors.push('scene 需要同时声明 figures.portrait 人物图片')
+    }
+    if (!presentation) {
+      errors.push('scene 需要同时声明 presentation 作为 v1.5 fallback')
     }
   }
 
@@ -751,6 +1226,7 @@ export function normalizeUiPluginManifest(raw: unknown): UiPluginValidationResul
       figures,
       ...(Object.keys(backgrounds).length > 0 ? { backgrounds } : {}),
       ...(presentation ? { presentation } : {}),
+      ...(scene ? { scene } : {}),
       ...(labels && Object.keys(labels).length > 0 ? { labels } : {}),
       ...(tokens && Object.keys(tokens).length > 0 ? { tokens } : {}),
       ...(features ? { features } : {})
@@ -825,6 +1301,59 @@ export function buildUiPluginPresentationCss(manifest: UiPluginManifestV1): stri
     `  --kun-ui-plugin-character-opacity: ${formatCssNumber(presentation.character.opacity)};\n` +
     `}`
   )
+}
+
+/**
+ * Emits only bounded numeric variables for scene v1.6. Enum choices remain
+ * host-owned data attributes/classes and scene image data stays out of CDP CSS.
+ */
+export function buildUiPluginSceneCss(manifest: UiPluginManifestV1): string {
+  const scene = manifest.scene
+  if (
+    !scene ||
+    !UI_PLUGIN_ID_PATTERN.test(manifest.id) ||
+    scene.apiVersion !== UI_PLUGIN_SCENE_API_VERSION ||
+    !Number.isInteger(scene.character.offsetX) ||
+    scene.character.offsetX < -12 ||
+    scene.character.offsetX > 12 ||
+    !Number.isInteger(scene.character.offsetY) ||
+    scene.character.offsetY < -12 ||
+    scene.character.offsetY > 12 ||
+    !Number.isFinite(scene.character.opacity) ||
+    scene.character.opacity < 0 ||
+    scene.character.opacity > 1
+  ) {
+    return ''
+  }
+
+  const declarations = [
+    `  --kun-ui-plugin-scene-character-offset-x: ${scene.character.offsetX}%;`,
+    `  --kun-ui-plugin-scene-character-offset-y: ${scene.character.offsetY}%;`,
+    `  --kun-ui-plugin-scene-character-opacity: ${formatCssNumber(scene.character.opacity)};`
+  ]
+  for (const slot of UI_PLUGIN_SCENE_ARTWORK_SLOTS) {
+    const layer = scene.artwork[slot]
+    if (!layer) continue
+    if (
+      !Number.isInteger(layer.offsetX) ||
+      layer.offsetX < -12 ||
+      layer.offsetX > 12 ||
+      !Number.isInteger(layer.offsetY) ||
+      layer.offsetY < -12 ||
+      layer.offsetY > 12 ||
+      !Number.isFinite(layer.opacity) ||
+      layer.opacity < 0 ||
+      layer.opacity > 1
+    ) {
+      return ''
+    }
+    declarations.push(
+      `  --kun-ui-plugin-scene-${slot}-offset-x: ${layer.offsetX}%;`,
+      `  --kun-ui-plugin-scene-${slot}-offset-y: ${layer.offsetY}%;`,
+      `  --kun-ui-plugin-scene-${slot}-opacity: ${formatCssNumber(layer.opacity)};`
+    )
+  }
+  return `html[data-ui-plugin='${manifest.id}'] {\n${declarations.join('\n')}\n}`
 }
 
 const UI_PLUGIN_BACKGROUND_DATA_URL_PATTERN =

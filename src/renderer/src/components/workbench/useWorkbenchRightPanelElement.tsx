@@ -201,6 +201,9 @@ export function useWorkbenchRightPanelElement({
         ...file,
         onClose: onCollapse
       }}
+      mcpSkills={{
+        onOpenSettings: () => openSettings('agents')
+      }}
       extensionView={extensionView}
       code={code}
       workspaceRoot={workspaceRoot}
