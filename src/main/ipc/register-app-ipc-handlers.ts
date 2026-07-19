@@ -49,6 +49,7 @@ import {
   confirmDialogPayloadSchema,
   clawTaskFromTextPayloadSchema,
   computerUsePermissionKindSchema,
+  conversationExportPayloadSchema,
   deepseekConfigContentSchema,
   desktopCommandSchema,
   defaultPathSchema,
@@ -241,6 +242,7 @@ import {
   exportDesignPrototype,
   exportWriteDocument
 } from '../services/write-export-service'
+import { exportConversation } from '../services/conversation-export-service'
 import { exportMemoryMarkdown } from '../services/memory-export-service'
 import { importGithubSkillsToRoot } from '../services/github-skill-import-service'
 import { readLocalPdfText } from '../services/write-pdf-text-service'
@@ -2024,6 +2026,12 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   ipcMain.handle('write:export', async (_, payload: unknown) =>
     exportWriteDocument(
       parseIpcPayload('write:export', writeExportPayloadSchema, payload),
+      { parentWindow: getMainWindow() }
+    )
+  )
+  ipcMain.handle('conversation:export', async (_, payload: unknown) =>
+    exportConversation(
+      parseIpcPayload('conversation:export', conversationExportPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
   )

@@ -120,6 +120,10 @@ import type {
   WriteRichClipboardPayload,
   WriteRichClipboardResult
 } from './write-export'
+import type {
+  ConversationExportPayload,
+  ConversationExportResult
+} from './conversation-export'
 import type { PptMasterEnsureResult } from './ppt-master'
 import type { DesignExportPayload, DesignExportResult } from './design-export'
 import type {
@@ -675,6 +679,7 @@ export type KunGuiApi = ExtensionIpcApi & {
   listWriteInlineCompletionDebugEntries: () => Promise<WriteInlineCompletionDebugEntry[]>
   clearWriteInlineCompletionDebugEntries: () => Promise<boolean>
   exportWriteDocument: (payload: WriteExportPayload) => Promise<WriteExportResult>
+  exportConversation: (payload: ConversationExportPayload) => Promise<ConversationExportResult>
   exportMemoryMarkdown: (payload: MemoryMarkdownExportSavePayload) => Promise<MemoryMarkdownExportSaveResult>
   exportDesignPrototype: (payload: DesignExportPayload) => Promise<DesignExportResult>
   copyWriteDocumentAsRichText: (

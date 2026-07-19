@@ -271,6 +271,8 @@ const api = {
   },
   exportWriteDocument: (payload) =>
     ipcRenderer.invoke('write:export', payload),
+  exportConversation: (payload) =>
+    ipcRenderer.invoke('conversation:export', payload),
   exportMemoryMarkdown: (payload) =>
     ipcRenderer.invoke('memory:export-markdown', payload),
   exportDesignPrototype: (payload) =>

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS } from '../../shared/conversation-export'
 import {
   clawImInstallPollPayloadSchema,
   clawTaskFromTextPayloadSchema,
+  conversationExportPayloadSchema,
   isSafeOpenExternalUrl,
   runtimeRequestPayloadSchema,
   scheduleTaskFromTextPayloadSchema,
@@ -943,6 +945,26 @@ describe('app-ipc-schemas', () => {
 
     expect(payload.title).toBe('Kun answer')
     expect(payload.format).toBe('png')
+  })
+
+  it('validates conversation export payloads and rejects oversized transcripts', () => {
+    const payload = conversationExportPayloadSchema.parse({
+      title: 'Thread',
+      format: 'pdf',
+      markdown: '# Thread',
+      defaultFileName: 'Thread-2026-07-19'
+    })
+
+    expect(payload.format).toBe('pdf')
+    expect(payload.markdown).toBe('# Thread')
+    expect(() => conversationExportPayloadSchema.parse({
+      ...payload,
+      markdown: 'x'.repeat(CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS + 1)
+    })).toThrow()
+    expect(() => conversationExportPayloadSchema.parse({
+      ...payload,
+      unexpected: true
+    })).toThrow()
   })
 
   it('accepts write rich clipboard payloads', () => {
