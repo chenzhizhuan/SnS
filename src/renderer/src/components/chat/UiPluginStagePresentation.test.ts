@@ -247,9 +247,10 @@ describe('UiPluginStagePresentation', () => {
   it('keeps the Grand Line conversation card and composer status rail visually connected', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
-    const [css, workbenchStage] = await Promise.all([
+    const [css, workbenchStage, sidebar] = await Promise.all([
       readFile(new URL('../../styles/surfaces-write.css', import.meta.url), 'utf8'),
-      readFile(new URL('../workbench/WorkbenchChatStage.tsx', import.meta.url), 'utf8')
+      readFile(new URL('../workbench/WorkbenchChatStage.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('./Sidebar.tsx', import.meta.url), 'utf8')
     ])
 
     expect(css).toContain(
@@ -259,6 +260,30 @@ describe('UiPluginStagePresentation', () => {
     expect(css).toContain(
       "html[data-ui-plugin-scene-chrome-composer='grand-line'] .ds-composer-footer::before"
     )
+    expect(css).toContain('.ds-ui-plugin-scene-artwork-foreground')
+    expect(css).toContain('height: auto;')
+    expect(css).toContain('object-position: center bottom;')
+    expect(css).toContain('.ds-sidebar-mascot-slot')
+    expect(css).toContain(".ds-focus-mode-toggle[aria-checked='false']")
+    expect(css).toContain(".ds-focus-mode-toggle[aria-checked='true']")
+    expect(css).toContain(
+      "html[data-theme='dark'][data-ui-plugin-scene-chrome-sidebar='grand-line']"
+    )
+    expect(css).toContain(
+      "html[data-theme='dark'][data-ui-plugin-scene-chrome-topbar='grand-line']"
+    )
+    expect(css).toContain(
+      "html[data-theme='dark'][data-ui-plugin-scene-chrome-composer='grand-line']"
+    )
+    expect(css).toContain('.ds-composer-textarea::placeholder')
+    expect(css).toContain('.ds-composer-model-picker .text-accent')
+    expect(css).toContain('.session-header-compact-meta')
+    expect(css).toContain(
+      '.ds-message-timeline-content :is(.text-ds-ink, .text-ds-muted, .text-ds-faint)'
+    )
+    expect(sidebar).toContain('ds-sidebar-focus-row')
+    expect(sidebar).toContain('ds-sidebar-mascot-slot')
+    expect(sidebar).toContain('ds-focus-mode-toggle-track')
     expect(workbenchStage).toContain('ds-composer-dock')
   })
 })
