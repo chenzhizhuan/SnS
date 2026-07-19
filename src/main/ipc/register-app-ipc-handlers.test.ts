@@ -181,6 +181,76 @@ describe('registerAppIpcHandlers', () => {
     expect(reloadIgnoringCache).not.toHaveBeenCalled()
   })
 
+  it('registers a trusted dedicated runtime image upload bridge', async () => {
+    const mainFrame = { processId: 10, routingId: 20 }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    const runtimeRequest = vi.fn(async (path: string, _method?: string, body?: string) => {
+      if (path === '/v1/runtime/info') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            capabilities: {
+              attachments: {
+                maxImageBytes: 5 * 1024 * 1024,
+                maxImageDimension: 4096,
+                allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+                textFallbackMaxBase64Bytes: 512 * 1024,
+                textFallbackMaxImageDimension: 1280,
+                textFallbackPreferredMimeType: 'image/webp'
+              }
+            }
+          })
+        }
+      }
+      const upload = JSON.parse(body ?? '{}') as Record<string, unknown>
+      return {
+        ok: true,
+        status: 201,
+        body: JSON.stringify({
+          attachment: {
+            id: 'att_ipc',
+            name: upload.name,
+            kind: 'image',
+            mimeType: upload.mimeType,
+            byteSize: Buffer.from(String(upload.dataBase64), 'base64').byteLength,
+            hash: 'hash',
+            textFallback: upload.textFallback,
+            createdAt: 't0',
+            updatedAt: 't0'
+          }
+        })
+      }
+    })
+    registerAppIpcHandlers(registerOptions({
+      getMainWindow: () => mainWindow as never,
+      runtimeRequest: runtimeRequest as never
+    }))
+    const handler = handlers.get('runtime:attachment:upload-image')
+    const payload = {
+      source: {
+        kind: 'base64',
+        mimeType: 'image/png',
+        dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+      },
+      name: 'pixel.png'
+    }
+
+    await expect(handler?.({
+      sender: { id: 99 },
+      senderFrame: { processId: 90, routingId: 91 }
+    }, payload)).rejects.toThrow(/trusted workbench frame/)
+    await expect(handler?.({ sender: contents, senderFrame: mainFrame }, payload)).resolves.toMatchObject({
+      ok: true,
+      attachment: { id: 'att_ipc' }
+    })
+    expect(runtimeRequest.mock.calls.map((call) => call[0])).toEqual([
+      '/v1/runtime/info',
+      '/v1/attachments'
+    ])
+  })
+
   it('rejects invalid settings patches at the handler boundary', async () => {
     const applySettingsPatch = vi.fn(async () => settings())
 

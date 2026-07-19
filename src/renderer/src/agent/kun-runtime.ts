@@ -768,6 +768,21 @@ export class KunRuntimeProvider implements AgentProvider {
     threadId?: string
     workspace?: string
   }): Promise<CoreAttachmentMetadataJson> {
+    if (
+      input.mimeType?.startsWith('image/') &&
+      typeof window.kunGui?.uploadRuntimeImageAttachment === 'function'
+    ) {
+      const result = await window.kunGui.uploadRuntimeImageAttachment({
+        source: input.localFilePath
+          ? { kind: 'localPath', path: input.localFilePath }
+          : { kind: 'base64', dataBase64: input.dataBase64, mimeType: input.mimeType },
+        name: input.name,
+        ...(input.threadId ? { threadId: input.threadId } : {}),
+        ...(input.workspace ? { workspace: input.workspace } : {})
+      })
+      if (!result.ok) throw new Error(result.message)
+      return result.attachment
+    }
     const response = await rendererRuntimeClient.runtimeRequest(
       KUN_ATTACHMENTS_PATH,
       'POST',

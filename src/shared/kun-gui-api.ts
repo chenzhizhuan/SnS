@@ -149,6 +149,10 @@ import type {
   DataMigrationReport,
   DataMigrationWorkspaceConflictStrategy
 } from './data-migration'
+import type {
+  RuntimeImageAttachmentUploadRequest,
+  RuntimeImageAttachmentUploadResult
+} from './runtime-image-attachment'
 
 export type KunRuntimeStatusPayload = {
   state: 'starting' | 'running' | 'restarting' | 'crashed' | 'failed' | 'stopped'
@@ -468,6 +472,9 @@ export type KunGuiApi = ExtensionIpcApi & {
   setSettings: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   saveSettingsSilent: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   runtimeRequest: (path: string, method?: string, body?: string) => Promise<RuntimeRequestResult>
+  uploadRuntimeImageAttachment: (
+    request: RuntimeImageAttachmentUploadRequest
+  ) => Promise<RuntimeImageAttachmentUploadResult>
   resolveKunApproval: (request: KunProtectedApprovalRequest) => Promise<KunProtectedApprovalResult>
   restartRuntime: () => Promise<void>
   fetchUpstreamModels: () => Promise<UpstreamModelsResult>

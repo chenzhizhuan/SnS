@@ -74,6 +74,7 @@ import {
   worktreeOptionalRootSchema,
   worktreePathSchema,
   runtimeRequestPayloadSchema,
+  runtimeImageAttachmentUploadPayloadSchema,
   kunProtectedApprovalPayloadSchema,
   kunProjectConfigTrustPayloadSchema,
   kunProjectConfigWorkspacePayloadSchema,
@@ -117,6 +118,7 @@ import {
   workspaceRootSchema,
   legacySessionImportPayloadSchema
 } from './app-ipc-schemas'
+import { uploadRuntimeImageAttachment } from '../services/runtime-image-attachment-service'
 import {
   createApprovalConsentToken,
   KUN_APPROVAL_CONSENT_HEADER
@@ -794,6 +796,16 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   ipcMain.handle('runtime:request', async (_, payload: unknown) => {
     const request = parseIpcPayload('runtime:request', runtimeRequestPayloadSchema, payload)
     return runtimeRequest(request.path, request.method, request.body)
+  })
+
+  ipcMain.handle('runtime:attachment:upload-image', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload(
+      'runtime:attachment:upload-image',
+      runtimeImageAttachmentUploadPayloadSchema,
+      payload
+    )
+    return uploadRuntimeImageAttachment(request, { runtimeRequest })
   })
 
   ipcMain.handle('approval:decide', async (event, payload: unknown) => {

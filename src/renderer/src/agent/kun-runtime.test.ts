@@ -898,6 +898,46 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
+  it('routes image uploads through the dedicated desktop bridge when available', async () => {
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
+    const uploadRuntimeImageAttachment = vi.fn(async () => ({
+      ok: true as const,
+      attachment: {
+        id: 'att_bridge',
+        name: 'large.webp',
+        kind: 'image' as const,
+        mimeType: 'image/webp',
+        byteSize: 1024,
+        hash: 'hash',
+        createdAt: 't0',
+        updatedAt: 't0'
+      },
+      preview: { dataBase64: 'AQID', mimeType: 'image/webp', byteSize: 3 },
+      compression: {
+        sourceBytes: 8 * 1024 * 1024,
+        outputBytes: 1024,
+        fallbackBytes: 3,
+        wasCompressed: true
+      }
+    }))
+    installDsGui({ runtimeRequest, uploadRuntimeImageAttachment })
+    const provider = new KunRuntimeProvider()
+
+    await expect(provider.uploadAttachment({
+      name: 'large.png',
+      mimeType: 'image/png',
+      dataBase64: 'unused',
+      localFilePath: '/tmp/large.png',
+      threadId: 'thr_1'
+    })).resolves.toMatchObject({ id: 'att_bridge', mimeType: 'image/webp' })
+    expect(uploadRuntimeImageAttachment).toHaveBeenCalledWith({
+      source: { kind: 'localPath', path: '/tmp/large.png' },
+      name: 'large.png',
+      threadId: 'thr_1'
+    })
+    expect(runtimeRequest).not.toHaveBeenCalled()
+  })
+
   it('lists, toggles, and deletes memory records through Kun endpoints', async () => {
     const memoryPatches: string[] = []
     const runtimeRequest = vi.fn(async (path: string, method?: string, body?: string) => {
