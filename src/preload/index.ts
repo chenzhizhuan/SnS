@@ -78,6 +78,8 @@ const api = {
     ipcRenderer.invoke('settings:save-silent', partial),
   runtimeRequest: (path, method, body) =>
     ipcRenderer.invoke('runtime:request', { path, method, body }),
+  uploadRuntimeImageAttachment: (request) =>
+    ipcRenderer.invoke('runtime:attachment:upload-image', request),
   resolveKunApproval: (request) => ipcRenderer.invoke('approval:decide', request),
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),
@@ -158,6 +160,18 @@ const api = {
     ipcRenderer.invoke('kun:config:write', content),
   openKunConfigDir: () =>
     ipcRenderer.invoke('kun:config:open-dir'),
+  getKunProjectConfigFile: (workspaceRoot) =>
+    ipcRenderer.invoke('kun:project-config:read', { workspaceRoot }),
+  setKunProjectConfigFile: (workspaceRoot, content) =>
+    ipcRenderer.invoke('kun:project-config:write', { workspaceRoot, content }),
+  setKunProjectConfigTrust: (workspaceRoot, trusted, expectedDigest) =>
+    ipcRenderer.invoke('kun:project-config:trust', {
+      workspaceRoot,
+      trusted,
+      ...(trusted && expectedDigest ? { expectedDigest } : {})
+    }),
+  openKunProjectConfigDir: (workspaceRoot) =>
+    ipcRenderer.invoke('kun:project-config:open-dir', { workspaceRoot }),
   getGitBranches: (workspaceRoot) =>
     ipcRenderer.invoke('git:branches', workspaceRoot),
   switchGitBranch: (workspaceRoot, branch) =>
@@ -257,6 +271,8 @@ const api = {
   },
   exportWriteDocument: (payload) =>
     ipcRenderer.invoke('write:export', payload),
+  exportConversation: (payload) =>
+    ipcRenderer.invoke('conversation:export', payload),
   exportMemoryMarkdown: (payload) =>
     ipcRenderer.invoke('memory:export-markdown', payload),
   exportDesignPrototype: (payload) =>

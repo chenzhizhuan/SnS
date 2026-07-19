@@ -360,6 +360,41 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
+  it('uses the configured Plan-mode model and provider when the turn has no explicit override', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 202,
+      body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_plan', userMessageItemId: 'item_plan' })
+    }))
+    installDsGui({
+      runtimeRequest,
+      getSettings: vi.fn(async () => ({
+        ...settings(),
+        agents: {
+          kun: {
+            ...defaultKunRuntimeSettings(),
+            planModel: 'reasoning-pro',
+            planProviderId: 'provider-pro'
+          }
+        }
+      }))
+    })
+    await new KunRuntimeProvider().sendUserMessage('thr_1', 'draft a plan', { mode: 'plan' })
+
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thr_1/turns',
+      'POST',
+      JSON.stringify({
+        prompt: 'draft a plan',
+        model: 'reasoning-pro',
+        providerId: 'provider-pro',
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write',
+        mode: 'plan'
+      })
+    )
+  })
+
   it('posts workspace checkpoint ids with Kun turn requests when provided', async () => {
     const runtimeRequest = vi.fn(async () => ({
       ok: true,
@@ -861,6 +896,46 @@ describe('KunRuntimeProvider', () => {
         workspace: '/tmp/ws'
       })
     )
+  })
+
+  it('routes image uploads through the dedicated desktop bridge when available', async () => {
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
+    const uploadRuntimeImageAttachment = vi.fn(async () => ({
+      ok: true as const,
+      attachment: {
+        id: 'att_bridge',
+        name: 'large.webp',
+        kind: 'image' as const,
+        mimeType: 'image/webp',
+        byteSize: 1024,
+        hash: 'hash',
+        createdAt: 't0',
+        updatedAt: 't0'
+      },
+      preview: { dataBase64: 'AQID', mimeType: 'image/webp', byteSize: 3 },
+      compression: {
+        sourceBytes: 8 * 1024 * 1024,
+        outputBytes: 1024,
+        fallbackBytes: 3,
+        wasCompressed: true
+      }
+    }))
+    installDsGui({ runtimeRequest, uploadRuntimeImageAttachment })
+    const provider = new KunRuntimeProvider()
+
+    await expect(provider.uploadAttachment({
+      name: 'large.png',
+      mimeType: 'image/png',
+      dataBase64: 'unused',
+      localFilePath: '/tmp/large.png',
+      threadId: 'thr_1'
+    })).resolves.toMatchObject({ id: 'att_bridge', mimeType: 'image/webp' })
+    expect(uploadRuntimeImageAttachment).toHaveBeenCalledWith({
+      source: { kind: 'localPath', path: '/tmp/large.png' },
+      name: 'large.png',
+      threadId: 'thr_1'
+    })
+    expect(runtimeRequest).not.toHaveBeenCalled()
   })
 
   it('lists, toggles, and deletes memory records through Kun endpoints', async () => {

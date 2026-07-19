@@ -6,6 +6,7 @@ import {
   UI_PLUGIN_BACKGROUND_THEMES,
   UI_PLUGIN_LIMITS,
   UI_PLUGIN_MANIFEST_FILENAME,
+  UI_PLUGIN_SCENE_ARTWORK_SLOTS,
   isSafeUiPluginBackgroundPath,
   isSafeUiPluginFigurePath,
   normalizeUiPluginManifest,
@@ -15,7 +16,9 @@ import {
   type UiPluginListItem,
   type UiPluginManifestV1,
   type UiPluginRuntimeBackgrounds,
-  type UiPluginRuntimeFigures
+  type UiPluginRuntimeFigures,
+  type UiPluginRuntimeSceneAssets,
+  type UiPluginSceneArtworkSlot
 } from '../../shared/ui-plugin'
 
 /**
@@ -34,6 +37,7 @@ export type UiPluginLoadResult =
       manifest: UiPluginManifestV1
       figures: UiPluginRuntimeFigures
       backgrounds: UiPluginRuntimeBackgrounds
+      sceneAssets: UiPluginRuntimeSceneAssets
     }
   | { ok: false; error: string }
 
@@ -58,12 +62,16 @@ type AssetReadOptions = {
   requireStaticFigure?: boolean
 }
 
+type AssetKind = 'figure' | 'background' | 'scene'
+
 type SeedBackgroundBytes = Partial<
   Record<
     UiPluginBackgroundTheme,
     Partial<Record<UiPluginBackgroundSlot, Buffer>>
   >
 >
+
+type SeedSceneAssetBytes = Partial<Record<string, Buffer>>
 
 const MIME_BY_FORMAT: Record<ImageFormat, string> = {
   png: 'image/png',
@@ -313,7 +321,7 @@ function inspectImage(bytes: Buffer): Omit<ValidatedAsset, 'bytes'> | null {
 async function validateAssetBytes(
   relativePath: string,
   bytes: Buffer,
-  kind: 'figure' | 'background',
+  kind: AssetKind,
   options: AssetReadOptions = {}
 ): Promise<AssetReadResult> {
   const inspected = inspectImage(bytes)
@@ -339,7 +347,9 @@ async function validateAssetBytes(
       failOn: 'error',
       limitInputPixels: kind === 'figure'
         ? UI_PLUGIN_LIMITS.figureMaxPixels
-        : UI_PLUGIN_LIMITS.backgroundMaxPixels
+        : kind === 'scene'
+          ? UI_PLUGIN_LIMITS.sceneAssetMaxPixels
+          : UI_PLUGIN_LIMITS.backgroundMaxPixels
     })
       .raw()
       .toBuffer({ resolveWithObject: true })
@@ -357,7 +367,7 @@ async function validateAssetBytes(
 function validateAssetUsage(
   relativePath: string,
   asset: ValidatedAsset,
-  kind: 'figure' | 'background'
+  kind: AssetKind
 ): string | null {
   const safePath = kind === 'figure'
     ? isSafeUiPluginFigurePath(relativePath)
@@ -366,7 +376,9 @@ function validateAssetUsage(
 
   const byteLimit = kind === 'figure'
     ? UI_PLUGIN_LIMITS.figureBytes
-    : UI_PLUGIN_LIMITS.backgroundBytes
+    : kind === 'scene'
+      ? UI_PLUGIN_LIMITS.sceneAssetBytes
+      : UI_PLUGIN_LIMITS.backgroundBytes
   if (asset.bytes.byteLength > byteLimit) {
     return `图片超过 ${Math.round(byteLimit / 1024 / 1024)}MB 上限`
   }
@@ -375,11 +387,13 @@ function validateAssetUsage(
   if (expectedFormat !== asset.format) {
     return '图片扩展名与实际格式不一致'
   }
-  if (kind === 'background' && asset.format === 'gif') {
-    return '背景仅支持 png/jpeg/webp'
+  if (kind !== 'figure' && asset.format === 'gif') {
+    return kind === 'scene' ? 'scene 图片仅支持 png/jpeg/webp' : '背景仅支持 png/jpeg/webp'
   }
-  if (kind === 'background' && asset.animated) {
-    return '背景仅支持静态图片，不支持 APNG 或 animated WebP'
+  if (kind !== 'figure' && asset.animated) {
+    return kind === 'scene'
+      ? 'scene 图片仅支持静态图片，不支持 APNG 或 animated WebP'
+      : '背景仅支持静态图片，不支持 APNG 或 animated WebP'
   }
 
   if (kind === 'figure') {
@@ -392,7 +406,7 @@ function validateAssetUsage(
     if (asset.width * asset.height > UI_PLUGIN_LIMITS.figureMaxPixels) {
       return `形象像素不得超过 ${UI_PLUGIN_LIMITS.figureMaxPixels}`
     }
-  } else {
+  } else if (kind === 'background') {
     if (
       asset.width > UI_PLUGIN_LIMITS.backgroundMaxDimension ||
       asset.height > UI_PLUGIN_LIMITS.backgroundMaxDimension
@@ -401,6 +415,16 @@ function validateAssetUsage(
     }
     if (asset.width * asset.height > UI_PLUGIN_LIMITS.backgroundMaxPixels) {
       return `背景像素不得超过 ${UI_PLUGIN_LIMITS.backgroundMaxPixels}`
+    }
+  } else {
+    if (
+      asset.width > UI_PLUGIN_LIMITS.sceneAssetMaxDimension ||
+      asset.height > UI_PLUGIN_LIMITS.sceneAssetMaxDimension
+    ) {
+      return `scene 图片宽高不得超过 ${UI_PLUGIN_LIMITS.sceneAssetMaxDimension}px`
+    }
+    if (asset.width * asset.height > UI_PLUGIN_LIMITS.sceneAssetMaxPixels) {
+      return `scene 图片像素不得超过 ${UI_PLUGIN_LIMITS.sceneAssetMaxPixels}`
     }
   }
 
@@ -417,7 +441,7 @@ function validateStaticFigureUsage(asset: ValidatedAsset): string | null {
 async function readAssetFromDirectory(
   rootDir: string,
   relativePath: string,
-  kind: 'figure' | 'background',
+  kind: AssetKind,
   options: AssetReadOptions = {}
 ): Promise<AssetReadResult> {
   const safePath = kind === 'figure'
@@ -452,7 +476,9 @@ async function readAssetFromDirectory(
 
   const byteLimit = kind === 'figure'
     ? UI_PLUGIN_LIMITS.figureBytes
-    : UI_PLUGIN_LIMITS.backgroundBytes
+    : kind === 'scene'
+      ? UI_PLUGIN_LIMITS.sceneAssetBytes
+      : UI_PLUGIN_LIMITS.backgroundBytes
   const effectiveByteLimit = Math.min(byteLimit, options.maxBytes ?? byteLimit)
   if (size > effectiveByteLimit) {
     return {
@@ -528,6 +554,29 @@ function backgroundEntries(
     for (const slot of UI_PLUGIN_BACKGROUND_SLOTS) {
       const layer = manifest.backgrounds?.[theme]?.[slot]
       if (layer) entries.push({ theme, slot, relativePath: layer.path })
+    }
+  }
+  return entries
+}
+
+function sceneAssetEntries(
+  manifest: UiPluginManifestV1
+): Array<{
+  slot: UiPluginSceneArtworkSlot
+  variant: 'default' | 'dark'
+  relativePath: string
+}> {
+  const entries: Array<{
+    slot: UiPluginSceneArtworkSlot
+    variant: 'default' | 'dark'
+    relativePath: string
+  }> = []
+  for (const slot of UI_PLUGIN_SCENE_ARTWORK_SLOTS) {
+    const layer = manifest.scene?.artwork[slot]
+    if (!layer) continue
+    entries.push({ slot, variant: 'default', relativePath: layer.path })
+    if (layer.darkPath && layer.darkPath !== layer.path) {
+      entries.push({ slot, variant: 'dark', relativePath: layer.darkPath })
     }
   }
   return entries
@@ -683,10 +732,13 @@ export async function loadUiPluginFigures(
   let totalBackgroundBytes = 0
   let totalAssetBytes = 0
   let totalBackgroundPixels = 0
+  let totalSceneAssetBytes = 0
+  let totalSceneAssetPixels = 0
+  const uniqueSceneAssetPaths = new Set<string>()
 
   const readCachedAsset = async (
     relativePath: string,
-    kind: 'figure' | 'background',
+    kind: AssetKind,
     options: AssetReadOptions = {}
   ): Promise<AssetReadResult> => {
     const cached = cache.get(relativePath)
@@ -766,7 +818,35 @@ export async function loadUiPluginFigures(
     }
   }
 
-  return { ok: true, manifest, figures, backgrounds }
+  const sceneAssets: UiPluginRuntimeSceneAssets = {}
+  for (const { slot, variant, relativePath } of sceneAssetEntries(manifest)) {
+    if (!isSafeUiPluginBackgroundPath(relativePath)) {
+      return { ok: false, error: `scene ${slot}.${variant} 的图片路径不合法` }
+    }
+    const result = await readCachedAsset(relativePath, 'scene')
+    if (!result.ok) {
+      return { ok: false, error: `scene ${slot}.${variant} 加载失败:${result.error}` }
+    }
+    if (!uniqueSceneAssetPaths.has(relativePath)) {
+      uniqueSceneAssetPaths.add(relativePath)
+      totalSceneAssetBytes += result.asset.bytes.byteLength
+      totalSceneAssetPixels += result.asset.width * result.asset.height
+      if (totalSceneAssetBytes > UI_PLUGIN_LIMITS.totalSceneAssetBytes) {
+        return { ok: false, error: '插件 scene 图片总体积超过上限' }
+      }
+      if (totalSceneAssetPixels > UI_PLUGIN_LIMITS.totalSceneAssetPixels) {
+        return { ok: false, error: '插件 scene 图片总像素超过上限' }
+      }
+    }
+    const totalError = chargeTotalAsset(relativePath, result.asset)
+    if (totalError) return { ok: false, error: totalError }
+    const runtimeAssets = (sceneAssets.assets ??= {})
+    if (!Object.prototype.hasOwnProperty.call(runtimeAssets, relativePath)) {
+      runtimeAssets[relativePath] = assetDataUrl(result.asset)
+    }
+  }
+
+  return { ok: true, manifest, figures, backgrounds, sceneAssets }
 }
 
 export async function installUiPluginFromDirectory(
@@ -782,15 +862,18 @@ export async function installUiPluginFromDirectory(
   const assetFiles = new Map<string, ValidatedAsset>()
   const uniqueAssetPaths = new Set<string>()
   const uniqueBackgroundPaths = new Set<string>()
+  const uniqueSceneAssetPaths = new Set<string>()
   let totalFigureBytes = 0
   let totalFigurePixels = 0
   let totalBackgroundBytes = 0
   let totalAssetBytes = 0
   let totalBackgroundPixels = 0
+  let totalSceneAssetBytes = 0
+  let totalSceneAssetPixels = 0
 
   const readCachedAsset = async (
     relativePath: string,
-    kind: 'figure' | 'background',
+    kind: AssetKind,
     options: AssetReadOptions = {}
   ): Promise<AssetReadResult> => {
     const cached = assetFiles.get(relativePath)
@@ -846,6 +929,20 @@ export async function installUiPluginFromDirectory(
     chargeTotalAsset(relativePath, result.asset)
   }
 
+  for (const { slot, variant, relativePath } of sceneAssetEntries(manifest)) {
+    const result = await readCachedAsset(relativePath, 'scene')
+    if (!result.ok) {
+      errors.push(`scene ${slot}.${variant}(${relativePath}):${result.error}`)
+      continue
+    }
+    if (!uniqueSceneAssetPaths.has(relativePath)) {
+      uniqueSceneAssetPaths.add(relativePath)
+      totalSceneAssetBytes += result.asset.bytes.byteLength
+      totalSceneAssetPixels += result.asset.width * result.asset.height
+    }
+    chargeTotalAsset(relativePath, result.asset)
+  }
+
   if (totalFigureBytes > UI_PLUGIN_LIMITS.totalFigureBytes) {
     errors.push('插件形象图片总体积超过上限')
   }
@@ -857,6 +954,12 @@ export async function installUiPluginFromDirectory(
   }
   if (totalBackgroundPixels > UI_PLUGIN_LIMITS.totalBackgroundPixels) {
     errors.push('插件背景图片总像素超过上限')
+  }
+  if (totalSceneAssetBytes > UI_PLUGIN_LIMITS.totalSceneAssetBytes) {
+    errors.push('插件 scene 图片总体积超过上限')
+  }
+  if (totalSceneAssetPixels > UI_PLUGIN_LIMITS.totalSceneAssetPixels) {
+    errors.push('插件 scene 图片总像素超过上限')
   }
   if (totalAssetBytes > UI_PLUGIN_LIMITS.totalAssetBytes) {
     errors.push('插件全部资源总体积超过上限')
@@ -889,13 +992,15 @@ export async function installUiPluginFromDirectory(
 
 /**
  * 用内存字节落盘一个插件(预装插件用)。figureBytes 的键是槽位名；
- * backgroundBytes 按 theme → slot 提供。旧的三参数调用保持兼容。
+ * backgroundBytes 按 theme → slot 提供，sceneAssetBytes 按 manifest 相对路径提供。
+ * 旧的三/四参数调用保持兼容。
  */
 export async function seedUiPlugin(
   userDataDir: string,
   manifestRaw: unknown,
   figureBytes: Record<string, Buffer>,
-  backgroundBytes: SeedBackgroundBytes = {}
+  backgroundBytes: SeedBackgroundBytes = {},
+  sceneAssetBytes: SeedSceneAssetBytes = {}
 ): Promise<UiPluginInstallResult> {
   const manifestResult = normalizeUiPluginManifest(manifestRaw)
   if (!manifestResult.ok) return { ok: false, errors: manifestResult.errors }
@@ -905,16 +1010,19 @@ export async function seedUiPlugin(
   const assetFiles = new Map<string, ValidatedAsset>()
   const uniqueAssetPaths = new Set<string>()
   const uniqueBackgroundPaths = new Set<string>()
+  const uniqueSceneAssetPaths = new Set<string>()
   let totalFigureBytes = 0
   let totalFigurePixels = 0
   let totalBackgroundBytes = 0
   let totalAssetBytes = 0
   let totalBackgroundPixels = 0
+  let totalSceneAssetBytes = 0
+  let totalSceneAssetPixels = 0
 
   const registerAsset = async (
     relativePath: string,
     bytes: Buffer,
-    kind: 'figure' | 'background',
+    kind: AssetKind,
     context: string,
     options: AssetReadOptions = {}
   ): Promise<ValidatedAsset | null> => {
@@ -985,6 +1093,27 @@ export async function seedUiPlugin(
     chargeTotalAsset(relativePath, asset)
   }
 
+  for (const { slot, variant, relativePath } of sceneAssetEntries(manifest)) {
+    const bytes = sceneAssetBytes[relativePath]
+    if (!bytes) {
+      errors.push(`scene ${slot}.${variant} 缺少预装图片数据`)
+      continue
+    }
+    const asset = await registerAsset(
+      relativePath,
+      bytes,
+      'scene',
+      `scene ${slot}.${variant}`
+    )
+    if (!asset) continue
+    if (!uniqueSceneAssetPaths.has(relativePath)) {
+      uniqueSceneAssetPaths.add(relativePath)
+      totalSceneAssetBytes += asset.bytes.byteLength
+      totalSceneAssetPixels += asset.width * asset.height
+    }
+    chargeTotalAsset(relativePath, asset)
+  }
+
   if (totalFigureBytes > UI_PLUGIN_LIMITS.totalFigureBytes) {
     errors.push('预装插件形象图片总体积超过上限')
   }
@@ -996,6 +1125,12 @@ export async function seedUiPlugin(
   }
   if (totalBackgroundPixels > UI_PLUGIN_LIMITS.totalBackgroundPixels) {
     errors.push('预装插件背景图片总像素超过上限')
+  }
+  if (totalSceneAssetBytes > UI_PLUGIN_LIMITS.totalSceneAssetBytes) {
+    errors.push('预装插件 scene 图片总体积超过上限')
+  }
+  if (totalSceneAssetPixels > UI_PLUGIN_LIMITS.totalSceneAssetPixels) {
+    errors.push('预装插件 scene 图片总像素超过上限')
   }
   if (totalAssetBytes > UI_PLUGIN_LIMITS.totalAssetBytes) {
     errors.push('预装插件全部资源总体积超过上限')

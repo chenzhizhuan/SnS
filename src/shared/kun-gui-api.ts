@@ -107,7 +107,8 @@ import type {
   UiPluginListItem,
   UiPluginManifestV1,
   UiPluginRuntimeBackgrounds,
-  UiPluginRuntimeFigures
+  UiPluginRuntimeFigures,
+  UiPluginRuntimeSceneAssets
 } from './ui-plugin'
 import type {
   WriteRetrievalRequest,
@@ -119,6 +120,10 @@ import type {
   WriteRichClipboardPayload,
   WriteRichClipboardResult
 } from './write-export'
+import type {
+  ConversationExportPayload,
+  ConversationExportResult
+} from './conversation-export'
 import type { PptMasterEnsureResult } from './ppt-master'
 import type { DesignExportPayload, DesignExportResult } from './design-export'
 import type {
@@ -148,6 +153,10 @@ import type {
   DataMigrationReport,
   DataMigrationWorkspaceConflictStrategy
 } from './data-migration'
+import type {
+  RuntimeImageAttachmentUploadRequest,
+  RuntimeImageAttachmentUploadResult
+} from './runtime-image-attachment'
 
 export type KunRuntimeStatusPayload = {
   state: 'starting' | 'running' | 'restarting' | 'crashed' | 'failed' | 'stopped'
@@ -225,6 +234,7 @@ export type UiPluginLoadIpcResult =
       manifest: UiPluginManifestV1
       figures: UiPluginRuntimeFigures
       backgrounds: UiPluginRuntimeBackgrounds
+      sceneAssets: UiPluginRuntimeSceneAssets
     }
   | { ok: false; error: string }
 export type UiPluginThemeActivateIpcResult =
@@ -232,6 +242,7 @@ export type UiPluginThemeActivateIpcResult =
       ok: true
       manifest: UiPluginManifestV1
       figures: UiPluginRuntimeFigures
+      sceneAssets: UiPluginRuntimeSceneAssets
     }
   | { ok: false; error: string }
 export type UiPluginThemeDeactivateIpcResult =
@@ -239,6 +250,25 @@ export type UiPluginThemeDeactivateIpcResult =
   | { ok: false; error: string }
 export type DeepseekConfigFileResult = { path: string; content: string; exists: boolean }
 export type DeepseekConfigSaveResult = { ok: true; path: string }
+export type KunProjectConfigServerSummary = {
+  id: string
+  transport: 'stdio' | 'streamable-http' | 'sse'
+  target: string
+  enabled: boolean
+}
+export type KunProjectConfigFileResult = {
+  workspaceRoot: string
+  path: string
+  content: string
+  exists: boolean
+  status: 'missing' | 'invalid' | 'valid'
+  trust: 'untrusted' | 'trusted' | 'stale'
+  message?: string
+  digest?: string
+  serverSummaries: KunProjectConfigServerSummary[]
+  skillRootCount: number
+  disabledSkillCount: number
+}
 export type TurnCompleteNotificationPayload = {
   threadId?: string
   title: string
@@ -446,6 +476,9 @@ export type KunGuiApi = ExtensionIpcApi & {
   setSettings: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   saveSettingsSilent: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   runtimeRequest: (path: string, method?: string, body?: string) => Promise<RuntimeRequestResult>
+  uploadRuntimeImageAttachment: (
+    request: RuntimeImageAttachmentUploadRequest
+  ) => Promise<RuntimeImageAttachmentUploadResult>
   resolveKunApproval: (request: KunProtectedApprovalRequest) => Promise<KunProtectedApprovalResult>
   restartRuntime: () => Promise<void>
   fetchUpstreamModels: () => Promise<UpstreamModelsResult>
@@ -511,6 +544,14 @@ export type KunGuiApi = ExtensionIpcApi & {
   getKunConfigFile: () => Promise<DeepseekConfigFileResult>
   setKunConfigFile: (content: string) => Promise<DeepseekConfigSaveResult>
   openKunConfigDir: () => Promise<PathOpenResult>
+  getKunProjectConfigFile: (workspaceRoot: string) => Promise<KunProjectConfigFileResult>
+  setKunProjectConfigFile: (workspaceRoot: string, content: string) => Promise<KunProjectConfigFileResult>
+  setKunProjectConfigTrust: (
+    workspaceRoot: string,
+    trusted: boolean,
+    expectedDigest?: string
+  ) => Promise<KunProjectConfigFileResult>
+  openKunProjectConfigDir: (workspaceRoot: string) => Promise<PathOpenResult>
   getGitBranches: (workspaceRoot: string) => Promise<GitBranchesResult>
   switchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
   createAndSwitchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
@@ -638,6 +679,7 @@ export type KunGuiApi = ExtensionIpcApi & {
   listWriteInlineCompletionDebugEntries: () => Promise<WriteInlineCompletionDebugEntry[]>
   clearWriteInlineCompletionDebugEntries: () => Promise<boolean>
   exportWriteDocument: (payload: WriteExportPayload) => Promise<WriteExportResult>
+  exportConversation: (payload: ConversationExportPayload) => Promise<ConversationExportResult>
   exportMemoryMarkdown: (payload: MemoryMarkdownExportSavePayload) => Promise<MemoryMarkdownExportSaveResult>
   exportDesignPrototype: (payload: DesignExportPayload) => Promise<DesignExportResult>
   copyWriteDocumentAsRichText: (

@@ -1006,6 +1006,7 @@ describe('FloatingComposer capability controls', () => {
       expect(html).not.toContain('>审批<')
       expect(html).not.toContain('>权限<')
       expect(html).toContain('aria-label="工具权限"')
+      expect(html).toContain('data-permission-mode="bypass"')
       expect(html).toContain('lucide-lock-keyhole-open')
       expect(html).not.toContain('Full access')
       expect(html).not.toContain('Auto')
@@ -1029,6 +1030,7 @@ describe('FloatingComposer capability controls', () => {
     expect(html).toContain('Ask in workspace')
     expect(html).toContain('Asks before workspace file changes')
     expect(html).toContain('aria-label="Tool permission"')
+    expect(html).toContain('data-permission-mode="workspace-write"')
     expect(html).toContain('lucide-folder-pen')
   })
 
@@ -1046,6 +1048,7 @@ describe('FloatingComposer capability controls', () => {
     expect(html).toContain('Trusted workspace')
     expect(html).toContain('Workspace file changes run without prompts')
     expect(html).toContain('aria-label="Tool permission"')
+    expect(html).toContain('data-permission-mode="trusted-workspace"')
     expect(html).toContain('lucide-shield-check')
   })
 
@@ -1063,7 +1066,23 @@ describe('FloatingComposer capability controls', () => {
     expect(html).toContain('Sensitive ask')
     expect(html).toContain('Ordinary reads can run automatically')
     expect(html).toContain('aria-label="Tool permission"')
+    expect(html).toContain('data-permission-mode="sensitive-ask"')
     expect(html).toContain('lucide-shield-question')
+  })
+
+  it('marks the read-only permission mode for theme-specific presentation', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingComposerExecutionPicker, {
+        value: {
+          approvalPolicy: 'on-request',
+          sandboxMode: 'danger-full-access'
+        },
+        onChange: () => undefined
+      })
+    )
+
+    expect(html).toContain('data-permission-mode="read-only"')
+    expect(html).toContain('lucide-eye')
   })
 
   it('renders the always-ask permission label in Chinese as 永远询问', async () => {
@@ -1083,6 +1102,7 @@ describe('FloatingComposer capability controls', () => {
 
       expect(html).toContain('永远询问')
       expect(html).toContain('每次工具调用都要你确认')
+      expect(html).toContain('data-permission-mode="always-ask"')
       expect(html).toContain('lucide-hand')
       expect(html).not.toContain('永远咨询')
     } finally {

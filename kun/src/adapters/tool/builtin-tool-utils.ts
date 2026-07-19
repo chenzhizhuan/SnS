@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { lstat, readFile, readdir, readlink, realpath, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import type { ToolHostContext } from '../../ports/tool-host.js'
@@ -16,6 +16,20 @@ import type {
   TruncateMode
 } from './builtin-tool-types.js'
 import { COMPACT_RESOURCE_FILE_NAMES } from './builtin-tool-types.js'
+import {
+  isPathInsideOrEqual,
+  resolveExistingWorkspaceRoot,
+  resolvePathThroughSymlinks,
+  sameFilesystemPath,
+  workspaceRoot
+} from './workspace-path.js'
+import {
+  resolveWindowsShellCandidates,
+  WINDOWS_POWERSHELL_COMMAND_ARGS,
+  windowsSystemRoot
+} from './windows-shell-resolver.js'
+
+export { workspaceRoot } from './workspace-path.js'
 
 type SpawnSyncLike = typeof spawnSync
 type SpawnLike = typeof spawn
@@ -65,11 +79,6 @@ export async function withToolBoundary(
   }
 }
 
-export function workspaceRoot(workspace: string): string {
-  if (!workspace.trim()) return process.cwd()
-  return isAbsolute(workspace) ? resolve(workspace) : resolve(process.cwd(), workspace)
-}
-
 export async function resolveWorkspacePath(
   inputPath: string,
   context: ToolHostContext,
@@ -107,89 +116,24 @@ export async function resolveWorkspacePath(
       relativePath: normalizeToolPath(relative(root, lexicalAbsolutePath) || '.')
     }
   }
-  const resolvedRoot = await safeRealpath(root)
-  if (resolvedRoot === null) {
-    // Workspace root itself does not exist; nothing to anchor the escape
-    // check against. This is distinct from an actual escape (handled below).
-    throw new Error(`workspace root does not exist: ${root}`)
-  }
-  const resolvedAbsolute = await resolveSymlinkSafe(lexicalAbsolutePath)
-  const resolvedRelative = relative(resolvedRoot, resolvedAbsolute)
-  if (resolvedRelative === '..' || resolvedRelative.startsWith(`..${sep}`) || isAbsolute(resolvedRelative)) {
+  const { physicalRoot } = await resolveExistingWorkspaceRoot(root)
+  const resolvedAbsolute = await resolvePathThroughSymlinks(lexicalAbsolutePath)
+  const isInsideWorkspace = isPathInsideOrEqual(physicalRoot, resolvedAbsolute)
+  const isApprovedExternalPath = !options.enforceWorkspaceBoundary &&
+    context.approvedExternalWriteTargets?.some((target) =>
+      sameFilesystemPath(target.path, resolvedAbsolute)
+    ) === true
+  if (!isInsideWorkspace && !isApprovedExternalPath) {
     throw new Error(`path escapes the workspace root: ${inputPath}`)
   }
-  // Return LEXICAL paths to callers. The realpath-resolved pair is only used
-  // for the escape check above; downstream code (subprocess cwd, display
-  // paths, language-server init) expects the user-facing workspace path,
-  // which on symlinked roots (e.g. macOS `/tmp` -> `/private/tmp`) would
-  // otherwise diverge from what the user typed and break display layers.
+  // Workspace callers keep the lexical path expected by subprocess/display
+  // layers. External grants use the physical path that was checked so a
+  // symlink alias cannot be redirected after validation.
   return {
     workspaceRoot: root,
-    absolutePath: lexicalAbsolutePath,
+    absolutePath: isApprovedExternalPath ? resolvedAbsolute : lexicalAbsolutePath,
     relativePath: normalizeToolPath(relative(root, lexicalAbsolutePath) || '.')
   }
-}
-
-async function safeRealpath(target: string): Promise<string | null> {
-  try {
-    return await realpath(target)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'ENOENT') return null
-    if (code === 'EACCES' || code === 'ELOOP' || code === 'ENOTDIR') return null
-    throw error
-  }
-}
-
-// Whether `target` is itself a symbolic link, without following it. Returns
-// false when the entry is absent or cannot be stat-ed (treated as "not a link"
-// — the escape check still anchors against the nearest existing ancestor).
-async function isSymlink(target: string): Promise<boolean> {
-  try {
-    return (await lstat(target)).isSymbolicLink()
-  } catch {
-    return false
-  }
-}
-
-async function resolveSymlinkSafe(lexicalPath: string, depth = 0): Promise<string> {
-  // Guard against symlink loops (dangling link A -> B -> A never resolves).
-  if (depth > 40) {
-    throw new Error(`too many symbolic links resolving: ${lexicalPath}`)
-  }
-  const direct = await safeRealpath(lexicalPath)
-  if (direct !== null) return direct
-  // Target doesn't fully resolve — either a genuinely missing path (write/create
-  // case) or a *dangling* symlink whose target is absent. `realpath` reports
-  // both as ENOENT, so we must walk the components ourselves: anchor on the
-  // nearest existing ancestor, but if a non-resolving component is actually a
-  // symlink, follow it explicitly so the redirection is reflected in the escape
-  // check. Re-anchoring a dangling symlink lexically (the old behavior) let a
-  // planted link like `<ws>/evil -> /etc/passwd` (target absent) pass as an
-  // in-workspace path and escape on the subsequent write.
-  const segments: string[] = []
-  let current = lexicalPath
-  // Guard against pathological component counts.
-  for (let i = 0; i < 128 && current !== dirname(current); i += 1) {
-    const resolved = await safeRealpath(current)
-    if (resolved !== null) {
-      return segments.length > 0 ? resolve(resolved, ...segments) : resolved
-    }
-    if (await isSymlink(current)) {
-      // Dangling (or otherwise non-resolving) symlink: follow its target so the
-      // redirection is reflected, then re-resolve the target plus the suffix
-      // collected below this component.
-      const linkTarget = await readlink(current)
-      const resolvedParent = (await safeRealpath(dirname(current))) ?? dirname(current)
-      const followed = isAbsolute(linkTarget) ? resolve(linkTarget) : resolve(resolvedParent, linkTarget)
-      const rejoined = segments.length > 0 ? resolve(followed, ...segments) : followed
-      return resolveSymlinkSafe(rejoined, depth + 1)
-    }
-    segments.unshift(basename(current))
-    current = dirname(current)
-  }
-  // Nothing on the path exists; treat as escape.
-  throw new Error(`path escapes the workspace root: ${lexicalPath}`)
 }
 
 export function isBinaryBuffer(buffer: Buffer): boolean {
@@ -305,21 +249,6 @@ export function describeKind(mode: TruncateMode): string {
   return mode === 'head' ? 'first' : 'last'
 }
 
-const WINDOWS_POWERSHELL_ARGS = ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command']
-
-// `%SystemRoot%` (a.k.a. `%windir%`) — the Windows install directory. Always
-// present in a sane environment; the literal fallback covers the rare case
-// where even that has been stripped from the spawned process's env.
-function windowsSystemRoot(env: NodeJS.ProcessEnv = process.env): string {
-  return env.SystemRoot || env.windir || env.SYSTEMROOT || 'C:\\Windows'
-}
-
-// Absolute path to cmd.exe. `%ComSpec%` is the canonical pointer the OS itself
-// uses; fall back to System32\cmd.exe so we never depend on PATH resolution.
-function windowsComSpec(env: NodeJS.ProcessEnv = process.env): string {
-  return env.ComSpec || env.COMSPEC || win32.join(windowsSystemRoot(env), 'System32', 'cmd.exe')
-}
-
 export type ShellRuntimeInfo = ShellConfig & {
   name: string
   syntax: string
@@ -335,10 +264,6 @@ export type ShellRuntimePlanOptions = {
   lookup?: SpawnSyncLike
   fileExists?: (path: string) => boolean
   env?: NodeJS.ProcessEnv
-}
-
-function isWindowsAppsAlias(candidate: string): boolean {
-  return /(?:^|[\\/])windowsapps(?:[\\/]|$)/i.test(candidate)
 }
 
 function pathExists(fileExists: (path: string) => boolean, candidate: string): boolean {
@@ -368,68 +293,24 @@ function runtimePlan(configs: ShellConfig[], platform: NodeJS.Platform): ShellRu
   return { primary, candidates }
 }
 
-function windowsPowerShellConfigs(
-  lookup: SpawnSyncLike,
-  fileExists: (path: string) => boolean,
-  env: NodeJS.ProcessEnv
-): ShellConfig[] {
-  const configs: ShellConfig[] = []
-  const programFilesRoots = [env.ProgramW6432, env.ProgramFiles, env['ProgramFiles(x86)']]
-    .map((value) => value?.trim() ?? '')
-    .filter(Boolean)
-  for (const root of programFilesRoots) {
-    const pwsh = win32.join(root, 'PowerShell', '7', 'pwsh.exe')
-    if (pathExists(fileExists, pwsh)) configs.push({ shell: pwsh, args: WINDOWS_POWERSHELL_ARGS })
-  }
-
-  for (const pwsh of lookupResults(lookup, 'where', ['pwsh.exe'])) {
-    // WindowsApps execution aliases are not reliable launchable executables
-    // from a packaged Electron process.
-    if (!isWindowsAppsAlias(pwsh)) configs.push({ shell: pwsh, args: WINDOWS_POWERSHELL_ARGS })
-  }
-
-  const windowsPowerShell = win32.join(
-    windowsSystemRoot(env),
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
-  )
-  if (pathExists(fileExists, windowsPowerShell)) {
-    configs.push({ shell: windowsPowerShell, args: WINDOWS_POWERSHELL_ARGS })
-  }
-
-  for (const powershell of lookupResults(lookup, 'where', ['powershell.exe'])) {
-    if (!isWindowsAppsAlias(powershell)) {
-      configs.push({ shell: powershell, args: WINDOWS_POWERSHELL_ARGS })
-    }
-  }
-  return uniqueShellConfigs(configs, 'win32')
-}
-
 export function shellRuntimePlan(options: ShellRuntimePlanOptions = {}): ShellRuntimePlan {
   const platform = options.platform ?? process.platform
-  const lookup = options.lookup ?? spawnSync
-  const fileExists = options.fileExists ?? existsSync
-  const env = options.env ?? process.env
 
   if (platform === 'win32') {
-    const powershells = windowsPowerShellConfigs(lookup, fileExists, env)
-    if (powershells.length > 0) return runtimePlan(powershells, platform)
-
-    const bashes = lookupResults(lookup, 'where', ['bash.exe'])
-      .filter((candidate) => !isWindowsAppsAlias(candidate))
-      .map((shell) => ({ shell, args: ['-lc'] }))
-    if (bashes.length > 0) return runtimePlan(bashes, platform)
-
-    // Keep cmd fallbacks in one syntax family and retain the canonical system
-    // path after a possibly broken ComSpec entry.
-    return runtimePlan([
-      { shell: windowsComSpec(env), args: ['/d', '/s', '/c'] },
-      { shell: win32.join(windowsSystemRoot(env), 'System32', 'cmd.exe'), args: ['/d', '/s', '/c'] }
-    ], platform)
+    const resolverOptions = {
+      ...(options.lookup ? { lookup: options.lookup } : {}),
+      ...(options.fileExists ? { fileExists: options.fileExists } : {}),
+      ...(options.env ? { env: options.env } : {})
+    }
+    return runtimePlan(
+      resolveWindowsShellCandidates(resolverOptions)
+        .map((candidate) => ({ shell: candidate.file, args: [...candidate.commandArgs] })),
+      platform
+    )
   }
 
+  const lookup = options.lookup ?? spawnSync
+  const fileExists = options.fileExists ?? existsSync
   const configs: ShellConfig[] = []
   if (pathExists(fileExists, '/bin/bash')) configs.push({ shell: '/bin/bash', args: ['-lc'] })
   for (const shell of lookupResults(lookup, 'which', ['bash'])) configs.push({ shell, args: ['-lc'] })
@@ -438,12 +319,17 @@ export function shellRuntimePlan(options: ShellRuntimePlanOptions = {}): ShellRu
 }
 
 export function shellConfig(
-  platform: NodeJS.Platform = process.platform,
-  lookup: SpawnSyncLike = spawnSync,
-  fileExists: (path: string) => boolean = existsSync,
-  env: NodeJS.ProcessEnv = process.env
+  platform?: NodeJS.Platform,
+  lookup?: SpawnSyncLike,
+  fileExists?: (path: string) => boolean,
+  env?: NodeJS.ProcessEnv
 ): ShellConfig {
-  const { shell, args } = shellRuntimePlan({ platform, lookup, fileExists, env }).primary
+  const { shell, args } = shellRuntimePlan({
+    ...(platform ? { platform } : {}),
+    ...(lookup ? { lookup } : {}),
+    ...(fileExists ? { fileExists } : {}),
+    ...(env ? { env } : {})
+  }).primary
   return { shell, args }
 }
 
@@ -552,7 +438,7 @@ export function shellCommandArgs(config: ShellConfig, command: string): string[]
   const name = shellDisplayName(config.shell)
   if (name === 'pwsh' || name === 'powershell') {
     const script = `${POWERSHELL_UTF8_OUTPUT_PREAMBLE}\n${command}`
-    return [...WINDOWS_POWERSHELL_ARGS, script]
+    return [...WINDOWS_POWERSHELL_COMMAND_ARGS, script]
   }
   return [...config.args, command]
 }
@@ -676,14 +562,20 @@ export function createShellCommandRunner(options: ShellCommandRunnerOptions = {}
     candidates,
     async spawn(command, spawnOptions) {
       const attempts: ShellSpawnAttempt[] = []
-      const childOptions: SpawnOptions = {
+      const safeEnv = shellSpawnEnv(spawnOptions.env ?? env, platform)
+      const baseChildOptions: SpawnOptions = {
         ...spawnOptions,
-        env: shellSpawnEnv(spawnOptions.env ?? env, platform),
         windowsHide: spawnOptions.windowsHide ?? true,
         shell: false
       }
       for (const runtime of candidates) {
         try {
+          const childOptions: SpawnOptions = {
+            ...baseChildOptions,
+            env: platform === 'win32' && runtime.name === 'bash'
+              ? { ...safeEnv, CHERE_INVOKING: '1' }
+              : safeEnv
+          }
           const child = spawnImpl(runtime.shell, shellCommandArgs(runtime, command), childOptions)
           await waitForSpawn(child)
           return { child, runtime }
@@ -1022,9 +914,9 @@ export function globToRegExp(pattern: string): RegExp {
   const withWildcards = escaped
     .replace(/\*\*/g, '::DOUBLE_STAR::')
     .replace(/\*/g, '[^/]*')
-    .replace(/\?/g, '.')
+    .replace(/\?/g, '[^/]')
     .replace(/::DOUBLE_STAR::/g, '.*')
-  return new RegExp(`^${optionalPrefix ? '(?:.*/)?' : ''}${withWildcards}$`, 'i')
+  return new RegExp(`^${optionalPrefix ? '(?:.*/)?' : ''}${withWildcards}$`, 'iu')
 }
 
 export function normalizeToolPath(value: string): string {

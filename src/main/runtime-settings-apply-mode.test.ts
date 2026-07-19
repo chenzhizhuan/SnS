@@ -111,7 +111,7 @@ describe('runtimeSettingsApplyMode', () => {
     expect(runtimeSettingsApplyMode(prev, next)).toBe('none')
   })
 
-  it('hot-applies model, provider, approval, media, MCP, memory, and subagent changes', () => {
+  it('hot-applies model, provider, approval, media, MCP, project grants, memory, and subagent changes', () => {
     const prev = settings()
     const withModel = {
       ...prev,
@@ -158,6 +158,17 @@ describe('runtimeSettingsApplyMode', () => {
         internal: { ...prev.schedule.internal, port: prev.schedule.internal.port + 1 }
       }
     }
+    const withProjectGrant = {
+      ...prev,
+      agents: {
+        kun: {
+          ...prev.agents.kun,
+          projectConfig: {
+            grants: [{ workspaceRoot: '/workspace/project', configDigest: 'a'.repeat(64) }]
+          }
+        }
+      }
+    }
     const withMemory = {
       ...prev,
       agents: { kun: { ...prev.agents.kun, memoryEnabled: true } }
@@ -189,6 +200,7 @@ describe('runtimeSettingsApplyMode', () => {
     expect(runtimeSettingsApplyMode(prev, withMedia)).toBe('hot')
     expect(runtimeSettingsApplyMode(prev, withImageResolution)).toBe('hot')
     expect(runtimeSettingsApplyMode(prev, withMcp)).toBe('hot')
+    expect(runtimeSettingsApplyMode(prev, withProjectGrant)).toBe('hot')
     expect(runtimeSettingsApplyMode(prev, withMemory)).toBe('hot')
     expect(runtimeSettingsApplyMode(prev, withSubagents)).toBe('hot')
   })

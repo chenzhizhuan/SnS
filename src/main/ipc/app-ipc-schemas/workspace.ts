@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import {
+  CONVERSATION_EXPORT_FORMATS,
+  CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS
+} from '../../../shared/conversation-export'
 import { WRITE_EXPORT_FORMATS } from '../../../shared/write-export'
 import { WRITE_INFOGRAPHIC_MAX_TEXT_CHARS } from '../../../shared/write-infographic'
 import {
@@ -61,6 +65,31 @@ export const localPdfTextTargetPayloadSchema = z
 export const deepseekConfigContentSchema = z.string().max(MAX_CONFIG_FILE_BYTES)
 
 export const workspaceRootSchema = trimmedString(MAX_PATH_LENGTH)
+export const kunProjectConfigWorkspacePayloadSchema = z
+  .object({
+    workspaceRoot: workspaceRootSchema.refine(isAbsolutePath, {
+      message: 'workspaceRoot must be an absolute path'
+    })
+  })
+  .strict()
+
+export const kunProjectConfigWritePayloadSchema = kunProjectConfigWorkspacePayloadSchema.extend({
+  content: deepseekConfigContentSchema
+}).strict()
+
+export const kunProjectConfigTrustPayloadSchema = z.discriminatedUnion('trusted', [
+  kunProjectConfigWorkspacePayloadSchema.extend({
+    trusted: z.literal(true),
+    expectedDigest: z.string().trim().regex(/^[a-fA-F0-9]{64}$/)
+  }).strict(),
+  kunProjectConfigWorkspacePayloadSchema.extend({
+    trusted: z.literal(false)
+  }).strict()
+])
+
+function isAbsolutePath(value: string): boolean {
+  return value.startsWith('/') || /^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\')
+}
 export const gitBranchPayloadSchema = z
   .object({
     workspaceRoot: workspaceRootSchema,
@@ -267,6 +296,15 @@ export const writeExportPayloadSchema = z
   .refine((payload) => Boolean(payload.path || payload.title), {
     message: 'An export path or title is required.'
   })
+
+export const conversationExportPayloadSchema = z
+  .object({
+    title: trimmedString(200),
+    format: z.enum(CONVERSATION_EXPORT_FORMATS),
+    markdown: z.string().min(1).max(CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS),
+    defaultFileName: trimmedString(200)
+  })
+  .strict()
 
 export const memoryMarkdownExportPayloadSchema = z
   .object({

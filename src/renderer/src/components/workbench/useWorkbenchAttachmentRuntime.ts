@@ -19,15 +19,6 @@ import { useWorkbenchAttachmentController } from './useWorkbenchAttachmentContro
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 
-function base64ToFile(dataBase64: string, name: string, mimeType: string): File {
-  const binary = atob(dataBase64)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-  return new File([bytes], name || 'image', { type: mimeType })
-}
-
 type WorkbenchAttachmentRuntimeOptions = {
   activeThreadId: string | null
   canvasDocument: CanvasDocument
@@ -120,8 +111,7 @@ export function useWorkbenchAttachmentRuntime({
     activeThreadId,
     attachmentCapabilities: runtimeInfo?.capabilities.attachments,
     setComposerAttachmentsForScope,
-    getActiveWorkspace: activeComposerWorkspace,
-    createFile: base64ToFile
+    getActiveWorkspace: activeComposerWorkspace
   })
 
   const clearComposerAttachments = (scope = composerAttachmentScopeRef.current): void => {
@@ -154,8 +144,7 @@ export function useWorkbenchAttachmentRuntime({
     setComposerAttachmentsForScope,
     setComposerAttachments,
     getAttachmentScope: () => composerAttachmentScopeRef.current,
-    getActiveWorkspace: activeComposerWorkspace,
-    createFile: base64ToFile
+    getActiveWorkspace: activeComposerWorkspace
   })
 
   return {

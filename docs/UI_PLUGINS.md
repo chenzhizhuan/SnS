@@ -1,9 +1,10 @@
 # UI 插件开发指南(形象工坊)
 
 Kun 的「形象工坊」允许任何人制作并安装自己的视觉形象包:既可以替换工作台里的
-泳动小鸟、欢迎/睡觉/坐着等状态形象,也可以给应用主体、侧边栏和主舞台换上主题背景,
-再配合主题 token 与进行中文案完成一套皮肤。v1.5 起还可以把一张完整人物立绘放进
-Kun 会话舞台,由宿主安全地生成构图、框景、可读性遮罩和玻璃材质。
+泳动小鸟、欢迎/睡觉/坐着等状态形象,也可以给应用主体、侧边栏、主舞台和写作/设计工作面换上主题背景,
+再配合主题 token 与进行中文案完成一套皮肤。v1.5 起可以把一张完整人物立绘放进
+Kun 会话舞台;v1.6 的 `scene` 进一步提供左右导轨、卡片、背景式构图、五类专属美术槽位、
+人物焦点/蒙版以及宿主内置动效,让每个人物主题拥有不同的 UI 语言而不开放任意 CSS。
 
 **iKun 模式就是一个随应用分发的示例**:它会在首次启动时自动安装
 (id 为 `ikun`,见 `src/main/ui-plugin-bundled.ts`),在形象工坊里与第三方插件同级。
@@ -21,12 +22,16 @@ my-plugin/
 │   ├── swim.png
 │   ├── portrait.png
 │   └── stage.webp
+├── scene/
+│   ├── backdrop.webp
+│   ├── frame.png
+│   └── emblem.png
 └── artwork/
     └── stage-source.svg  # 可选的创作源文件,不会安装或执行
 ```
 
 安装方式:`设置 → 形象工坊 → 安装插件文件夹…`,选中插件目录即可。
-应用校验 manifest 和图片后,只把 **manifest 与被 `figures` / `backgrounds` 引用的图片**
+应用校验 manifest 和图片后,只把 **manifest 与被 `figures` / `backgrounds` / `scene` 引用的图片**
 复制进应用数据目录(`~/.kun/ui-plugins/<id>/`);未引用的创作源文件不会复制。
 
 官方示例见 [`examples/ui-plugins/starlight/`](../examples/ui-plugins/starlight/)。它同时演示了
@@ -69,6 +74,51 @@ my-plugin/
       "cards": "translucent"
     }
   },
+  "scene": {
+    "apiVersion": "1.6",
+    "layout": "card-right",
+    "character": {
+      "scale": "hero",
+      "fit": "cover",
+      "focalPoint": "top",
+      "mask": "arch",
+      "offsetX": 0,
+      "offsetY": 0,
+      "opacity": 1,
+      "flipX": false,
+      "motion": { "preset": "breathe", "speed": "slow", "phase": "a" }
+    },
+    "artwork": {
+      "backdrop": {
+        "path": "scene/backdrop.webp",
+        "anchor": "center",
+        "size": "full",
+        "fit": "cover",
+        "offsetX": 0,
+        "offsetY": 0,
+        "opacity": 0.7,
+        "blend": "soft-light",
+        "motion": { "preset": "drift-x", "speed": "slow", "phase": "b" }
+      },
+      "frame": {
+        "path": "scene/frame.png",
+        "anchor": "center",
+        "size": "full",
+        "fit": "contain",
+        "offsetX": 0,
+        "offsetY": 0,
+        "opacity": 1,
+        "blend": "normal",
+        "motion": { "preset": "none", "speed": "normal", "phase": "a" }
+      }
+    },
+    "chrome": {
+      "sidebar": "starlight",
+      "topbar": "starlight",
+      "composer": "starlight",
+      "cards": "starlight"
+    }
+  },
   "backgrounds": {
     "light": {
       "stage": "img/stage.webp"
@@ -103,8 +153,9 @@ my-plugin/
 | `version` | ✓ | 语义化版本,如 `1.0.0` |
 | `author` / `description` | | ≤80 / ≤240 字符 |
 | `figures` | 至少一类 | 形象槽位对象;活动小形象支持 `png/webp/jpg/jpeg/gif`;`portrait` 仅支持静态 `png/webp/jpg/jpeg` |
-| `backgrounds` | 至少一类 | `light` / `dark` 主题下可放 `app` / `sidebar` / `stage`;图片仅支持静态 `png/webp/jpg/jpeg`(不支持 APNG、animated WebP) |
+| `backgrounds` | 至少一类 | `light` / `dark` 主题下可放 `app` / `sidebar` / `stage` / `write` / `design`;图片仅支持静态 `png/webp/jpg/jpeg`(不支持 APNG、animated WebP) |
 | `presentation` | | 人物舞台的严格声明式配置;一旦提供就必须同时提供 `figures.portrait` |
+| `scene` | | v1.6 专属场景;必须同时提供完整 `presentation` 回退、`figures.portrait` 与至少一个 `artwork` 槽位 |
 | `labels` | | 仅 `zh` / `en`;键限 `working` / `workingSprint` / `workingDive` / `workingSurf`;每条 ≤24 字符 |
 | `tokens` | | 仅 `light` / `dark`;键限 `--ds-*`;值禁止 `url()`、分号、花括号等;总数 ≤60 |
 | `features.cameos` | | `true` 时启用主会话两侧的不定时出没彩蛋 |
@@ -114,15 +165,17 @@ my-plugin/
 
 ## 背景图层(backgrounds)
 
-`backgrounds` 按主题和区域组织。三个区域彼此独立:
+`backgrounds` 按主题和区域组织。五个区域彼此独立;`write` / `design` 可省略,此时继续使用 `stage`:
 
 | 槽位 | 作用区域 | 默认透明度 |
 |---|---|---|
 | `app` | 整个工作台内容区的底层背景 | `0.22` |
 | `sidebar` | 左侧栏背景 | `0.18` |
 | `stage` | 主内容/会话舞台背景 | `0.32` |
+| `write` | 写作模式工作面 | `0.50` |
+| `design` | 设计模式制图工作面 | `0.50` |
 
-顶栏(`topbar`)不属于上述三个背景槽位,仍由主题 token `--ds-topbar-bg` 控制。
+顶栏(`topbar`)不属于上述五个背景槽位,仍由主题 token `--ds-topbar-bg` 控制。
 
 一个图层可以直接写成图片路径,也可以写成对象:
 
@@ -192,17 +245,74 @@ Kun 的侧栏、顶栏、输入框或其它应用界面烘焙进图片。Kun 会
 人物层、装饰层和遮罩层均为 `pointer-events: none` 且 `aria-hidden`;不会拦截聊天、输入或
 辅助技术。会话舞台窄于 980px 或开启专注模式时,人物与装饰自动隐藏并归还内容宽度。
 
+## 专属人物场景(scene,v1.6)
+
+`scene` 是 `presentation` 之上的渐进增强。它不允许插件传入 DOM、CSS 或动画代码,而是让
+插件从 Kun 固定的场景积木中组合专属 UI。声明 `scene` 时仍必须保留完整 `presentation`,
+供只认识 v1.5 的宿主安全回退。`scene.apiVersion` 当前只能是 `"1.6"`。
+
+### 场景布局和人物
+
+- `layout`: `rail-right` / `rail-left` / `card-right` / `card-left` /
+  `backdrop-right` / `backdrop-center`。导轨和卡片布局会由宿主给消息列与输入框预留左右空间;
+  背景布局始终放在内容层下方。
+- `character.scale`: `compact` / `standard` / `hero`;`fit`: `contain` / `cover`;
+  `focalPoint` 使用背景图层相同的九宫格位置。
+- `character.mask`: `none` / `soft-card` / `circle` / `arch` / `diamond` /
+  `hologram` / `portal` / `polaroid` / `ticket`。
+- `offsetX` / `offsetY` 是 `-12`–`12` 的整数,`opacity` 为 `0`–`1`,`flipX` 为布尔值。
+- 人物 `motion.preset` 为 `none` / `breathe` / `float` / `sway`;所有 motion 还必须指定
+  `speed`(`slow` / `normal` / `fast`)与 `phase`(`a` / `b` / `c`)。
+
+### 专属美术槽位
+
+`artwork` 至少声明一个槽位:`backdrop` / `ambient` 位于整个舞台的安全底层;
+`frame` / `foreground` / `emblem` 位于裁切后的人物视觉区。每层必须完整提供:
+
+| 字段 | 可选值/范围 |
+|---|---|
+| `path` / `darkPath` | 插件内静态 PNG/JPEG/WebP 相对路径;`darkPath` 可选,深色模式覆盖默认图 |
+| `anchor` | 九宫格位置 |
+| `size` | `small` / `medium` / `large` / `full` |
+| `fit` | `contain` / `cover` |
+| `offsetX` / `offsetY` | `-12`–`12` 的整数 |
+| `opacity` | `0`–`1` |
+| `blend` | `normal`;仅 `backdrop` / `ambient` 可用 `screen` / `soft-light` |
+| `motion.preset` | `none` / `float` / `drift-x` / `drift-y` / `pulse` / `orbit` / `twinkle` / `scan` |
+
+人物和美术动效都由宿主实现,系统开启“减少动态效果”时自动停止。不要把 Kun 的输入框、
+消息、侧栏等界面烘焙进这些图;宿主会负责真实 UI 的避让和层级。
+
+### 宿主外观配方
+
+`chrome` 必须包含 `sidebar`、`topbar`、`composer`、`cards` 四项。每项可选
+`inherit` / `soft` / `editorial` / `paper` / `crystal` / `hologram` / `backstage` /
+`portal` / `polaroid` / `ticket` / `seal`,也可以使用 11 套人物专属配方:
+`botanical` / `fortune-ledger` / `dream-gate` / `washi` / `scrapbook` / `aurora` /
+`synth` / `midnight-pass` / `nautical` / `grand-line` / `dimension-lab` / `starlight`。
+
+人物专属配方由 Kun 宿主实现,会以同一套视觉语言同时处理侧边栏、顶栏、输入框、用户/助手
+消息、普通卡片与表格表面。例如 `botanical` 使用柔和植物感层次,`fortune-ledger` 使用账簿式
+线条,`synth` 与 `dimension-lab` 使用不同的未来界面语言。插件只选择白名单名称;不能提供
+选择器、属性值、DOM 或控件,所有装饰保持在真实交互层下方,不会拦截输入。
+
+四项可以独立选择,但人物主题通常应让四项使用同一个专属配方,以保证会话卡片、输入区和
+导航区与人物形象保持一致。这些名称是 Kun 固定的表面配方,不是 CSS 权限。
+
+场景舞台、人物视觉区、装饰图和可读性遮罩均为不可交互安全层。窗口变窄、专注模式开启或
+终端面板展开时,宿主会隐藏整套场景并取消消息列/输入框位移,避免任何图片或装饰遮挡输入。
+
 ## 宿主受控的 CDP 主题注入
 
 CDP 是 Kun 应用主题的**宿主实现细节**,不是 manifest 能申请的代码执行能力。激活一次插件时:
 
 1. 渲染层只把插件 `id` 发给主进程。
 2. 主进程从 `~/.kun/ui-plugins/<id>/` 重新读取并规范化 manifest,重新校验全部引用图片。
-3. Kun 自己的样式生成器把白名单 token、固定背景槽位和已归一化的人物数值变量组合成 CSS。
+3. Kun 自己的样式生成器把白名单 token、固定背景槽位以及已归一化的人物/场景数值变量组合成 CSS。
 4. 主进程短暂附加 `mainWindow.webContents.debugger`,调用固定的 `Runtime.evaluate` 程序,
    只用 `style.textContent` 创建或更新一个宿主管理的 `<style>` 节点,随后立即分离 debugger。
-5. 渲染层用固定 React 组件显示主进程验证后的 `figures.portrait` data URL,枚举值只设置为
-   宿主认识的受控 `data-*` 状态;不会执行插件代码或插入插件标记。
+5. 渲染层用固定 React 组件显示主进程验证后的 `figures.portrait` 与 `scene.artwork` data URL,
+   枚举值只设置为宿主认识的受控 `data-*` 状态;不会执行插件代码或插入插件标记。
 6. 工作台重新加载后,主进程用同一份宿主生成 CSS 重新注入;停用插件时删除该节点并清理状态。
 
 Kun 不使用 `--remote-debugging-port`,不会连接外部 WebSocket,也不接受插件提供的 CSS、JS、
@@ -217,7 +327,7 @@ Kun 美术,或按下表回退链借用插件内的其它槽位;`portrait` 不参
 
 | 槽位 | 出现在哪里 | 缺失时回退 |
 |---|---|---|
-| `portrait` | `presentation` 人物舞台中的完整人物立绘 | 不显示人物舞台;声明 `presentation` 时此槽位必填 |
+| `portrait` | `presentation` / `scene` 人物舞台中的完整人物立绘 | 不显示人物舞台;声明 `presentation` 或 `scene` 时此槽位必填 |
 | `swim` | 回合进行中的泳动动画主体(推进/冲刺/潜入)、各处最终兜底 | 默认 Kun 鸟 |
 | `surf` | 泳动动画的冲浪姿态、庆祝「胜利巡游」 | `swim` |
 | `greet` | 欢迎卡片、侧边栏轮播、出没「探头」、庆祝「跃起欢呼」 | `swim` |
@@ -236,9 +346,11 @@ Kun 美术,或按下表回退链借用插件内的其它槽位;`portrait` 不参
 - 任一形象图片宽、高均 ≤4096 px,且单张解码尺寸 ≤12 MP;全部形象槽位合计 ≤48 MP。
   与体积预算相同,同一路径被多个形象槽位引用时会按槽位计入总像素预算。
 - 单张背景图片 ≤8 MiB;去重后的全部背景图片合计 ≤32 MiB。
-- 去重后的形象与背景文件合计 ≤48 MiB。
+- 按相对路径去重后的形象、背景与场景文件合计 ≤48 MiB。
 - 任一背景图片宽、高均 ≤8192 px,且单张解码尺寸 ≤24 MP(宽 × 高)。
 - 去重后的全部背景图片解码尺寸合计 ≤64 MP。
+- 单张 `scene.artwork` 图片 ≤4 MiB;按相对路径去重后的场景图片合计 ≤16 MiB。
+- 任一场景图片宽、高均 ≤4096 px,且单张解码尺寸 ≤12 MP;去重后的场景图片合计 ≤40 MP。
 
 形象工坊列表优先使用 `toggleIcon`、`swim`、`greet` 等小形象作为预览,不会把全尺寸
 portrait 的 base64 放进列表 IPC。只有 portrait 可用时,宿主会生成最长边 ≤256px、编码后
@@ -253,12 +365,13 @@ portrait 的 base64 放进列表 IPC。只有 portrait 可用时,宿主会生成
 旧版 Kun 不认识 `backgrounds` 时会忽略该字段,背景不会生效。`portrait` 和 `presentation`
 需要支持 v1.5 的 Kun;严格校验旧版可能把 `portrait` 视为未知槽位而拒绝安装。较早的校验器还要求
 `figures` 存在,因此需要兼容旧版时,建议至少保留一个形象槽位(通常是 `swim` 或
-`toggleIcon`)。新版允许制作只有背景、没有自定义形象的插件。
+`toggleIcon`)。`scene` 需要支持 v1.6 的 Kun;兼容 v1.5 时请保留 `presentation`,旧宿主会忽略
+场景而使用人物舞台回退。新版允许制作只有背景、没有自定义形象的插件。
 
 ## 安全模型(为什么这样设计)
 
 1. **无代码执行**:manifest 只接受声明式字段;JS、HTML、CSS、SVG 不能作为运行资源。
-2. **白名单安装**:只复制 manifest 与 `figures` / `backgrounds` 引用的安全图片;路径禁止
+2. **白名单安装**:只复制 manifest 与 `figures` / `backgrounds` / `scene` 引用的安全图片;路径禁止
    越界,未引用文件不会安装。
 3. **主进程校验**:安装时校验扩展名、文件签名、完整像素解码、文件大小、图像尺寸与累计预算;
    不合规的图片会让安装失败。
@@ -269,6 +382,8 @@ portrait 的 base64 放进列表 IPC。只有 portrait 可用时,宿主会生成
    `html[data-ui-plugin='<id>']` 下,由主进程通过短生命周期 CDP 会话注入,停用即移除。
 7. **人物舞台白名单**:只接受固定锚点、尺寸、框景、动效、遮罩和材质枚举;数值范围由
    主进程验证,所有选择器、标记、事件和动画实现均由 Kun 固定提供。
+8. **专属场景白名单**:只接受固定布局、五类美术槽位、蒙版、焦点、动效和外观配方;原始路径
+   不进入 DOM 或 CSS,渲染层只接收主进程验证后的静态图片 data URL。
 
 ## 调试技巧
 
