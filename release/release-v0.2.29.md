@@ -39,6 +39,7 @@
 - 配置迁移现在会保留仍然有效的字段，不会因为单个旧字段或无效嵌套字段丢弃整段配置。
 - Provider 模型列表支持数组、`data` 和 `models` 等有限返回结构，并对响应体、模型数量和 ID 长度设置上限。
 - 空白模型上下文配置默认按 `256K` 处理；Bash 超时改由 Kun Runtime 统一管理，子 Agent 不再重复执行 token budget 限制。
+- Windows 检测到 Git for Windows 时，Agent Bash、内置终端和 Workflow Bash 会统一优先使用 Git Bash，并在未安装时保持 PowerShell/cmd 或明确不可用的安全回退。
 - 修复 Todo 工具边界处 Plan 关联信息丢失的问题。
 
 ### Extension 与发布质量
