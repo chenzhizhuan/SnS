@@ -243,6 +243,8 @@ npm install --registry=https://registry.npmmirror.com
 
 本项目仅供学习和参考，不可用于任何商业用途。商业使用、商业分发、SaaS/托管服务、二次销售或集成到商业产品中，均需要获得作者的单独书面授权。
 
+我们非常支持企业将 Kun 仅用于内部员工提效。此类使用只需发送邮件至 [zhongxingyuemail@gmail.com](mailto:zhongxingyuemail@gmail.com) 申请书面授权，授权不会收取任何费用。该免费内部授权不包括对外提供 SaaS/托管服务、转售、商业分发，或集成到面向客户的商业产品中。
+
 教育机构与公益教育机构可用于非商业教学、研究、课程实验和学习参考。完整条款见 [PolyForm Noncommercial License 1.0.0](./LICENSE)。
 
 ## Star 历史

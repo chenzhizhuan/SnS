@@ -181,11 +181,12 @@ export function FloatingComposerExecutionPicker({
         ref={menuRef}
         role="menu"
         style={menuStyle}
-        className="fixed z-50 overflow-hidden rounded-2xl border border-ds-border bg-white p-2 text-[13px] text-ds-ink shadow-[0_18px_48px_rgba(20,47,95,0.16)] dark:bg-ds-card"
+        className="ds-composer-permission-menu fixed z-50 overflow-hidden rounded-2xl border border-ds-border bg-white p-2 text-[13px] text-ds-ink shadow-[0_18px_48px_rgba(20,47,95,0.16)] dark:bg-ds-card"
       >
         {APPROVAL_OPTIONS.map((option) => (
           <ExecutionRow
             key={option.value}
+            mode={option.value}
             selected={permissionMode === option.value}
             label={t(option.labelKey)}
             description={t(option.descriptionKey)}
@@ -250,6 +251,7 @@ export function applyTrustedComposerExecutionChange(
 }
 
 function ExecutionRow({
+  mode,
   selected,
   label,
   description,
@@ -257,6 +259,7 @@ function ExecutionRow({
   iconClass,
   onClick
 }: {
+  mode: KunToolPermissionMode
   selected: boolean
   label: string
   description: string
@@ -268,20 +271,21 @@ function ExecutionRow({
     <button
       type="button"
       role="menuitemradio"
+      data-permission-mode={mode}
       aria-checked={selected}
       onClick={onClick}
-      className={`flex w-full cursor-pointer items-start gap-2 rounded-xl px-2.5 py-2 text-left text-ds-ink transition ${
+      className={`ds-composer-permission-option flex w-full cursor-pointer items-start gap-2 rounded-xl px-2.5 py-2 text-left text-ds-ink transition ${
         selected ? 'bg-ds-hover' : 'hover:bg-ds-hover/70'
       }`}
     >
-      <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${iconClass}`}>
+      <span className={`ds-composer-permission-option-icon inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${iconClass}`}>
         <Icon className="h-3.5 w-3.5" strokeWidth={1.9} />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{label}</span>
-        <span className="mt-0.5 block text-[12px] leading-snug text-ds-muted">{description}</span>
+      <span className="ds-composer-permission-option-copy min-w-0 flex-1">
+        <span className="ds-composer-permission-option-label block truncate font-medium">{label}</span>
+        <span className="ds-composer-permission-option-description mt-0.5 block text-[12px] leading-snug text-ds-muted">{description}</span>
       </span>
-      {selected ? <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} /> : null}
+      {selected ? <Check className="ds-composer-permission-option-check mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} /> : null}
     </button>
   )
 }

@@ -247,10 +247,11 @@ describe('UiPluginStagePresentation', () => {
   it('keeps the Grand Line conversation card and composer status rail visually connected', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
-    const [css, workbenchStage, sidebar] = await Promise.all([
+    const [css, workbenchStage, sidebar, executionPicker] = await Promise.all([
       readFile(new URL('../../styles/surfaces-write.css', import.meta.url), 'utf8'),
       readFile(new URL('../workbench/WorkbenchChatStage.tsx', import.meta.url), 'utf8'),
-      readFile(new URL('./Sidebar.tsx', import.meta.url), 'utf8')
+      readFile(new URL('./Sidebar.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('./FloatingComposerExecutionPicker.tsx', import.meta.url), 'utf8')
     ])
 
     expect(css).toContain(
@@ -277,6 +278,17 @@ describe('UiPluginStagePresentation', () => {
     )
     expect(css).toContain('.ds-composer-textarea::placeholder')
     expect(css).toContain('.ds-composer-model-picker .text-accent')
+    expect(css).toContain('.ds-composer-permission-menu')
+    for (const permissionMode of [
+      'always-ask',
+      'read-only',
+      'sensitive-ask',
+      'workspace-write',
+      'trusted-workspace',
+      'bypass'
+    ]) {
+      expect(css).toContain(`[data-permission-mode='${permissionMode}']`)
+    }
     expect(css).toContain('.session-header-compact-meta')
     expect(css).toContain(
       '.ds-message-timeline-content :is(.text-ds-ink, .text-ds-muted, .text-ds-faint)'
@@ -284,6 +296,9 @@ describe('UiPluginStagePresentation', () => {
     expect(sidebar).toContain('ds-sidebar-focus-row')
     expect(sidebar).toContain('ds-sidebar-mascot-slot')
     expect(sidebar).toContain('ds-focus-mode-toggle-track')
+    expect(executionPicker).toContain('ds-composer-permission-menu')
+    expect(executionPicker).toContain('ds-composer-permission-option')
+    expect(executionPicker).toContain('data-permission-mode={mode}')
     expect(workbenchStage).toContain('ds-composer-dock')
   })
 })

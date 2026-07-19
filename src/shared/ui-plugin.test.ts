@@ -733,6 +733,9 @@ describe('buildUiPluginBackgroundCss', () => {
     expect(css).toContain(
       "html[data-ui-plugin='starlight'][data-theme='dark'] .ds-settings-sidebar::after"
     )
+    expect(css).toContain(
+      "html[data-ui-plugin='starlight']:not([data-theme='dark']) .ds-composer-shell.ds-chat-composer::after"
+    )
     expect(css).toContain('background-size: contain;')
     expect(css).toContain('background-position: left top;')
     expect(css).toContain('opacity: 0.25;')

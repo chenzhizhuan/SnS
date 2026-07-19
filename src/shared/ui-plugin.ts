@@ -227,10 +227,11 @@ export type UiPluginSceneV16 = {
   }
 }
 
-/** 可换肤的应用表面:整窗、侧栏、通用舞台，以及写作/设计专用工作面 */
+/** 可换肤的应用表面:整窗、侧栏、输入框、通用舞台，以及写作/设计专用工作面 */
 export const UI_PLUGIN_BACKGROUND_SLOTS = [
   'app',
   'sidebar',
+  'composer',
   'stage',
   'write',
   'design'
@@ -420,6 +421,7 @@ export const UI_PLUGIN_BACKGROUND_DEFAULT_OPACITY: Readonly<
 > = {
   app: 0.22,
   sidebar: 0.18,
+  composer: 1,
   stage: 0.32,
   write: 0.5,
   design: 0.5
@@ -1409,6 +1411,10 @@ const UI_PLUGIN_BACKGROUND_HOSTS: Readonly<
   sidebar: {
     selectors: ['.ds-sidebar-shell', '.ds-settings-sidebar'],
     baseBackground: 'var(--ds-sidebar-gradient)'
+  },
+  composer: {
+    selectors: ['.ds-composer-shell.ds-chat-composer'],
+    baseBackground: 'var(--ds-surface-elevated)'
   },
   stage: {
     selectors: ['.ds-stage-surface', '.ds-settings-stage'],

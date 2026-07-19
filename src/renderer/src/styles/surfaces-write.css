@@ -3734,21 +3734,258 @@ html[data-ui-plugin-scene-chrome-composer='grand-line']
 }
 
 html[data-ui-plugin-scene-chrome-composer='grand-line']
-  .ds-composer-permission-button[data-permission-mode='bypass'] {
+  .ds-composer-permission-button {
+  --ds-permission-border: #477996;
+  --ds-permission-bg: linear-gradient(160deg, #1a668a, #0a3d5e);
+  --ds-permission-ink: #edf9ff;
   min-height: 2.7rem;
-  border: 2px solid #6e1d18 !important;
-  border-radius: 0.8rem;
-  background:
-    radial-gradient(circle at 18% 25%, rgba(255, 218, 173, 0.24), transparent 30%),
-    linear-gradient(160deg, #bd4938, #81241f) !important;
+  border: 2px solid var(--ds-permission-border) !important;
+  border-radius: 0.7rem 1rem 0.7rem 1rem;
+  background: var(--ds-permission-bg) !important;
   padding: 0.3rem 1rem;
-  color: #fff0cf !important;
+  color: var(--ds-permission-ink) !important;
   font-size: 0.9rem;
   font-weight: 700;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 235, 194, 0.2),
+    0 4px 8px rgba(2, 25, 43, 0.3) !important;
+}
+
+html[data-ui-plugin-scene-chrome-composer='grand-line']
+  .ds-composer-permission-button > svg:first-child {
+  width: 1.55rem;
+  height: 1.55rem;
+  border: 1px solid rgba(255, 240, 202, 0.38);
+  border-radius: 0.48rem;
+  background: rgba(2, 25, 43, 0.18);
+  padding: 0.25rem;
+}
+
+html[data-ui-plugin-scene-chrome-composer='grand-line']
+  .ds-composer-permission-button:hover:not(:disabled) {
+  filter: brightness(1.09) saturate(1.04);
+  transform: translateY(-1px);
+}
+
+html[data-ui-plugin-scene-chrome-composer='grand-line']
+  .ds-composer-permission-button[data-permission-mode='always-ask'] {
+  --ds-permission-border: #5eb4d7;
+  --ds-permission-bg: linear-gradient(160deg, #176b91, #093b5c);
+  --ds-permission-ink: #effaff;
+}
+
+html[data-ui-plugin-scene-chrome-composer='grand-line']
+  .ds-composer-permission-button[data-permission-mode='read-only'] {
+  --ds-permission-border: #63c8af;
+  --ds-permission-bg: linear-gradient(160deg, #176d62, #083f43);
+  --ds-permission-ink: #e9fff8;
+  border-radius: 1.35rem;
+}
+
+html[data-ui-plugin-scene-chrome-composer='grand-line']
+  .ds-composer-permission-button[data-permission-mode='sensitive-ask'] {
+  --ds-permission-border: #efc35f;
+  --ds-permission-bg: linear-gradient(160deg, #a8741d, #69440c);
+  --ds-permission-ink: #fff4c9;
+  border-radius: 0.42rem;
+}
+
+html[data-ui-plugin-scene-chrome-composer='grand-line']
+  .ds-composer-permission-button[data-permission-mode='workspace-write'] {
+  --ds-permission-border: #9aacef;
+  --ds-permission-bg: linear-gradient(160deg, #495d92, #27345f);
+  --ds-permission-ink: #f0f2ff;
+  border-radius: 0.48rem 0.92rem 0.48rem 0.92rem;
+}
+
+html[data-ui-plugin-scene-chrome-composer='grand-line']
+  .ds-composer-permission-button[data-permission-mode='trusted-workspace'] {
+  --ds-permission-border: #61d3c1;
+  --ds-permission-bg: linear-gradient(160deg, #17766e, #084740);
+  --ds-permission-ink: #e8fff9;
+  border-radius: 1rem 0.5rem 1rem 0.5rem;
+}
+
+html[data-ui-plugin-scene-chrome-composer='grand-line']
+  .ds-composer-permission-button[data-permission-mode='bypass'] {
+  --ds-permission-border: #7e211d;
+  --ds-permission-bg:
+    radial-gradient(circle at 18% 25%, rgba(255, 218, 173, 0.24), transparent 30%),
+    linear-gradient(160deg, #bd4938, #81241f);
+  --ds-permission-ink: #fff0cf;
+  border-radius: 0.8rem;
   clip-path: polygon(3% 12%, 10% 8%, 16% 12%, 24% 7%, 34% 11%, 44% 7%, 54% 11%, 64% 7%, 74% 11%, 84% 7%, 96% 12%, 98% 26%, 96% 42%, 99% 57%, 96% 75%, 97% 88%, 88% 94%, 78% 91%, 68% 95%, 58% 91%, 48% 95%, 38% 91%, 28% 95%, 18% 91%, 8% 94%, 2% 85%, 4% 69%, 1% 53%, 4% 37%, 1% 23%);
   box-shadow:
     inset 0 0 0 1px rgba(255, 220, 174, 0.28),
     0 4px 8px rgba(80, 21, 17, 0.34) !important;
+}
+
+html[data-ui-plugin='grand-line-logbook'] .ds-composer-permission-menu {
+  border: 2px solid #b9873c !important;
+  border-radius: 1.2rem;
+  background:
+    repeating-linear-gradient(0deg, rgba(74, 54, 29, 0.035) 0 1px, transparent 1px 1.45rem),
+    linear-gradient(150deg, #fff1c9, #e4c083) !important;
+  padding: 0.65rem;
+  color: #18364b;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 248, 222, 0.72),
+    0 18px 48px rgba(3, 27, 45, 0.3) !important;
+}
+
+html[data-ui-plugin='grand-line-logbook'] .ds-composer-permission-option {
+  --ds-permission-accent: #247da5;
+  --ds-permission-soft: rgba(36, 125, 165, 0.1);
+  --ds-permission-selected: rgba(36, 125, 165, 0.19);
+  position: relative;
+  overflow: hidden;
+  margin-block: 0.12rem;
+  border: 1px solid rgba(92, 66, 31, 0.16);
+  background: linear-gradient(90deg, var(--ds-permission-soft), transparent 76%) !important;
+  color: #18364b !important;
+}
+
+html[data-ui-plugin='grand-line-logbook'] .ds-composer-permission-option::before {
+  content: '';
+  position: absolute;
+  inset: 0.48rem auto 0.48rem 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--ds-permission-accent);
+  opacity: 0.72;
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option:is(:hover, [aria-checked='true']) {
+  border-color: var(--ds-permission-accent);
+  background: linear-gradient(90deg, var(--ds-permission-selected), var(--ds-permission-soft) 64%, transparent) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 247, 218, 0.38);
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[aria-checked='true']::before {
+  inset-block: 0.28rem;
+  width: 4px;
+  opacity: 1;
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option-icon {
+  border-color: var(--ds-permission-accent) !important;
+  background: var(--ds-permission-soft) !important;
+  color: var(--ds-permission-accent) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 248, 225, 0.2);
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option-label {
+  color: inherit;
+  font-weight: 720;
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option-description {
+  color: #67563e !important;
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option-check {
+  color: var(--ds-permission-accent);
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='always-ask'] {
+  --ds-permission-accent: #247da5;
+  --ds-permission-soft: rgba(36, 125, 165, 0.11);
+  --ds-permission-selected: rgba(36, 125, 165, 0.22);
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='read-only'] {
+  --ds-permission-accent: #287f69;
+  --ds-permission-soft: rgba(40, 127, 105, 0.11);
+  --ds-permission-selected: rgba(40, 127, 105, 0.22);
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='sensitive-ask'] {
+  --ds-permission-accent: #9a6a12;
+  --ds-permission-soft: rgba(154, 106, 18, 0.12);
+  --ds-permission-selected: rgba(154, 106, 18, 0.24);
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='workspace-write'] {
+  --ds-permission-accent: #5368a5;
+  --ds-permission-soft: rgba(83, 104, 165, 0.11);
+  --ds-permission-selected: rgba(83, 104, 165, 0.22);
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='trusted-workspace'] {
+  --ds-permission-accent: #167c73;
+  --ds-permission-soft: rgba(22, 124, 115, 0.11);
+  --ds-permission-selected: rgba(22, 124, 115, 0.22);
+}
+
+html[data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='bypass'] {
+  --ds-permission-accent: #a43d31;
+  --ds-permission-soft: rgba(164, 61, 49, 0.11);
+  --ds-permission-selected: rgba(164, 61, 49, 0.23);
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-menu {
+  border-color: #c99743 !important;
+  background:
+    repeating-linear-gradient(0deg, rgba(230, 191, 116, 0.035) 0 1px, transparent 1px 1.45rem),
+    linear-gradient(145deg, #123f5c, #061f35) !important;
+  color: #f5e3bc;
+  box-shadow:
+    inset 0 0 0 1px rgba(242, 207, 139, 0.14),
+    0 18px 48px rgba(0, 10, 20, 0.48) !important;
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option {
+  border-color: rgba(220, 174, 86, 0.14);
+  color: #f5e3bc !important;
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option-description {
+  color: #d8c192 !important;
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='always-ask'] {
+  --ds-permission-accent: #67c4eb;
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='read-only'] {
+  --ds-permission-accent: #62d1b5;
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='sensitive-ask'] {
+  --ds-permission-accent: #f2c45c;
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='workspace-write'] {
+  --ds-permission-accent: #aebcff;
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='trusted-workspace'] {
+  --ds-permission-accent: #65dfce;
+}
+
+html[data-theme='dark'][data-ui-plugin='grand-line-logbook']
+  .ds-composer-permission-option[data-permission-mode='bypass'] {
+  --ds-permission-accent: #ff9480;
 }
 
 html[data-ui-plugin-scene-chrome-composer='grand-line'] .ds-composer-primary-action {
