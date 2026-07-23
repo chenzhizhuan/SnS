@@ -14,7 +14,7 @@
   &nbsp;·&nbsp;
   <strong>简体中文</strong>
   &nbsp;·&nbsp;
-  <a href="https://github.com/KunAgent/Kun/releases">下载</a>
+  <a href="https://github.com/SnSAgent/SnS/releases">下载</a>
   &nbsp;·&nbsp;
   <a href="#文档地图">文档</a>
   &nbsp;·&nbsp;
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/KunAgent/Kun/releases"><img src="https://img.shields.io/github/v/release/KunAgent/Kun?label=release" alt="GitHub release"></a>
+  <a href="https://github.com/SnSAgent/SnS/releases"><img src="https://img.shields.io/github/v/release/SnSAgent/SnS?label=release" alt="GitHub release"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue" alt="License: PolyForm Noncommercial 1.0.0"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/Electron-43-47848F?logo=electron&logoColor=white" alt="Electron 43">
@@ -136,7 +136,7 @@ Kun 追求的是“完整能力 + 极致性价比”。需求先行的流程比�
 
 ### 路径 A：下载发布版
 
-前往 [GitHub Releases](https://github.com/KunAgent/Kun/releases) 下载最新版本。
+前往 [GitHub Releases](https://github.com/SnSAgent/SnS/releases) 下载最新版本。
 
 | 平台 | 安装包 | 架构 |
 | --- | --- | --- |
@@ -166,7 +166,7 @@ Kun 追求的是“完整能力 + 极致性价比”。需求先行的流程比�
 | 模型服务凭据 | DeepSeek / Xiaomi MiMo / MiniMax / 自定义 Provider 至少一个 |
 
 ```bash
-git clone https://github.com/KunAgent/Kun.git
+git clone https://github.com/SnSAgent/SnS.git
 cd Kun
 npm install
 npm run dev
@@ -235,7 +235,7 @@ npm install --registry=https://registry.npmmirror.com
 
 感谢 [LobsterAI](https://github.com/netease-youdao/LobsterAI)、DeepSeek、Xiaomi MiMo、MiniMax，以及所有提交 issue、建议、代码和文档的贡献者。
 
-<a href="https://github.com/KunAgent/Kun/graphs/contributors">
+<a href="https://github.com/SnSAgent/SnS/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=KunAgent/Kun" alt="Kun contributors" />
 </a>
 

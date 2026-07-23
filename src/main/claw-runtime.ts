@@ -234,16 +234,16 @@ function imCommandHelpText(settings: AppSettingsV1): string {
       '- `/help`：查看命令帮助',
       '- `/new`：当前 IM 连接开启新话题',
       '- `/clear`：等同于 `/new`，当前 IM 连接开启新话题',
-      '- `/stop`：停止当前 Kun 会话里正在运行的任务',
-      '- `/pwd`：查看当前 Kun 会话工作目录本地路径',
-      '- `/usage`：查看当前 Kun 会话 token 消耗、供应商和模型',
-      '- `/list-skills`：查看当前 Kun 可用技能',
-      '- `/list-mcp`：查看当前 Kun MCP 服务器',
-      '- `/list-goal`：查看当前 Kun 会话目标',
-      '- `/goal <目标>`：设置当前 Kun 会话目标',
-      '- `/list-threads`：列出最近的 Kun 会话',
-      '- `/current`：查看当前 IM 会话连接的 Kun 会话',
-      '- `/switch <序号|thread id>`：切换当前 IM 会话到指定 Kun 会话',
+      '- `/stop`：停止当前 SnS 会话里正在运行的任务',
+      '- `/pwd`：查看当前 SnS 会话工作目录本地路径',
+      '- `/usage`：查看当前 SnS 会话 token 消耗、供应商和模型',
+      '- `/list-skills`：查看当前 SnS 可用技能',
+      '- `/list-mcp`：查看当前 SnS MCP 服务器',
+      '- `/list-goal`：查看当前 SnS 会话目标',
+      '- `/goal <目标>`：设置当前 SnS 会话目标',
+      '- `/list-threads`：列出最近的 SnS 会话',
+      '- `/current`：查看当前 IM 会话连接的 SnS 会话',
+      '- `/switch <序号|thread id>`：切换当前 IM 会话到指定 SnS 会话',
       '- `/list-model`：查看所有可用文本模型',
       '- `/model <序号>`：按 `/list-model` 列出的序号切换当前 IM 连接模型',
       '命令前缀可以从 `/` 改成 `-`，例如 `-new`、`-list-threads`、`-switch 2`。'
@@ -254,16 +254,16 @@ function imCommandHelpText(settings: AppSettingsV1): string {
     '- `/help`: show command help',
     '- `/new`: start a new topic for this IM connection',
     '- `/clear`: same as `/new`, start a new topic for this IM connection',
-    '- `/stop`: stop the running task in the current Kun conversation',
-    '- `/pwd`: show the local workspace path for the current Kun conversation',
-    '- `/usage`: show token usage plus provider/model for the current Kun conversation',
-    '- `/list-skills`: list available Kun skills',
-    '- `/list-mcp`: list Kun MCP servers',
-    '- `/list-goal`: show the current Kun conversation goal',
-    '- `/goal <objective>`: set the current Kun conversation goal',
-    '- `/list-threads`: list recent Kun conversations',
-    '- `/current`: show the Kun conversation connected to this IM chat',
-    '- `/switch <number|thread id>`: switch this IM chat to a Kun conversation',
+    '- `/stop`: stop the running task in the current SnS conversation',
+    '- `/pwd`: show the local workspace path for the current SnS conversation',
+    '- `/usage`: show token usage plus provider/model for the current SnS conversation',
+    '- `/list-skills`: list available SnS skills',
+    '- `/list-mcp`: list SnS MCP servers',
+    '- `/list-goal`: show the current SnS conversation goal',
+    '- `/goal <objective>`: set the current SnS conversation goal',
+    '- `/list-threads`: list recent SnS conversations',
+    '- `/current`: show the SnS conversation connected to this IM chat',
+    '- `/switch <number|thread id>`: switch this IM chat to a SnS conversation',
     '- `/list-model`: list all available text models',
     '- `/model <number>`: switch this IM connection to a model listed by `/list-model`',
     'The command prefix can be changed from `/` to `-`, for example `-new`, `-list-threads`, or `-switch 2`.'
@@ -356,9 +356,9 @@ function imKunErrorText(_settings: AppSettingsV1, message: string): string {
 
 function imKunSystemText(message: string): string {
   const trimmed = message.trim()
-  if (trimmed.startsWith('[Kun]')) return trimmed
-  if (trimmed.startsWith('Kun:')) return `[Kun] ${trimmed.slice('Kun:'.length).trim()}`
-  return `[Kun] ${trimmed}`
+  if (trimmed.startsWith('[SnS]')) return trimmed
+  if (trimmed.startsWith('SnS:')) return `[SnS] ${trimmed.slice('SnS:'.length).trim()}`
+  return `[SnS] ${trimmed}`
 }
 
 type ImSkillSummary = {
@@ -416,8 +416,8 @@ function parseSkillsResponse(body: string): { enabled: boolean; skills: ImSkillS
 function imSkillListText(settings: AppSettingsV1, enabled: boolean, skills: readonly ImSkillSummary[]): string {
   if (!enabled) {
     return isChineseLocale(settings)
-      ? 'Kun 技能当前未启用。'
-      : 'Kun skills are currently disabled.'
+      ? 'SnS 技能当前未启用。'
+      : 'SnS skills are currently disabled.'
   }
   if (skills.length === 0) {
     return isChineseLocale(settings)
@@ -434,7 +434,7 @@ function imSkillListText(settings: AppSettingsV1, enabled: boolean, skills: read
     ? (isChineseLocale(settings) ? `还有 ${skills.length - rows.length} 个技能未显示。` : `${skills.length - rows.length} more skills not shown.`)
     : ''
   return [
-    isChineseLocale(settings) ? '可用 Kun 技能：' : 'Available Kun skills:',
+    isChineseLocale(settings) ? '可用 SnS 技能：' : 'Available SnS skills:',
     ...rows,
     ...(extra ? [extra] : [])
   ].join('\n')
@@ -503,8 +503,8 @@ function parseThreadUsageResponse(body: string, threadId: string): ImThreadUsage
 function imMcpListText(settings: AppSettingsV1, servers: readonly ImMcpServerSummary[]): string {
   if (servers.length === 0) {
     return isChineseLocale(settings)
-      ? '当前没有配置 Kun MCP 服务器。'
-      : 'No Kun MCP servers are configured.'
+      ? '当前没有配置 SnS MCP 服务器。'
+      : 'No SnS MCP servers are configured.'
   }
   const rows = servers.map((server, index) => {
     const state = server.available
@@ -518,21 +518,21 @@ function imMcpListText(settings: AppSettingsV1, servers: readonly ImMcpServerSum
     return `- ${index + 1}. \`${server.id}\` ${state}${transport}${tools}${error}`
   })
   return [
-    isChineseLocale(settings) ? 'Kun MCP 服务器：' : 'Kun MCP servers:',
+    isChineseLocale(settings) ? 'SnS MCP 服务器：' : 'SnS MCP servers:',
     ...rows
   ].join('\n')
 }
 
 function imWorkspaceText(settings: AppSettingsV1, threadId: string, workspace: string): string {
   return isChineseLocale(settings)
-    ? `当前 Kun 会话 \`${threadId}\` 的工作目录：\n\`${workspace}\``
-    : `Workspace for current Kun conversation \`${threadId}\`:\n\`${workspace}\``
+    ? `当前 SnS 会话 \`${threadId}\` 的工作目录：\n\`${workspace}\``
+    : `Workspace for current SnS conversation \`${threadId}\`:\n\`${workspace}\``
 }
 
 function imWorkspaceMissingText(settings: AppSettingsV1, threadId: string): string {
   return imKunErrorText(settings, isChineseLocale(settings)
-    ? `没有读取到当前 Kun 会话 \`${threadId}\` 的工作目录。`
-    : `Could not read the workspace path for current Kun conversation \`${threadId}\`.`)
+    ? `没有读取到当前 SnS 会话 \`${threadId}\` 的工作目录。`
+    : `Could not read the workspace path for current SnS conversation \`${threadId}\`.`)
 }
 
 function imMarkdownLines(lines: string[]): string {
@@ -552,7 +552,7 @@ function imUsageText(
   const costText = costParts.length > 0 ? costParts.join(' · ') : (isChineseLocale(settings) ? '无' : 'none')
   if (isChineseLocale(settings)) {
     return imMarkdownLines([
-      `当前 Kun 会话：\`${threadId}\``,
+      `当前 SnS 会话：\`${threadId}\``,
       `供应商：\`${model.provider.id}\``,
       `模型：\`${model.model}\``,
       `Token 消耗：total ${usage.totalTokens} · input ${usage.promptTokens} · output ${usage.completionTokens}`,
@@ -562,7 +562,7 @@ function imUsageText(
     ])
   }
   return imMarkdownLines([
-    `Current Kun conversation: \`${threadId}\``,
+    `Current SnS conversation: \`${threadId}\``,
     `Provider: \`${model.provider.id}\``,
     `Model: \`${model.model}\``,
     `Token usage: total ${usage.totalTokens} · input ${usage.promptTokens} · output ${usage.completionTokens}`,
@@ -592,15 +592,15 @@ function parseGoalResponse(body: string): ImGoalSummary | null {
 
 function imNoCurrentThreadText(settings: AppSettingsV1): string {
   return imKunErrorText(settings, isChineseLocale(settings)
-    ? '当前 IM 会话还没有绑定 Kun 会话。先发送普通消息创建会话，或用 `/list-threads` 和 `/switch` 切换到已有会话。'
-    : 'This IM chat is not connected to a Kun conversation yet. Send a normal message to create one, or use `/list-threads` and `/switch` to pick one.')
+    ? '当前 IM 会话还没有绑定 SnS 会话。先发送普通消息创建会话，或用 `/list-threads` 和 `/switch` 切换到已有会话。'
+    : 'This IM chat is not connected to a SnS conversation yet. Send a normal message to create one, or use `/list-threads` and `/switch` to pick one.')
 }
 
 function imGoalText(settings: AppSettingsV1, goal: ImGoalSummary | null): string {
   if (!goal) {
     return isChineseLocale(settings)
-      ? '当前 Kun 会话还没有设置目标。使用 `/goal <目标>` 设置。'
-      : 'The current Kun conversation has no goal yet. Set one with `/goal <objective>`.'
+      ? '当前 SnS 会话还没有设置目标。使用 `/goal <目标>` 设置。'
+      : 'The current SnS conversation has no goal yet. Set one with `/goal <objective>`.'
   }
   const status = goal.status ? ` · ${goal.status}` : ''
   const tokens = typeof goal.tokensUsed === 'number' ? ` · ${goal.tokensUsed} tokens` : ''
@@ -677,8 +677,8 @@ function imThreadListText(
 ): string {
   if (threads.length === 0) {
     return isChineseLocale(settings)
-      ? '还没有找到可切换的 Kun 会话。先发送普通消息创建会话，或发送 `/new` 开启新话题。'
-      : 'No switchable Kun conversations were found yet. Send a normal message to create one, or send `/new` to start a new topic.'
+      ? '还没有找到可切换的 SnS 会话。先发送普通消息创建会话，或发送 `/new` 开启新话题。'
+      : 'No switchable SnS conversations were found yet. Send a normal message to create one, or send `/new` to start a new topic.'
   }
   const rows = threads.map((thread, index) => {
     const marker = thread.id === currentThreadId ? '*' : '-'
@@ -687,15 +687,15 @@ function imThreadListText(
   })
   if (isChineseLocale(settings)) {
     return [
-      currentThreadId ? `当前会话：\`${currentThreadId}\`。` : '当前还没有绑定 Kun 会话。',
-      '最近 Kun 会话：',
+      currentThreadId ? `当前会话：\`${currentThreadId}\`。` : '当前还没有绑定 SnS 会话。',
+      '最近 SnS 会话：',
       ...rows,
       '切换会话：`/switch <序号|thread id>`。新话题：`/new`。'
     ].join('\n')
   }
   return [
-    currentThreadId ? `Current conversation: \`${currentThreadId}\`.` : 'No Kun conversation is connected yet.',
-    'Recent Kun conversations:',
+    currentThreadId ? `Current conversation: \`${currentThreadId}\`.` : 'No SnS conversation is connected yet.',
+    'Recent SnS conversations:',
     ...rows,
     'Switch with `/switch <number|thread id>`. Start fresh with `/new`.'
   ].join('\n')
@@ -709,18 +709,18 @@ function imCurrentThreadText(
 ): string {
   if (!currentThreadId) {
     return imKunErrorText(settings, isChineseLocale(settings)
-      ? '当前 IM 会话还没有绑定 Kun 会话。发送普通消息会创建一个新会话。'
-      : 'This IM chat is not connected to a Kun conversation yet. Send a normal message to create one.')
+      ? '当前 IM 会话还没有绑定 SnS 会话。发送普通消息会创建一个新会话。'
+      : 'This IM chat is not connected to a SnS conversation yet. Send a normal message to create one.')
   }
   if (!thread) {
     return imKunErrorText(settings, isChineseLocale(settings)
-      ? `当前绑定的 Kun 会话是 \`${currentThreadId}\`，但线程列表里暂时没有读取到它。`
+      ? `当前绑定的 SnS 会话是 \`${currentThreadId}\`，但线程列表里暂时没有读取到它。`
       : `This IM chat is connected to \`${currentThreadId}\`, but it was not found in the thread list.`)
   }
   const status = thread.status?.trim() ? ` · ${thread.status.trim()}` : ''
   const text = isChineseLocale(settings)
-    ? `当前 Kun 会话：\`${thread.id}\` ${imThreadTitle(thread)}${status}。`
-    : `Current Kun conversation: \`${thread.id}\` ${imThreadTitle(thread)}${status}.`
+    ? `当前 SnS 会话：\`${thread.id}\` ${imThreadTitle(thread)}${status}。`
+    : `Current SnS conversation: \`${thread.id}\` ${imThreadTitle(thread)}${status}.`
   return shared ? `${text}\n\n${imSharedThreadWarningText(settings)}` : text
 }
 
@@ -748,14 +748,14 @@ function imThreadSwitchNotFoundText(settings: AppSettingsV1, target: string): st
 
 function imSharedThreadWarningText(settings: AppSettingsV1): string {
   return isChineseLocale(settings)
-    ? '注意：这个 Kun 会话也被其他 IM 会话持有。Kun 不会对共享会话做 IM 侧并发控制，请不要在多个 IM 里同时对话。'
-    : 'Note: this Kun conversation is also held by another IM chat. Kun does not add IM-side concurrency control for shared conversations, so avoid chatting into it from multiple IM chats at the same time.'
+    ? '注意：这个 SnS 会话也被其他 IM 会话持有。SnS 不会对共享会话做 IM 侧并发控制，请不要在多个 IM 里同时对话。'
+    : 'Note: this SnS conversation is also held by another IM chat. SnS does not add IM-side concurrency control for shared conversations, so avoid chatting into it from multiple IM chats at the same time.'
 }
 
 function imThreadSwitchedText(settings: AppSettingsV1, thread: ThreadRecordJson, shared: boolean): string {
   const text = isChineseLocale(settings)
-    ? `已切换到 Kun 会话 \`${thread.id}\`：${imThreadTitle(thread)}。后续消息会继续这个上下文。`
-    : `Switched to Kun conversation \`${thread.id}\`: ${imThreadTitle(thread)}. Future messages will continue that context.`
+    ? `已切换到 SnS 会话 \`${thread.id}\`：${imThreadTitle(thread)}。后续消息会继续这个上下文。`
+    : `Switched to SnS conversation \`${thread.id}\`: ${imThreadTitle(thread)}. Future messages will continue that context.`
   return shared ? `${text}\n\n${imSharedThreadWarningText(settings)}` : text
 }
 
@@ -783,14 +783,14 @@ function hasOtherImThreadBinding(
 
 function imStopNoRunningTurnText(settings: AppSettingsV1): string {
   return imKunErrorText(settings, isChineseLocale(settings)
-    ? '当前 Kun 会话没有正在运行的任务。'
-    : 'The current Kun conversation has no running task.')
+    ? '当前 SnS 会话没有正在运行的任务。'
+    : 'The current SnS conversation has no running task.')
 }
 
 function imStopSucceededText(settings: AppSettingsV1, turnId: string): string {
   return isChineseLocale(settings)
-    ? `Kun 已停止当前任务：\`${turnId}\`。`
-    : `Kun stopped the current task: \`${turnId}\`.`
+    ? `SnS 已停止当前任务：\`${turnId}\`。`
+    : `SnS stopped the current task: \`${turnId}\`.`
 }
 
 /**
@@ -799,11 +799,11 @@ function imStopSucceededText(settings: AppSettingsV1, turnId: string): string {
  */
 export function imWelcomeText(settings: AppSettingsV1, channel?: ClawImChannelV1): string {
   const profile = channel?.agentProfile
-  const name = profile?.name.trim() || channel?.label.trim() || 'Kun'
+  const name = profile?.name.trim() || channel?.label.trim() || 'SnS'
   const description = profile?.description.trim() ?? ''
   if (isChineseLocale(settings)) {
     return [
-      `你好，我是 ${name}，通过 Kun 连接到这个对话的 AI 助手。`,
+      `你好，我是 ${name}，通过 SnS 连接到这个对话的 AI 助手。`,
       ...(description ? [description] : []),
       '你可以直接发消息让我帮忙：回答问题、查资料、读写已连接电脑工作区里的文件、生成文档等，完成后我会在这里回复你。',
       imCommandHelpText(settings),
@@ -811,7 +811,7 @@ export function imWelcomeText(settings: AppSettingsV1, channel?: ClawImChannelV1
     ].join('\n\n')
   }
   return [
-    `Hi, I am ${name}, an AI assistant connected to this chat through Kun.`,
+    `Hi, I am ${name}, an AI assistant connected to this chat through SnS.`,
     ...(description ? [description] : []),
     'Send me a message and I will handle it on the connected computer: answering questions, research, reading and writing workspace files, generating documents — I reply here once done.',
     imCommandHelpText(settings),
@@ -2052,7 +2052,7 @@ export class ClawRuntime {
         { method: 'GET' }
       )
       if (!detailRes.ok) {
-        this.deps.logError('claw-feishu', 'Failed to read recent generated files from Kun thread', {
+        this.deps.logError('claw-feishu', 'Failed to read recent generated files from SnS thread', {
           ...context,
           threadId: targetThreadId,
           message: runtimeErrorMessage(detailRes, 'Failed to read thread result.')
@@ -2065,7 +2065,7 @@ export class ClawRuntime {
         maxFiles: 3
       })
     } catch (error) {
-      this.deps.logError('claw-feishu', 'Failed to inspect Kun thread for recent generated files', {
+      this.deps.logError('claw-feishu', 'Failed to inspect SnS thread for recent generated files', {
         ...context,
         threadId: targetThreadId,
         message: errorMessage(error)
@@ -2240,7 +2240,7 @@ export class ClawRuntime {
   private async handleWebhook(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       if (this.stopController.signal.aborted) {
-        writeJson(res, 503, { ok: false, message: 'Kun: Claw runtime is stopping.' })
+        writeJson(res, 503, { ok: false, message: 'SnS: Claw runtime is stopping.' })
         return
       }
       const settings = await this.deps.store.load()
@@ -2249,22 +2249,22 @@ export class ClawRuntime {
       if (url.pathname === '/claw/internal/gui-plan/create' && req.method === 'POST') {
         // The legacy `gui_plan_create` MCP bridge is no longer the
         // active plan path. GUI plan creation now flows through the
-        // native Kun `create_plan` tool. Reject legacy calls
+        // native SnS `create_plan` tool. Reject legacy calls
         // loudly so older clients see a clear migration error.
         writeJson(res, 410, {
           ok: false,
           code: 'gui_plan_create_retired',
           message:
-            'Kun: The /claw/internal/gui-plan/create endpoint is no longer active. Use the Kun create_plan tool.'
+            'SnS: The /claw/internal/gui-plan/create endpoint is no longer active. Use the SnS create_plan tool.'
         })
         return
       }
       if (req.method !== 'POST' || url.pathname !== im.path) {
-        writeJson(res, 404, { ok: false, message: 'Kun: Not found.' })
+        writeJson(res, 404, { ok: false, message: 'SnS: Not found.' })
         return
       }
       if (!settings.claw.enabled || !im.enabled) {
-        writeJson(res, 503, { ok: false, message: 'Kun: Claw IM webhook is disabled.' })
+        writeJson(res, 503, { ok: false, message: 'SnS: Claw IM webhook is disabled.' })
         return
       }
       if (im.secret) {
@@ -2274,7 +2274,7 @@ export class ClawRuntime {
         const rawHeaderSecret = req.headers['x-kun-secret'] ?? req.headers['x-deepseek-gui-secret']
         const headerSecret = Array.isArray(rawHeaderSecret) ? rawHeaderSecret[0] : rawHeaderSecret
         if (auth !== `Bearer ${im.secret}` && headerSecret !== im.secret) {
-          writeJson(res, 401, { ok: false, message: 'Kun: Unauthorized.' })
+          writeJson(res, 401, { ok: false, message: 'SnS: Unauthorized.' })
           return
         }
       }
@@ -2282,12 +2282,12 @@ export class ClawRuntime {
       const body = await readRequestBody(req)
       const payload = parseJsonObject(body)
       if (!payload) {
-        writeJson(res, 400, { ok: false, message: 'Kun: Expected a JSON object.' })
+        writeJson(res, 400, { ok: false, message: 'SnS: Expected a JSON object.' })
         return
       }
       const prompt = extractIncomingPrompt(payload)
       if (!prompt) {
-        writeJson(res, 400, { ok: false, message: 'Kun: No message text found.' })
+        writeJson(res, 400, { ok: false, message: 'SnS: No message text found.' })
         return
       }
       const sender = extractSenderLabel(payload)
@@ -2416,7 +2416,7 @@ export class ClawRuntime {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       this.deps.logError('claw-webhook', 'Claw IM webhook request failed', { message })
-      writeJson(res, 500, { ok: false, message: 'Kun: Internal server error.' })
+      writeJson(res, 500, { ok: false, message: 'SnS: Internal server error.' })
     }
   }
 }

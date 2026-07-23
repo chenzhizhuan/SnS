@@ -590,7 +590,7 @@ export function ExtensionViewOutlet({
   onClose?: () => void
 }): ReactElement {
   if (contribution.owner.kind !== 'extension') {
-    return <div role="alert">Built-in Views are rendered by their owning Kun component.</div>
+    return <div role="alert">Built-in Views are rendered by their owning SnS component.</div>
   }
   if (
     contribution.point !== 'message.resultPreviews' &&

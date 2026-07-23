@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
-import type { KunGuiApi } from '../shared/kun-gui-api'
+import type { KunGuiApi } from '../shared/sns-gui-api'
 import { registerExtensionContentScriptPreload } from './extension-content-script'
 
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })

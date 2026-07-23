@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next'
 import type { AttachmentReference, RuntimeConnectionStatus, ChatBlock } from '../../agent/types'
 import type { CoreRuntimeSkillJson } from '../../agent/kun-contract'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
-import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ModelProviderModelGroup } from '@shared/sns-gui-api'
 import {
   useWriteWorkspaceStore,
   writeRelativeToWorkspace

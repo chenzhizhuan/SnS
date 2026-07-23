@@ -60,7 +60,7 @@ export type ExtensionMediaPickerContext = ExtensionMediaBindingContext & {
 
 /**
  * Runs the import picker entirely in Electron Main. Paths and the protected
- * operation token only cross the authenticated Main-to-Kun route.
+ * operation token only cross the authenticated Main-to-SnS route.
  */
 export async function pickExtensionMediaFiles(
   context: ExtensionMediaPickerContext,
@@ -142,7 +142,7 @@ export async function pickExtensionMediaSaveTarget(
   if (!target) {
     throw new ExtensionMediaPickerError(
       'MEDIA_REGISTRATION_FAILED',
-      'Kun did not register the selected export destination.'
+      'SnS did not register the selected export destination.'
     )
   }
   return MediaPickSaveTargetResultSchema.parse({ outcome: 'selected', target })
@@ -306,7 +306,7 @@ async function registerSelections(
   } catch {
     throw new ExtensionMediaPickerError(
       'MEDIA_REGISTRATION_FAILED',
-      'Kun returned an invalid protected media registration response.'
+      'SnS returned an invalid protected media registration response.'
     )
   }
   return ExtensionMediaSelectionRegistrationResultSchema.parse(payload).selections
@@ -358,7 +358,7 @@ function cleanupFailure(
   context.onCleanupFailure?.({ selectionCount })
   return new ExtensionMediaPickerError(
     'MEDIA_REGISTRATION_FAILED',
-    'Kun could not confirm rollback of a protected media selection.'
+    'SnS could not confirm rollback of a protected media selection.'
   )
 }
 
@@ -366,10 +366,10 @@ function safeRuntimeFailure(result: RuntimeRequestResult): string {
   try {
     const payload = JSON.parse(result.body) as { code?: unknown }
     if (typeof payload.code === 'string' && /^[a-z0-9_-]{1,128}$/i.test(payload.code)) {
-      return `Kun rejected protected media registration (${payload.code}).`
+      return `SnS rejected protected media registration (${payload.code}).`
     }
   } catch {
     // Fall through to an intentionally path-free status message.
   }
-  return `Kun rejected protected media registration (HTTP ${result.status}).`
+  return `SnS rejected protected media registration (HTTP ${result.status}).`
 }

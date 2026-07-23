@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { ArchiveRestore, FolderOpen, Loader2 } from 'lucide-react'
-import type { LegacySessionDetectResult } from '@shared/kun-gui-api'
+import type { LegacySessionDetectResult } from '@shared/sns-gui-api'
 import { compactHomePathForSettingsDisplay } from '../lib/settings-home-paths'
 import { InlineNoticeView, SettingsCard, SettingRow, type InlineNotice } from './settings-controls'
 

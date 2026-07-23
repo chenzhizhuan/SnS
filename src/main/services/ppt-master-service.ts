@@ -23,7 +23,7 @@ const COMMAND_TIMEOUT_MS = 15 * 60 * 1000
 const MAX_COMMAND_OUTPUT = 24_000
 const INSTALL_METADATA_FILE = '.kun-ppt-master.json'
 const UPSTREAM_ENTRY_FILE = 'PPT_MASTER_UPSTREAM.md'
-const MANAGED_BY = 'kun-gui'
+const MANAGED_BY = 'sns-gui'
 // The Write integration exposes only Markdown -> SVG -> PPTX. Installing the
 // upstream catch-all requirements would also pull PDF, EPUB, notebook, web,
 // narration, image-generation, and preview-server stacks (including a ~24 MB

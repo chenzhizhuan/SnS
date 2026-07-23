@@ -255,7 +255,7 @@ export class DataMigrationImportOrchestrator {
           preflight: runtimePreflight
         })
       } else if (runtimeEntry) {
-        throw new Error('Kun runtime import client is unavailable for this package')
+        throw new Error('SnS runtime import client is unavailable for this package')
       }
 
       const applicationSteps = await this.applicationSteps({

@@ -156,7 +156,7 @@ function createKunChildLogCapture(pid: number | undefined): KunChildLogCapture {
 
   const writeLine = (stream: KunLogStream, message: string): void => {
     pending = pending
-      .then(() => appendManagedLogLine('kun', formatKunLogLine(stream, pid, message)))
+      .then(() => appendManagedLogLine('sns', formatKunLogLine(stream, pid, message)))
       .catch(() => undefined)
   }
 
@@ -538,7 +538,7 @@ async function killStaleKunOnPort(port: number): Promise<boolean> {
     }
     if (!command.includes('serve-entry')) continue
     void appendManagedLogLine(
-      'kun',
+      'sns',
       formatKunLogLine('lifecycle', pid, `killing stale kun process holding port ${port}`)
     )
     if (await terminateStalePid(pid)) reclaimed = true

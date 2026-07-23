@@ -1,17 +1,20 @@
 import i18n from '../i18n'
 
-const DEFAULT_WORKSPACE_LABEL = 'Kun'
+const DEFAULT_WORKSPACE_LABEL = 'SnS'
 
 function normalizePathForMatch(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
 
-// Treat both current and legacy default workspace paths as the app workspace.
-// Older installs can keep the ~/.deepseekgui path until migration completes.
+// Treat current and legacy default workspace paths as the app workspace.
+// Current is ~/.sns; older installs can keep ~/.kun or ~/.deepseekgui until
+// migration completes.
 function isDefaultWorkspacePath(path: string): boolean {
   const normalized = normalizePathForMatch(path)
   return (
-    normalized === '~/.kun/default_workspace'
+    normalized === '~/.sns/default_workspace'
+    || normalized.endsWith('/.sns/default_workspace')
+    || normalized === '~/.kun/default_workspace'
     || normalized.endsWith('/.kun/default_workspace')
     || normalized === '~/.deepseekgui/default_workspace'
     || normalized.endsWith('/.deepseekgui/default_workspace')

@@ -5,7 +5,7 @@ import { basename, join } from 'node:path'
 import { clipboard } from 'electron'
 import sharp from 'sharp'
 import { z } from 'zod'
-import type { RuntimeRequestResult } from '../../shared/kun-gui-api'
+import type { RuntimeRequestResult } from '../../shared/sns-gui-api'
 import type {
   RuntimeImageAttachmentMetadata,
   RuntimeImageAttachmentSource,

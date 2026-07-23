@@ -24,7 +24,7 @@ type ClawScheduleMcpConfigPaths = {
 }
 
 export function resolveKunConfigPath(): string {
-  return join(homedir(), '.kun', 'config.toml')
+  return join(homedir(), '.sns', 'config.toml')
 }
 
 export function resolveDeepseekConfigPath(): string {
@@ -32,7 +32,7 @@ export function resolveDeepseekConfigPath(): string {
 }
 
 export function resolveKunMcpJsonPath(): string {
-  return join(homedir(), '.kun', 'mcp.json')
+  return join(homedir(), '.sns', 'mcp.json')
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -202,7 +202,7 @@ async function readJsonFile(path: string): Promise<unknown | null> {
     return JSON.parse(raw) as unknown
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`Failed to parse Kun MCP config at ${path}: ${message}`, { cause: error })
+    throw new Error(`Failed to parse SnS MCP config at ${path}: ${message}`, { cause: error })
   }
 }
 

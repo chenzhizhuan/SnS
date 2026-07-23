@@ -1,4 +1,4 @@
-import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
+import type { KunRuntimeStatusPayload } from '@shared/sns-gui-api'
 
 export function shouldSuppressRuntimeErrorBanner(
   status: KunRuntimeStatusPayload | null | undefined

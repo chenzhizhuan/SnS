@@ -1,4 +1,4 @@
-# Kun Contribution Guide: Architecture, design patterns and code organization ideas
+# SnS Contribution Guide: Architecture, design patterns and code organization ideas
 
 > Applicable to: Any engineer who wants to contribute code to the `kun/` package.
 > Reading path: For your first contribution, you can read the entire text in order; come back later to find specific chapters.

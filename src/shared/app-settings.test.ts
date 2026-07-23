@@ -89,9 +89,9 @@ describe('application locale settings', () => {
     expect(normalizeAppSettings({ ...settings(), locale }).locale).toBe(locale)
   })
 
-  it('falls back to English for an unsupported persisted locale', () => {
+  it('falls back to the default Chinese locale for an unsupported persisted locale', () => {
     const input = { ...settings(), locale: 'fr' } as unknown as AppSettingsV1
-    expect(normalizeAppSettings(input).locale).toBe('en')
+    expect(normalizeAppSettings(input).locale).toBe('zh')
   })
 })
 

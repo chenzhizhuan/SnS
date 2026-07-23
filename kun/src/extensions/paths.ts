@@ -18,8 +18,8 @@ export class ExtensionPaths {
   readonly downloadsRoot: string
 
   constructor(options: ExtensionPathsOptions = {}) {
-    this.packageRoot = resolve(options.packageRoot ?? join(homedir(), '.kun', 'extensions'))
-    this.dataRoot = resolve(options.dataRoot ?? join(homedir(), '.kun', 'extension-data'))
+    this.packageRoot = resolve(options.packageRoot ?? join(homedir(), '.sns', 'extensions'))
+    this.dataRoot = resolve(options.dataRoot ?? join(homedir(), '.sns', 'extension-data'))
     this.registryFile = join(this.packageRoot, 'registry.json')
     this.stagingRoot = join(this.packageRoot, '.staging')
     this.downloadsRoot = join(this.packageRoot, '.downloads')

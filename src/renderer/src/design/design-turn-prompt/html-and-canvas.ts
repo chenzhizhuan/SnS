@@ -33,8 +33,8 @@ export function buildScreenTurnPrompt(options: ScreenTurnOptions): string {
     : `\`${options.artifactRelativePath}\``
   const lines = [
     options.basePath
-      ? `Kun is asking you to ITERATE on an existing screen design: "${options.screenName}".`
-      : `Kun is asking you to design a new screen: "${options.screenName}".`,
+      ? `SnS is asking you to ITERATE on an existing screen design: "${options.screenName}".`
+      : `SnS is asking you to design a new screen: "${options.screenName}".`,
     `Workspace: ${options.workspaceRoot}`,
     ...formatProjectDesignSystemLines(options),
     ...formatDesignTargetFrameLines(options.designContext),
@@ -325,8 +325,8 @@ export function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
   const placementFrameLabel = codeCanvasMode ? 'UI frame placeholders' : 'target screen frames'
   const lines = [
     codeCanvasMode
-      ? 'Kun is asking you to operate the Code sidebar whiteboard with the dedicated canvas tools.'
-      : 'Kun is asking you to operate the design canvas with the dedicated design tools.',
+      ? 'SnS is asking you to operate the Code sidebar whiteboard with the dedicated canvas tools.'
+      : 'SnS is asking you to operate the design canvas with the dedicated design tools.',
     `Workspace: ${options.workspaceRoot}`,
     ...formatProjectDesignSystemLines(options),
     ...formatCanvasTargetFrameLines(options.designContext, options.canvasSurface ?? 'design'),

@@ -4,7 +4,7 @@ import type {
   SseEndPayload,
   SseErrorPayload,
   SseEventPayload
-} from '@shared/kun-gui-api'
+} from '@shared/sns-gui-api'
 
 class RendererRuntimeClient {
   private cachedSettings: AppSettingsV1 | null = null

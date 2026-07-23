@@ -39,7 +39,7 @@ import {
   tokenPlanProviderId
 } from '@shared/app-settings'
 import type { ModelProviderPreset } from '@shared/model-provider-presets'
-import type { ModelProviderProbeResult } from '@shared/kun-gui-api'
+import type { ModelProviderProbeResult } from '@shared/sns-gui-api'
 import {
   AudioLines,
   ChevronDown,

@@ -38,7 +38,7 @@ import type {
   TurnCompleteNotificationPayload,
   UpstreamModelsResult,
   WorkspacePickResult
-} from '../../shared/kun-gui-api'
+} from '../../shared/sns-gui-api'
 import type { WorkspaceFileSaveAsResult } from '../../shared/workspace-file'
 import type { GuiUpdateDownloadResult, GuiUpdateInfo, GuiUpdateInstallResult, GuiUpdateState } from '../../shared/gui-update'
 import {
@@ -528,7 +528,7 @@ function runDesktopCommand(
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   // Seed the built-in "design system & craft" skill into ~/.kun/skills/ once.
-  void ensureBundledSkills(join(homedir(), '.kun'))
+  void ensureBundledSkills(join(homedir(), '.sns'))
   const {
     store,
     getMainWindow,
@@ -1253,7 +1253,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       }
     }
     const result = await ensurePptMaster({
-      kunHomeDir: join(homedir(), '.kun'),
+      kunHomeDir: join(homedir(), '.sns'),
       proxyUrl: resolveModelProviderProxyUrl(settings)
     })
     if (!result.ok) return result
@@ -1302,7 +1302,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
 
   ipcMain.handle('ui-plugin:list', async (event) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
-    const kunHomeDir = join(homedir(), '.kun')
+    const kunHomeDir = join(homedir(), '.sns')
     await ensureBundledUiPlugins(kunHomeDir)
     return { plugins: await listUiPlugins(kunHomeDir) }
   })
@@ -1322,7 +1322,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       return { canceled: true as const }
     }
     const result = await enqueueUiPluginOperation(() =>
-      installUiPluginFromDirectory(join(homedir(), '.kun'), sourceDir)
+      installUiPluginFromDirectory(join(homedir(), '.sns'), sourceDir)
     )
     if (!result.ok) {
       return { canceled: false as const, ok: false as const, errors: result.errors }
@@ -1345,14 +1345,14 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
           return { ok: false }
         }
       }
-      return { ok: await removeUiPlugin(join(homedir(), '.kun'), request.id) }
+      return { ok: await removeUiPlugin(join(homedir(), '.sns'), request.id) }
     })
   })
 
   ipcMain.handle('ui-plugin:load', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     const request = parseIpcPayload('ui-plugin:load', uiPluginIdPayloadSchema, payload)
-    const kunHomeDir = join(homedir(), '.kun')
+    const kunHomeDir = join(homedir(), '.sns')
     await ensureBundledUiPlugins(kunHomeDir)
     return loadUiPluginFigures(kunHomeDir, request.id)
   })
@@ -1365,7 +1365,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       payload
     )
     return enqueueUiPluginOperation(async () => {
-      const kunHomeDir = join(homedir(), '.kun')
+      const kunHomeDir = join(homedir(), '.sns')
       await ensureBundledUiPlugins(kunHomeDir)
       const loaded = await loadUiPluginFigures(kunHomeDir, request.id)
       if (!loaded.ok) return { ok: false as const, error: loaded.error }
@@ -2195,7 +2195,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
 }
 
 function isManagedPptMasterSkillRootDisabled(settings: AppSettingsV1): boolean {
-  const target = comparableSkillRootPath(join(homedir(), '.kun', 'skills'))
+  const target = comparableSkillRootPath(join(homedir(), '.sns', 'skills'))
   const disabledDirectories = [
     ...settings.claw.skills.disabledDirs,
     ...settings.schedule.skills.disabledDirs

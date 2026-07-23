@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClawImChannelV1 } from '@shared/app-settings'
-import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ModelProviderModelGroup } from '@shared/sns-gui-api'
 import { CLAW_MANAGED_INSTRUCTIONS_HEADING, MODEL_REASONING_EFFORTS } from '@shared/app-settings'
 import {
   MAX_COMPOSER_REASONING_EFFORTS,

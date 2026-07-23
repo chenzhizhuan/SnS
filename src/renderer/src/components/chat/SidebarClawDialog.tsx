@@ -24,7 +24,7 @@ import type {
   ClawImProvider,
   ClawRunMode
 } from '@shared/app-settings'
-import type { ClawImInstallQrResult } from '@shared/kun-gui-api'
+import type { ClawImInstallQrResult } from '@shared/sns-gui-api'
 import { confirmDialog } from '../../lib/confirm-dialog'
 import { clawModelSelectOptions, mergeClawModelOptions } from '../../lib/claw-model-options'
 import {

@@ -63,17 +63,19 @@ export type SettingsCredentialMigration = {
   ) => Promise<SettingsCredentialMigrationResult>
 }
 
-// 数据默认根目录从 ~/.deepseekgui 升级为 ~/.kun。老安装的既有目录由
-// legacy-data-migration.ts 在启动期搬迁并留兼容链接;settings 里存的旧
-// 绝对路径也在那里按迁移结果重写,这里只负责“新值”。
-const DEFAULT_WORKSPACE_ROOT = join(homedir(), '.kun', 'default_workspace')
+// 数据默认根目录历经 ~/.deepseekgui → ~/.kun → ~/.sns。老安装的既有目录由
+// legacy-data-migration.ts 在启动期整目录搬迁并留兼容 junction;settings 里存的
+// 旧绝对路径也在那里按迁移结果重写,这里只负责“新值”。
+const DEFAULT_WORKSPACE_ROOT = join(homedir(), '.sns', 'default_workspace')
 // 对话会话不绑定项目文件夹,每个新会话在此目录下自动创建时间戳子目录作为工作目录。
 // macOS/Windows 用系统 Documents 文件夹;Linux 没有 Documents 约定,改用 XDG 风格目录。
+// 品牌升级为 SnS 后目录名从 Kun 改为 SnS;老的 ~/Documents/Kun(及 Linux 变体)
+// 由 legacy-data-migration.ts 的 KUN_TO_SNS_HOME_MIGRATION_MAPPINGS 在启动期搬迁。
 const DEFAULT_CONVERSATION_WORKSPACE_ROOT_ABSOLUTE =
   process.platform === 'linux'
-    ? join(homedir(), '.local', 'share', 'Kun', 'conversations')
-    : join(homedir(), 'Documents', 'Kun')
-const DEFAULT_CLAW_CHANNELS_ROOT = join(homedir(), '.kun', 'claw')
+    ? join(homedir(), '.local', 'share', 'SnS', 'conversations')
+    : join(homedir(), 'Documents', 'SnS')
+const DEFAULT_CLAW_CHANNELS_ROOT = join(homedir(), '.sns', 'claw')
 const DEFAULT_WRITE_WORKSPACE_ROOT_ABSOLUTE = expandHomePath(DEFAULT_WRITE_WORKSPACE_ROOT)
 const SETTINGS_FILE_NAME = 'kun-settings.json'
 // 旧版设置文件名。userData 整目录迁移后旧文件会原样留在新目录里,
@@ -228,7 +230,8 @@ async function ensureManagedWorkspaceRootsExist(settings: AppSettingsV1): Promis
 
 const defaultSettings = (): AppSettingsV1 => ({
   version: 1,
-  locale: 'en',
+  // 默认简体中文(与 app-settings-normalize 的 locale 兜底、i18n 引导语言一致)。
+  locale: 'zh',
   theme: 'system',
   uiFontScale: DEFAULT_UI_FONT_SCALE,
   chatContentMaxWidthPx: DEFAULT_CHAT_CONTENT_MAX_WIDTH_PX,
@@ -373,11 +376,11 @@ async function replaceInvalidSettingsWithDefaults(
   await store.save(defaults)
   if (backupPath) {
     console.warn(
-      `[kun-gui] Invalid settings were replaced with defaults (${reason}). Backup: ${backupPath}`
+      `[sns-gui] Invalid settings were replaced with defaults (${reason}). Backup: ${backupPath}`
     )
   } else {
     console.warn(
-      `[kun-gui] Invalid settings were replaced with defaults (${reason}). Backup could not be written for ${sourcePath}.`
+      `[sns-gui] Invalid settings were replaced with defaults (${reason}). Backup could not be written for ${sourcePath}.`
     )
   }
   return defaults
@@ -475,7 +478,7 @@ export class JsonSettingsStore {
     if (this.options.credentialMigration && hasLegacyProviderPlaintext(prepared)) {
       const backupPath = await writeLegacyCredentialSettingsBackup(sourcePath, raw)
       if (!backupPath) {
-        console.warn('[kun-gui] Legacy credential migration deferred because the settings backup could not be written.')
+        console.warn('[sns-gui] Legacy credential migration deferred because the settings backup could not be written.')
         this.cache = prepared
         return this.cache
       }
@@ -499,7 +502,7 @@ export class JsonSettingsStore {
         await this.persistSettings(migration.persistedSettings)
       } catch (error) {
         await migration.rollback().catch(() => undefined)
-        console.warn('[kun-gui] Legacy credential migration settings commit failed; plaintext settings remain authoritative.', {
+        console.warn('[sns-gui] Legacy credential migration settings commit failed; plaintext settings remain authoritative.', {
           message: error instanceof Error ? error.message : String(error)
         })
         this.cache = prepared
@@ -507,7 +510,7 @@ export class JsonSettingsStore {
       }
     }
     await migration.commit().catch((error) => {
-      console.warn('[kun-gui] Legacy credential migration commit marker is pending recovery.', {
+      console.warn('[sns-gui] Legacy credential migration commit marker is pending recovery.', {
         message: error instanceof Error ? error.message : String(error)
       })
     })
@@ -543,7 +546,7 @@ export class JsonSettingsStore {
       throw error
     }
     await migration.commit().catch((error) => {
-      console.warn('[kun-gui] Legacy credential migration commit marker is pending recovery.', {
+      console.warn('[sns-gui] Legacy credential migration commit marker is pending recovery.', {
         message: error instanceof Error ? error.message : String(error)
       })
     })
@@ -591,7 +594,7 @@ export class JsonSettingsStore {
       return await this.options.credentialMigration.prepare(settings, { replaceCommitted })
     } catch (error) {
       if (replaceCommitted) throw error
-      console.warn('[kun-gui] Legacy credential migration is unavailable; retaining compatibility settings.', {
+      console.warn('[sns-gui] Legacy credential migration is unavailable; retaining compatibility settings.', {
         message: error instanceof Error ? error.message : String(error)
       })
       return null

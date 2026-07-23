@@ -97,14 +97,16 @@ if (releaseArtifactVersion && !artifactVersionPattern.test(releaseArtifactVersio
 }
 
 module.exports = {
-  // appId 永远保持旧值,即使品牌已改名 Kun:
+  // SnS 独立品牌启用后 appId 切换为 app.sns.gui(此前为
+  // com.xingyuzhong.deepseekgui)。注意 appId 变更的影响:
+  //  - Windows 端 NSIS 以 appId 派生卸载 GUID,新 id 会被当成全新应用,
+  //    不会覆盖/升级基于旧 id 的历史安装(SnS 作为独立分支即为预期);
   //  - macOS 端 Squirrel.Mac 校验更新包签名时锚定 bundle identifier,
-  //    换了 id 老版本会拒绝安装新版本;
-  //  - Windows 端 NSIS 以 appId 派生卸载 GUID,换了 id 升级安装不会
-  //    卸载旧版本,用户会装出两份应用;
-  //  - macOS TCC 权限、通知授权也都挂在这个 id 上。
-  appId: 'com.xingyuzhong.deepseekgui',
-  productName: 'Kun',
+  //    macOS TCC 权限、通知授权也都挂在这个 id 上,同样视为全新身份;
+  //  - userData 目录由 productName(SnS)决定,不受 appId 影响,数据不丢。
+  // main 进程的 AppUserModelId(src/main/index.ts)必须与此保持一致。
+  appId: 'app.sns.gui',
+  productName: 'SnS',
   asar: true,
   asarUnpack: [
     '**/kun/dist/**/*',
@@ -185,7 +187,7 @@ module.exports = {
       filter: ['**/*']
     }
   ],
-  artifactName: `Kun-${artifactVersion}-\${os}-\${arch}.\${ext}`,
+  artifactName: `SnS-${artifactVersion}-\${os}-\${arch}.\${ext}`,
   publish: [
     {
       provider: 'generic',
@@ -208,7 +210,7 @@ module.exports = {
     entitlementsInherit: 'build/entitlements.mac.inherit.plist',
     extendInfo: {
       // 语音输入：渲染进程通过 getUserMedia 录音做语音转文字。
-      NSMicrophoneUsageDescription: 'Kun uses the microphone for voice-to-text input.'
+      NSMicrophoneUsageDescription: 'SnS uses the microphone for voice-to-text input.'
     },
     // macOS 不会自动套圆角遮罩,图标文件本身需要是「圆角方块 + 透明边距」
     icon: './src/asset/img/kun_mac.png',
@@ -240,8 +242,8 @@ module.exports = {
     // 明确创建快捷方式；always 在覆盖安装时也会重建（即使用户曾删掉桌面图标）
     createDesktopShortcut: 'always',
     createStartMenuShortcut: true,
-    shortcutName: 'Kun',
-    uninstallDisplayName: 'Kun',
+    shortcutName: 'SnS',
+    uninstallDisplayName: 'SnS',
     deleteAppDataOnUninstall: false
   },
   linux: {

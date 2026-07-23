@@ -5,8 +5,8 @@
   "name": "presentation-studio",
   "publisher": "kun-examples",
   "version": "0.1.10",
-  "displayName": "Kun PPT",
-  "description": "A revision-aware Kun PPT display HTML workspace for people and the main Kun Agent.",
+  "displayName": "SnS PPT",
+  "description": "A revision-aware SnS PPT display HTML workspace for people and the main SnS Agent.",
   "license": "MIT",
   "engines": {
     "kun": ">=0.1.0"
@@ -29,7 +29,7 @@
     "commands": [
       {
         "id": "presentation-create",
-        "title": "Kun PPT: Create Deck",
+        "title": "SnS PPT: Create Deck",
         "description": "Create a new root-level standalone HTML presentation.",
         "inputSchema": {
           "type": "object",
@@ -54,7 +54,7 @@
       },
       {
         "id": "presentation-load",
-        "title": "Kun PPT: Load Deck",
+        "title": "SnS PPT: Load Deck",
         "description": "Load a root-level standalone HTML presentation.",
         "inputSchema": {
           "type": "object",
@@ -74,7 +74,7 @@
       },
       {
         "id": "presentation-save",
-        "title": "Kun PPT: Save Operations",
+        "title": "SnS PPT: Save Operations",
         "description": "Save one revision-aware batch of visual presentation operations.",
         "inputSchema": {
           "type": "object",
@@ -93,7 +93,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 128,
-              "description": "Optional idempotency key. Kun derives one from the tool invocation when omitted."
+              "description": "Optional idempotency key. SnS derives one from the tool invocation when omitted."
             },
             "operations": {
               "type": "array",
@@ -924,7 +924,7 @@
       },
       {
         "id": "presentation-export-copy",
-        "title": "Kun PPT: Export Copy",
+        "title": "SnS PPT: Export Copy",
         "description": "Copy the current revision to another root-level HTML presentation.",
         "inputSchema": {
           "type": "object",
@@ -958,7 +958,7 @@
     "views.rightSidebar": [
       {
         "id": "studio",
-        "title": "Kun PPT",
+        "title": "SnS PPT",
         "entry": "dist/webview/index.html",
         "icon": "assets/presentation-studio.svg",
         "order": 40,
@@ -1529,7 +1529,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 128,
-              "description": "Optional idempotency key. Kun derives one from the tool invocation when omitted."
+              "description": "Optional idempotency key. SnS derives one from the tool invocation when omitted."
             },
             "operations": {
               "type": "array",

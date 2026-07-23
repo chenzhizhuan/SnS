@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import type { DesktopCommand } from '@shared/kun-gui-api'
+import type { DesktopCommand } from '@shared/sns-gui-api'
 import {
   findKeyboardShortcutCommand,
   keyboardEventToShortcut,

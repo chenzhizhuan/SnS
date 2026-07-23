@@ -1,4 +1,4 @@
-import type { SkillRootListItem } from '@shared/kun-gui-api'
+import type { SkillRootListItem } from '@shared/sns-gui-api'
 import { parseUsageResponse } from '../hooks/usage-response'
 import { parseMcpConfigText, type McpFormServer } from './mcp/mcp-config-form'
 

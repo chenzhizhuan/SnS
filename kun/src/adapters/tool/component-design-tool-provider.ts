@@ -437,9 +437,10 @@ export function hardenComponentPrototypeHtml(content: string): string {
   if (!/<body\b[^>]*>/i.test(trimmed) || !/<\/body\s*>/i.test(trimmed)) {
     throw new Error('component prototype must contain a complete body element')
   }
-  if (!/<meta\b[^>]*name\s*=\s*(["'])kun-component-prototype\1[^>]*>/i.test(trimmed)) {
-    throw new Error('component prototype is missing the kun-component-prototype marker')
-  }
+  // 标识 meta 仅用于识别原型文件(无安全含义),模型偶尔会漏加。
+  // 缺失时不再判定失败,改为在下方与 CSP 一起由工具补注入。
+  const hasComponentMarker =
+    /<meta\b[^>]*name\s*=\s*(["'])kun-component-prototype\1[^>]*>/i.test(trimmed)
   const roots = trimmed.match(/<[a-z][^>]*\sdata-kun-component-root(?:\s*=\s*(?:["'][^"']*["']|[^\s>]+))?[^>]*>/gi) ?? []
   if (roots.length !== 1) throw new Error('component prototype must contain exactly one data-kun-component-root')
   if (FORBIDDEN_EMBED_RE.test(trimmed)) throw new Error('component prototype contains a forbidden embedded document')
@@ -451,7 +452,8 @@ export function hardenComponentPrototypeHtml(content: string): string {
 
   const withoutExistingCsp = trimmed.replace(CSP_META_RE, '')
   const csp = `<meta http-equiv="Content-Security-Policy" content="${OFFLINE_CSP}">`
-  return `${withoutExistingCsp.replace(/<head\b([^>]*)>/i, `<head$1>\n  ${csp}`)}\n`
+  const marker = hasComponentMarker ? '' : '\n  <meta name="kun-component-prototype" content="1">'
+  return `${withoutExistingCsp.replace(/<head\b([^>]*)>/i, `<head$1>${marker}\n  ${csp}`)}\n`
 }
 
 async function persistComponentPrototypeHtml(

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { net } from 'electron'
 import type { AppSettingsV1, ClawImChannelV1 } from '../shared/app-settings'
-import type { ClawImTelegramConnectErrorCode } from '../shared/kun-gui-api'
+import type { ClawImTelegramConnectErrorCode } from '../shared/sns-gui-api'
 import type { JsonSettingsStore } from './settings-store'
 
 /**

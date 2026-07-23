@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { KunGuiApi } from '@shared/kun-gui-api'
+import type { KunGuiApi } from '@shared/sns-gui-api'
 import type { DesignArtifact } from '../design-types'
 import { useDesignWorkspaceStore } from '../design-workspace-store'
 import { svgArtifactStatusForSource } from './svg-artifact-status'

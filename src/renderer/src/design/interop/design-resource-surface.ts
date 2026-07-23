@@ -282,7 +282,7 @@ function resourceCounts(resources: readonly DesignResourceDescriptor[]): Record<
 
 export function buildDesignResourceSurface(options: BuildDesignResourceSurfaceOptions): DesignResourceSurface {
   const documentId = options.document?.id ?? options.canvasDocument.graph?.projectId ?? 'kun-design'
-  const title = options.document?.title ?? 'Kun design project'
+  const title = options.document?.title ?? 'SnS design project'
   const withoutBoard = [
     ...buildFrameResources(options, documentId),
     ...buildAssetResources(options.canvasDocument, documentId),

@@ -140,6 +140,29 @@ export function isComposerDirectoryReference(
   return reference.type === 'directory'
 }
 
+const IMAGE_REFERENCE_EXTENSIONS: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif'
+}
+
+/**
+ * 图片型文件引用不能当文本读(二进制),需走图片附件通道。返回其 MIME(按扩展名),
+ * 非图片或目录返回 null。判定用 name/relativePath/path 任一后缀。
+ */
+export function imageMimeTypeForReference(
+  reference: Pick<ComposerFileReference, 'name' | 'relativePath' | 'path' | 'type'>
+): string | null {
+  if (reference.type === 'directory') return null
+  const source = (reference.name || reference.relativePath || reference.path || '').toLowerCase()
+  for (const [ext, mime] of Object.entries(IMAGE_REFERENCE_EXTENSIONS)) {
+    if (source.endsWith(ext)) return mime
+  }
+  return null
+}
+
 export function isFileWithinDirectory(fileRelativePath: string, dirRelativePath: string): boolean {
   const dir = normalizeForCompare(dirRelativePath)
   if (!dir) return true

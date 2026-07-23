@@ -11,7 +11,7 @@ import type {
   ModelProviderModelProfileV1,
   ModelReasoningEffort
 } from '@shared/app-settings'
-import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ModelProviderModelGroup } from '@shared/sns-gui-api'
 import { KUN_RUNTIME_TOOLS_PATH } from '@shared/kun-endpoints'
 import type { CoreRuntimeToolDiagnosticsJson } from '../../agent/kun-contract'
 import { rendererRuntimeClient } from '../../agent/runtime-client'

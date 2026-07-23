@@ -5,7 +5,7 @@
  * when the runtime is crashing faster than it can recover.
  */
 
-import type { KunRuntimeStatusPayload } from '../shared/kun-gui-api'
+import type { KunRuntimeStatusPayload } from '../shared/sns-gui-api'
 import { ManagedRuntimeOperationCoordinator } from './runtime/managed-runtime-operation-coordinator'
 
 /** Shared with preload/renderer; the payload travels over `runtime:status`. */

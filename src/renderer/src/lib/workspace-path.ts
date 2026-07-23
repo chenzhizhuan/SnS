@@ -2,12 +2,14 @@ function normalizePathForMatch(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
 
-// 品牌升级后默认目录在 ~/.kun 下;老版本/迁移失败的机器上仍可能出现
-// ~/.deepseekgui 形式,这里对两套路径都要认,并归一到同一个身份键,
-// 避免同一个默认工作区在侧栏里出现两份。
+// 品牌升级后默认目录在 ~/.sns 下;老版本/迁移失败的机器上仍可能出现
+// ~/.kun 或更早的 ~/.deepseekgui 形式,这里对三代路径都要认,并归一到
+// 同一个身份键,避免同一个默认工作区在侧栏里出现多份。
 function isDefaultWorkspacePath(normalized: string): boolean {
   return (
-    normalized === '~/.kun/default_workspace'
+    normalized === '~/.sns/default_workspace'
+    || normalized.endsWith('/.sns/default_workspace')
+    || normalized === '~/.kun/default_workspace'
     || normalized.endsWith('/.kun/default_workspace')
     || normalized === '~/.deepseekgui/default_workspace'
     || normalized.endsWith('/.deepseekgui/default_workspace')
@@ -19,7 +21,7 @@ export function workspaceRootIdentityKey(path?: string): string {
   if (!trimmed) return ''
   const normalized = normalizePathForMatch(trimmed)
   if (isDefaultWorkspacePath(normalized)) {
-    return '~/.kun/default_workspace'
+    return '~/.sns/default_workspace'
   }
   return normalized
 }
@@ -62,14 +64,19 @@ export function isClawWorkspacePath(path?: string): boolean {
   const trimmed = path?.trim() ?? ''
   if (!trimmed) return false
   const normalized = normalizePathForMatch(trimmed)
-  return normalized.includes('/.kun/claw/') || normalized.includes('/.deepseekgui/claw/')
+  return (
+    normalized.includes('/.sns/claw/')
+    || normalized.includes('/.kun/claw/')
+    || normalized.includes('/.deepseekgui/claw/')
+  )
 }
 
-// 对话会话不绑定项目文件夹,默认在 ~/Documents/Kun(macOS/Windows)或
-// ~/.local/share/Kun/conversations(Linux)下按时间戳创建工作目录。
+// 对话会话不绑定项目文件夹,默认在 ~/Documents/SnS(macOS/Windows)或
+// ~/.local/share/SnS/conversations(Linux)下按时间戳创建工作目录。
+// (品牌升级前为 Kun;老目录由 main 层启动迁移搬走并改写 settings。)
 export function defaultConversationWorkspaceRoot(): string {
   const platform = typeof window !== 'undefined' && window.kunGui?.platform ? window.kunGui.platform : ''
-  return platform === 'linux' ? '~/.local/share/Kun/conversations' : '~/Documents/Kun'
+  return platform === 'linux' ? '~/.local/share/SnS/conversations' : '~/Documents/SnS'
 }
 // 兼容旧引用;动态取值。
 export const DEFAULT_CONVERSATION_WORKSPACE_ROOT = defaultConversationWorkspaceRoot()
@@ -105,7 +112,11 @@ export function isInternalDeepSeekGuiWorkspace(path?: string): boolean {
   if (!trimmed) return false
   const normalized = normalizePathForMatch(trimmed)
   return (
-    normalized === '~/.kun/write_workspace'
+    normalized === '~/.sns/write_workspace'
+    || normalized.endsWith('/.sns/write_workspace')
+    || normalized === '~/.sns/design-workspace'
+    || normalized.endsWith('/.sns/design-workspace')
+    || normalized === '~/.kun/write_workspace'
     || normalized.endsWith('/.kun/write_workspace')
     || normalized === '~/.kun/design-workspace'
     || normalized.endsWith('/.kun/design-workspace')

@@ -166,7 +166,7 @@ export function buildPenpotHandoffPackage(options: BuildPenpotHandoffPackageOpti
     updatedAt: options.updatedAt ?? new Date().toISOString(),
     document: {
       id: options.document?.id ?? 'kun-design',
-      title: options.document?.title ?? 'Kun design project',
+      title: options.document?.title ?? 'SnS design project',
       artifactCount: artifacts.length
     },
     graph: {

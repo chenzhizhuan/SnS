@@ -215,6 +215,19 @@ export function buildInitialSetupSettingsPatch(
   return diffSettingsPatch(settings, buildInitialSetupSettings(settings, drafts, selection))
 }
 
+/**
+ * locale / theme 是引导页通过 updateForm 直接改在 form 上的 UI 字段。因为
+ * buildInitialSetupSettingsPatch 以 form 自身为 diff 基准,这两个相对“持久化
+ * 设置”的改动会被 diff 掉,导致引导页选的语言/主题存不下(表现为设中文不生效)。
+ * 保存时用本函数把它们显式并回 patch,确保随设置一起持久化。
+ */
+export function withInitialSetupUiFields(
+  patch: AppSettingsPatch,
+  form: Pick<AppSettingsV1, 'locale' | 'theme'>
+): AppSettingsPatch {
+  return { ...patch, locale: form.locale, theme: form.theme }
+}
+
 function upsertPresetProfile(
   profiles: Map<string, ModelProviderProfileV1>,
   id: string,

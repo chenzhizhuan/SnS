@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
-import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
+import type { KunRuntimeStatusPayload } from '@shared/sns-gui-api'
 import { RuntimeStatusBanner } from './RuntimeStatusBanner'
 
 const storeState = vi.hoisted(() => ({

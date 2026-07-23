@@ -63,7 +63,7 @@ const SETTINGS_CLEAR_SENTINELS: Readonly<Record<string, string>> = {
   'agents.kun.contextCompaction.summaryProviderId': ''
 }
 
-export const DEFAULT_WORKSPACE_ROOT = '~/.kun/default_workspace'
+export const DEFAULT_WORKSPACE_ROOT = '~/.sns/default_workspace'
 
 export function splitSettingsList(raw: string): string[] {
   return raw

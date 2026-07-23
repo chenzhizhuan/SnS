@@ -12,7 +12,7 @@ import type {
   UserFileReference,
   UserInputAnswer
 } from '../agent/types'
-import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
+import type { KunRuntimeStatusPayload } from '@shared/sns-gui-api'
 import type {
   AppLocale,
   ClawImAgentProfileV1,
@@ -23,7 +23,7 @@ import type {
   ClawModel,
   ModelReasoningEffort
 } from '@shared/app-settings'
-import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ModelProviderModelGroup } from '@shared/sns-gui-api'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { ExtensionComposerContextEvent } from '@shared/extension-ipc'
 
@@ -179,7 +179,7 @@ export type ChatState = {
   initialSetupMode: InitialSetupMode
   workspaceRoot: string
   workspaceLabel: string
-  /** 对话会话的工作目录根(默认 ~/Documents/Kun),供侧边栏对话区块和项目保护使用。 */
+  /** 对话会话的工作目录根(默认 ~/Documents/SnS),供侧边栏对话区块和项目保护使用。 */
   conversationWorkspaceRoot: string
   runtimeConnection: RuntimeConnectionStatus
   runtimeStatus: KunRuntimeStatusPayload | null

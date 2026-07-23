@@ -77,11 +77,11 @@ function writeScript(name: string, content: string): string {
 async function readKunLog(): Promise<string> {
   if (!tempRoot) throw new Error('temp root not initialized')
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    const logFile = readdirSync(tempRoot).find((entry) => entry.startsWith('kun-') && entry.endsWith('.log'))
+    const logFile = readdirSync(tempRoot).find((entry) => entry.startsWith('sns-') && entry.endsWith('.log'))
     if (logFile) return readFileSync(join(tempRoot, logFile), 'utf8')
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
-  throw new Error('Expected a kun log file to be created')
+  throw new Error('Expected a sns log file to be created')
 }
 
 function canBindTestPort(port: number): Promise<boolean> {

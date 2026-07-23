@@ -464,7 +464,7 @@ export class ContributionRegistry {
         if (!extension.compatible) {
           diagnostics.push({
             code: 'CONTRIBUTION_INCOMPATIBLE',
-            message: `${id} is incompatible with the running Kun version`,
+            message: `${id} is incompatible with the running SnS version`,
             extensionId: extension.id,
             extensionVersion: extension.version,
             contributionId: id,

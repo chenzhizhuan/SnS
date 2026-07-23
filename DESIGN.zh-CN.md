@@ -966,7 +966,7 @@ on the system. It includes:
   `checkGuiUpdate`, `downloadGuiUpdate`, `installGuiUpdate`,
   `onGuiUpdateState`, `logError`, `getLogPath`, `openLogDir`).
 
-Every method on this surface is typed in `src/shared/kun-gui-api.ts`
+Every method on this surface is typed in `src/shared/sns-gui-api.ts`
 and validated at the IPC boundary by Zod schemas in
 `src/main/ipc/app-ipc-schemas.ts`.
 
@@ -1345,7 +1345,7 @@ If any check fails, the change is not ready.
 | Child process | `src/main/kun-process.ts` |
 | Settings | `src/main/settings-store.ts`, `src/shared/app-settings.ts` |
 | IPC | `src/main/ipc/register-app-ipc-handlers.ts`, `src/main/ipc/app-ipc-schemas.ts` |
-| kunGui API | `src/preload/index.ts`, `src/shared/kun-gui-api.ts` |
+| kunGui API | `src/preload/index.ts`, `src/shared/sns-gui-api.ts` |
 | Agent provider | `src/renderer/src/agent/kun-runtime.ts` |
 | DTO mapping | `src/renderer/src/agent/kun-mapper.ts` |
 | App shell | `src/renderer/src/AppShell.tsx` |

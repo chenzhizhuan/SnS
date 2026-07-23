@@ -1,8 +1,8 @@
 /** Public Google-compatible project theme source. */
 export const PROJECT_DESIGN_MD_PATH = 'DESIGN.md'
-/** Kun-generated project handoff. This is not a theme source. */
+/** SnS-generated project handoff. This is not a theme source. */
 export const PROJECT_DESIGN_HANDOFF_PATH = '.kun-design/HANDOFF.md'
-/** Compatibility-only path used by older Kun handoffs. */
+/** Compatibility-only path used by older SnS handoffs. */
 export const LEGACY_PROJECT_DESIGN_HANDOFF_PATH = '.kun-design/DESIGN.md'
 /** Compatibility-only migration source. It must never auto-render. */
 export const LEGACY_PROJECT_DESIGN_SYSTEM_PATH = '.kun-design/design-system.json'

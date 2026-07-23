@@ -280,7 +280,7 @@ describe('workspace editor icons', () => {
       expectedSha256: '0'.repeat(64)
     })).resolves.toEqual({
       ok: false,
-      message: 'Presentation changed after it was generated. Save it again in Kun PPT before opening.'
+      message: 'Presentation changed after it was generated. Save it again in SnS PPT before opening.'
     })
     expect(electronMock.openPath).not.toHaveBeenCalled()
   })

@@ -185,7 +185,7 @@ async function resolveLegacyApiKey(
     // keychain reset, profile restore, or copied data directory. One unreadable
     // legacy record must not make settings:set fail for a different provider:
     // keep that profile unhydrated so the user can replace its key explicitly.
-    console.warn('[kun-gui] Legacy provider credential could not be restored; the saved profile will require a new key.', {
+    console.warn('[sns-gui] Legacy provider credential could not be restored; the saved profile will require a new key.', {
       sourceId,
       message: error instanceof Error ? error.message : String(error)
     })

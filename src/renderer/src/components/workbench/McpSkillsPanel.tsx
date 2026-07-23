@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AppSettingsV1 } from '@shared/app-settings'
-import type { KunProjectConfigFileResult, SkillListItem } from '@shared/kun-gui-api'
+import type { KunProjectConfigFileResult, SkillListItem } from '@shared/sns-gui-api'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { useChatStore } from '../../store/chat-store'
 import {
@@ -253,7 +253,7 @@ export function McpSkillsPanel({ workspaceRoot = '', onOpenSettings }: Props): R
                 {scope === 'project' ? t('mcpSkillsPanel.currentWorkspace') : t('mcpSkillsPanel.globalConfig')}
               </div>
               <div className="mt-1 truncate text-[13px] font-semibold text-ds-ink">
-                {scope === 'project' ? workspaceName || t('mcpSkillsPanel.noWorkspace') : '~/.kun'}
+                {scope === 'project' ? workspaceName || t('mcpSkillsPanel.noWorkspace') : '~/.sns'}
               </div>
             </div>
             {scope === 'project' && workspaceRoot ? (

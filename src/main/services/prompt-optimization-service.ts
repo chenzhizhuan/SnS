@@ -12,7 +12,7 @@ import {
   type ModelEndpointFormat,
   type ModelProviderProfileV1
 } from '../../shared/app-settings'
-import type { PromptOptimizationResult } from '../../shared/kun-gui-api'
+import type { PromptOptimizationResult } from '../../shared/sns-gui-api'
 import { fetchWithOptionalProxy } from '../proxy-fetch'
 import {
   codexResponsesLiteInput,

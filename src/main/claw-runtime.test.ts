@@ -32,7 +32,7 @@ function buildSettings(): AppSettingsV1 {
       kun: defaultKunRuntimeSettings()
     },
     workspaceRoot: '/tmp/workspace',
-    conversationWorkspaceRoot: '~/Documents/Kun',
+    conversationWorkspaceRoot: '~/Documents/SnS',
     log: { enabled: true, retentionDays: 7 },
     checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },
@@ -222,7 +222,7 @@ describe('ClawRuntime', () => {
     expect(current().claw.channels[0].conversations[0].localThreadId).toBe('')
   })
 
-  it('lists available Kun skills for an incoming IM command', async () => {
+  it('lists available SnS skills for an incoming IM command', async () => {
     const settings = buildSettings()
     const { store } = mutableSettingsStore(settings)
     const runtimeRequest = vi.fn(async () => ({
@@ -262,7 +262,7 @@ describe('ClawRuntime', () => {
     expect(reply).toContain('Documents')
   })
 
-  it('lists Kun MCP servers for an incoming IM command', async () => {
+  it('lists SnS MCP servers for an incoming IM command', async () => {
     const settings = buildSettings()
     const { store } = mutableSettingsStore(settings)
     const runtimeRequest = vi.fn(async () => ({
@@ -314,7 +314,7 @@ describe('ClawRuntime', () => {
     expect(reply).toContain('connect failed')
   })
 
-  it('shows the current Kun thread workspace for an incoming IM command', async () => {
+  it('shows the current SnS thread workspace for an incoming IM command', async () => {
     const settings = buildSettings()
     settings.claw.channels = [
       buildChannel({
@@ -400,11 +400,11 @@ describe('ClawRuntime', () => {
       }
     })
 
-    expect(reply).toContain('[Kun]')
+    expect(reply).toContain('[SnS]')
     expect(reply).toContain('not connected')
   })
 
-  it('shows current Kun thread token usage with provider and model for an incoming IM command', async () => {
+  it('shows current SnS thread token usage with provider and model for an incoming IM command', async () => {
     const settings = buildSettings()
     settings.provider.providers = [buildModelProvider()]
     settings.claw.channels = [
@@ -493,7 +493,7 @@ describe('ClawRuntime', () => {
     expect(reply).toContain('output 45')
   })
 
-  it('returns a Kun-prefixed concrete error when an IM runtime command fails', async () => {
+  it('returns a SnS-prefixed concrete error when an IM runtime command fails', async () => {
     const settings = buildSettings()
     const { store } = mutableSettingsStore(settings)
     const runtimeRequest = vi.fn(async () => ({
@@ -514,10 +514,10 @@ describe('ClawRuntime', () => {
       ) => Promise<string | null>
     }).handleIncomingImCommandSafely(settings, { text: '/list-threads' })
 
-    expect(reply).toBe('[Kun] runtime is offline')
+    expect(reply).toBe('[SnS] runtime is offline')
   })
 
-  it('prefixes successful IM slash command replies as Kun system messages', async () => {
+  it('prefixes successful IM slash command replies as SnS system messages', async () => {
     const settings = buildSettings()
     const { store } = mutableSettingsStore(settings)
     const runtime = createClawRuntime({
@@ -533,11 +533,11 @@ describe('ClawRuntime', () => {
       ) => Promise<string | null>
     }).handleIncomingImCommandSafely(settings, { text: '/help' })
 
-    expect(reply).toMatch(/^\[Kun\] /)
+    expect(reply).toMatch(/^\[SnS\] /)
     expect(reply).toContain('/list-threads')
   })
 
-  it('shows the current Kun thread goal for an IM list-goal command', async () => {
+  it('shows the current SnS thread goal for an IM list-goal command', async () => {
     const settings = buildSettings()
     settings.claw.channels = [
       buildChannel({
@@ -601,7 +601,7 @@ describe('ClawRuntime', () => {
     expect(shown).toContain('Read document A')
   })
 
-  it('rejects empty and duplicate Kun thread goals for IM commands', async () => {
+  it('rejects empty and duplicate SnS thread goals for IM commands', async () => {
     const settings = buildSettings()
     settings.claw.channels = [
       buildChannel({
@@ -662,7 +662,7 @@ describe('ClawRuntime', () => {
       channel: settings.claw.channels[0],
       conversation: settings.claw.channels[0].conversations[0]
     })
-    expect(empty).toContain('[Kun]')
+    expect(empty).toContain('[SnS]')
     expect(empty).toContain('requires an objective')
 
     const changed = await handle(settings, {
@@ -671,14 +671,14 @@ describe('ClawRuntime', () => {
       conversation: settings.claw.channels[0].conversations[0]
     })
     expect(changed).toContain('already has a goal')
-    expect(changed).toContain('[Kun]')
+    expect(changed).toContain('[SnS]')
     expect(changed).toContain('Read document A')
     expect(runtimeRequest.mock.calls.some(([, path, init]) =>
       path === '/v1/threads/thr_goal/goal' && init.method === 'POST'
     )).toBe(false)
   })
 
-  it('sets a Kun thread goal when the current IM thread has none', async () => {
+  it('sets a SnS thread goal when the current IM thread has none', async () => {
     const settings = buildSettings()
     settings.claw.channels = [
       buildChannel({
@@ -809,7 +809,7 @@ describe('ClawRuntime', () => {
     )
   })
 
-  it('returns a Kun-prefixed error when there is no running IM turn to stop', async () => {
+  it('returns a SnS-prefixed error when there is no running IM turn to stop', async () => {
     const settings = buildSettings()
     settings.claw.channels = [
       buildChannel({
@@ -847,11 +847,11 @@ describe('ClawRuntime', () => {
       conversation: settings.claw.channels[0].conversations[0]
     })
 
-    expect(reply).toContain('[Kun]')
+    expect(reply).toContain('[SnS]')
     expect(reply).toContain('no running task')
   })
 
-  it('lists recent Kun threads for an incoming WeChat command', async () => {
+  it('lists recent SnS threads for an incoming WeChat command', async () => {
     const settings = buildSettings()
     settings.claw.im.provider = 'weixin'
     settings.claw.im.recentThreadListLimit = 3
@@ -924,7 +924,7 @@ describe('ClawRuntime', () => {
     expect(reply).toContain('Document A')
   })
 
-  it('switches the current WeChat conversation to a selected Kun thread', async () => {
+  it('switches the current WeChat conversation to a selected SnS thread', async () => {
     const settings = buildSettings()
     settings.claw.im.provider = 'weixin'
     settings.claw.channels = [
@@ -1105,7 +1105,7 @@ describe('ClawRuntime', () => {
       conversation: settings.claw.channels[0].conversations[0]
     })
 
-    expect(reply).toContain('[Kun]')
+    expect(reply).toContain('[SnS]')
     expect(reply).toContain('Could not find')
     expect(current().claw.channels[0].threadId).toBe('thr_old')
     expect(store.patch).not.toHaveBeenCalled()
@@ -1141,7 +1141,7 @@ describe('ClawRuntime', () => {
       ) => Promise<string | null>
     }).handleIncomingImCommand(settings, { text: '/switch 1' })
 
-    expect(reply).toContain('[Kun]')
+    expect(reply).toContain('[SnS]')
     expect(reply).not.toContain('Switched')
     expect(store.patch).not.toHaveBeenCalled()
   })
@@ -1651,7 +1651,7 @@ describe('ClawRuntime', () => {
     expect(turnBody).not.toHaveProperty('disableUserInput')
   })
 
-  it('reads assistant text from the Kun thread detail shape used by the real runtime', async () => {
+  it('reads assistant text from the SnS thread detail shape used by the real runtime', async () => {
     const settings = buildSettings()
     const runtimeRequest = vi.fn(async (_settings, path, init) => {
       if (path === '/v1/threads') {
@@ -1860,7 +1860,7 @@ describe('ClawRuntime', () => {
     expect(runtimeRequest).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith(
       'oc_chat_a',
-      { markdown: '[Kun] Started a new topic. The next message will create a fresh local conversation.' },
+      { markdown: '[SnS] Started a new topic. The next message will create a fresh local conversation.' },
       { replyTo: 'om_inbound', replyInThread: false }
     )
     expect(current().claw.channels[0].threadId).toBe('')
@@ -1919,7 +1919,7 @@ describe('ClawRuntime', () => {
     })
     expect(send).toHaveBeenCalledWith(
       'oc_chat_a',
-      { markdown: '[Kun] Claw IM model switched to `deepseek-v4-pro` with provider `deepseek`.' },
+      { markdown: '[SnS] Claw IM model switched to `deepseek-v4-pro` with provider `deepseek`.' },
       { replyTo: 'om_inbound', replyInThread: false }
     )
   })
@@ -1992,7 +1992,7 @@ describe('ClawRuntime', () => {
     })
     expect(send).toHaveBeenLastCalledWith(
       'oc_chat_a',
-      { markdown: expect.stringContaining('[Kun] Invalid model number `MiniMax-M3`.') },
+      { markdown: expect.stringContaining('[SnS] Invalid model number `MiniMax-M3`.') },
       { replyTo: 'om_model_name_switch', replyInThread: false }
     )
 
@@ -2008,7 +2008,7 @@ describe('ClawRuntime', () => {
     })
     expect(send).toHaveBeenLastCalledWith(
       'oc_chat_a',
-      { markdown: '[Kun] Claw IM model switched to `MiniMax-M3` with provider `minimax`.' },
+      { markdown: '[SnS] Claw IM model switched to `MiniMax-M3` with provider `minimax`.' },
       { replyTo: 'om_model_switch', replyInThread: false }
     )
   })
@@ -2274,7 +2274,7 @@ describe('ClawRuntime', () => {
     )
   })
 
-  it('resolves the default IM auto model to the current Kun model before starting a turn', async () => {
+  it('resolves the default IM auto model to the current SnS model before starting a turn', async () => {
     const settings = buildSettings()
     settings.claw.im.enabled = true
     settings.claw.im.responseTimeoutMs = 2_000
@@ -2356,7 +2356,7 @@ describe('ClawRuntime', () => {
     expect(result).toMatchObject({ ok: true, text: 'hello from mimo' })
   })
 
-  it('handles webhook /help as an IM command before starting a Kun turn', async () => {
+  it('handles webhook /help as an IM command before starting a SnS turn', async () => {
     const settings = buildSettings()
     settings.claw.im.enabled = true
     settings.claw.channels = [buildChannel({ provider: 'weixin' as const, id: 'channel_weixin' })]
@@ -2820,7 +2820,7 @@ describe('ClawRuntime', () => {
     expect(send).toHaveBeenCalledTimes(2)
     const welcomeCall = send.mock.calls[0] as unknown as [string, { markdown?: string }, Record<string, unknown>]
     expect(welcomeCall[0]).toBe('oc_chat_a')
-    expect(welcomeCall[1].markdown).toContain('Kun')
+    expect(welcomeCall[1].markdown).toContain('SnS')
     expect(welcomeCall[1].markdown).toContain('`/new`')
     expect(welcomeCall[1].markdown).toContain('`/list-model`')
     expect(welcomeCall[1].markdown).toContain('`/model <number>`')
@@ -3022,7 +3022,7 @@ describe('ClawRuntime', () => {
     }).handleWebhook(req, res)
 
     const reply = String(JSON.parse(responseBody).reply)
-    expect(reply).toContain('Kun')
+    expect(reply).toContain('SnS')
     expect(reply).toContain('`/new`')
     expect(reply.endsWith('hello from GUI')).toBe(true)
     expect(current().claw.channels[0].welcomeSentAt).toBeTruthy()

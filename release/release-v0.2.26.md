@@ -62,7 +62,7 @@
 
 ### 完整变更
 
-https://github.com/KunAgent/Kun/compare/v0.2.25...v0.2.26
+https://github.com/SnSAgent/SnS/compare/v0.2.25...v0.2.26
 
 ### 总结
 

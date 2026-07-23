@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SkillRootListItem } from '@shared/kun-gui-api'
+import type { SkillRootListItem } from '@shared/sns-gui-api'
 import {
   buildMcpConfig,
   buildRemoteMcpConfig,

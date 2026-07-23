@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ModelProviderModelGroup } from '@shared/sns-gui-api'
 import {
   buildComposerAssistantPickList,
   resolveComposerAssistantProviderId

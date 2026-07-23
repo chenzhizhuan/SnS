@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DESKTOP_COMMANDS } from '../../../shared/kun-gui-api'
+import { DESKTOP_COMMANDS } from '../../../shared/sns-gui-api'
 import { GUI_UPDATE_CHANNELS } from '../../../shared/gui-update'
 import { SPEECH_TRANSCRIPTION_MAX_BASE64_CHARS, SPEECH_TRANSCRIPTION_MAX_DURATION_MS } from '../../../shared/speech-to-text'
 import {

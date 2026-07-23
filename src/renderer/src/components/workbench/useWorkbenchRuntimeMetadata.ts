@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { SkillListItem } from '@shared/kun-gui-api'
+import type { SkillListItem } from '@shared/sns-gui-api'
 import type { CoreRuntimeInfoJson, CoreRuntimeSkillJson } from '../../agent/kun-contract'
 import { getProvider } from '../../agent/registry'
 

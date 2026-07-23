@@ -296,11 +296,11 @@ export function buildConversationExportDocument(options: {
     sections.push(section.join('\n\n'))
   }
 
-  const safeTitle = markdownHeadingText(options.title) || 'Kun'
+  const safeTitle = markdownHeadingText(options.title) || 'SnS'
   const exportedAt = formattedTime(options.exportedAt.toISOString(), options.locale)
   const header = `# ${safeTitle}\n\n> ${options.labels.exportedAt}: ${exportedAt}`
   const markdown = [header, ...sections].join('\n\n---\n\n') + '\n'
-  const fileTitle = singleLine(options.title).slice(0, 150) || 'Kun-conversation'
+  const fileTitle = singleLine(options.title).slice(0, 150) || 'SnS-conversation'
 
   return {
     markdown,

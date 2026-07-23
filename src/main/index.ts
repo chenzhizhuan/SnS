@@ -67,7 +67,7 @@ import {
 } from '../shared/app-settings'
 import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeErrorCode } from '../shared/runtime-error'
 import type { GuiUpdateState } from '../shared/gui-update'
-import type { TrayActionPayload } from '../shared/kun-gui-api'
+import type { TrayActionPayload } from '../shared/sns-gui-api'
 import { isAllowedDevPreviewUrl } from '../shared/dev-preview-url'
 import { isAuthorizedPrototypeFileUrl } from './services/prototype-embed-registry'
 import { fetchUpstreamModelIds } from './upstream-models'
@@ -169,10 +169,10 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 registerKunExtensionPlatformSchemesAsPrivileged(protocol)
-// 品牌升级为 Kun 后仍保留旧 AppUserModelId:它必须和 electron-builder
-// 的 appId 一致才能让 Windows 通知 / 任务栏分组在升级前后连续,而
-// appId 因为 NSIS 升级 GUID 与 macOS 更新签名校验的原因永远不改。
-const APP_USER_MODEL_ID = 'com.xingyuzhong.deepseekgui'
+// AppUserModelId 必须与 electron-builder 的 appId 保持一致,Windows 通知 /
+// 任务栏分组才会正确归属。SnS 独立品牌启用后一并切换为 app.sns.gui
+// (此前为 com.xingyuzhong.deepseekgui)。
+const APP_USER_MODEL_ID = 'app.sns.gui'
 const startupTraceEnabled =
   process.env.KUN_STARTUP_TRACE === '1' || process.env.DEEPSEEK_GUI_STARTUP_TRACE === '1'
 const startupTraceStart = Date.now()
@@ -254,7 +254,7 @@ configureAppIdentity()
 const legacyMigration = runLegacyKunDataMigration({
   userDataPath: app.getPath('userData'),
   homeDir: homedir(),
-  log: (message, detail) => console.warn(`[kun-gui] ${message}`, detail ?? '')
+  log: (message, detail) => console.warn(`[sns-gui] ${message}`, detail ?? '')
 })
 if (legacyMigration.userData.usedLegacyFallback) {
   app.setPath('userData', legacyMigration.userData.userDataPath)
@@ -333,7 +333,7 @@ async function runCheckpointCleanupIfDue(settings: AppSettingsV1): Promise<void>
     if (!cleanup.due) return
     const { result } = cleanup
     console.info(
-      `[kun-gui] git checkpoint cleanup scanned=${result.scanned} deleted=${result.deleted} kept=${result.kept} failed=${result.failed}`
+      `[sns-gui] git checkpoint cleanup scanned=${result.scanned} deleted=${result.deleted} kept=${result.kept} failed=${result.failed}`
     )
     if (result.failed > 0) {
       logWarn('git-checkpoint-cleanup', 'failed to delete some unused checkpoints', {
@@ -464,7 +464,7 @@ function windowCloseLabels(locale: AppSettingsV1['locale']): {
     return {
       title: '关闭窗口',
       message: '关闭窗口时要怎么处理？',
-      detail: '选择最小化到托盘时，Kun 会继续在后台运行；选择退出应用会结束后台服务。',
+      detail: '选择最小化到托盘时，SnS 会继续在后台运行；选择退出应用会结束后台服务。',
       minimizeToTray: '最小化到托盘',
       quit: '退出应用',
       cancel: '取消',
@@ -473,8 +473,8 @@ function windowCloseLabels(locale: AppSettingsV1['locale']): {
   }
   return {
     title: 'Close window',
-    message: 'What should Kun do when this window closes?',
-    detail: 'Minimize to tray keeps Kun running in the background. Quit app stops the background service.',
+    message: 'What should SnS do when this window closes?',
+    detail: 'Minimize to tray keeps SnS running in the background. Quit app stops the background service.',
     minimizeToTray: 'Minimize to tray',
     quit: 'Quit app',
     cancel: 'Cancel',
@@ -606,7 +606,7 @@ function syncTray(settings: AppSettingsV1): void {
     tray.on('right-click', showTrayMenu)
   }
 
-  tray.setToolTip('Kun')
+  tray.setToolTip('SnS')
   trayMenu = createTrayMenu(settings, [])
   tray.setContextMenu(null)
 }
@@ -651,7 +651,7 @@ async function promptWindowCloseAction(window: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.warn('[kun-gui] failed to handle close-window prompt:', error)
+    console.warn('[sns-gui] failed to handle close-window prompt:', error)
     logWarn('desktop-behavior', 'Failed to handle close-window prompt.', { message })
   } finally {
     closeWindowPromptOpen = false
@@ -696,7 +696,7 @@ async function showTurnCompleteNotification(
     return { ok: true, shown: false, reason: 'unsupported' }
   }
 
-  const title = normalizeNotificationText(payload.title, 'Kun', 80)
+  const title = normalizeNotificationText(payload.title, 'SnS', 80)
   const body = normalizeNotificationText(payload.body, 'Conversation complete.', 180)
 
   try {
@@ -854,7 +854,7 @@ function queueRuntimeSettingsApply(prev: AppSettingsV1, next: AppSettingsV1): vo
       }
     },
     (error: unknown) => {
-      logWarn('settings-apply', 'Failed to apply Kun runtime settings in background', {
+      logWarn('settings-apply', 'Failed to apply SnS runtime settings in background', {
         message: error instanceof Error ? error.message : String(error)
       })
     }
@@ -872,7 +872,7 @@ function queueRuntimeMcpConfigApply(settings: AppSettingsV1): void {
       }
     },
     (error: unknown) => {
-      logWarn('mcp-config', 'Failed to apply Kun MCP config change in background', {
+      logWarn('mcp-config', 'Failed to apply SnS MCP config change in background', {
         message: error instanceof Error ? error.message : String(error)
       })
     }
@@ -885,7 +885,7 @@ async function waitForQueuedRuntimeSettingsApply(): Promise<void> {
 
 /**
  * Build a stable fingerprint of the settings that affect the
- * Kun runtime so that `ensureRuntime` can debounce on real
+ * SnS runtime so that `ensureRuntime` can debounce on real
  * state instead of on a single in-flight promise. Without this,
  * a fresh call that arrives while a failing ensure is still pending
  * would re-throw the old error.
@@ -923,7 +923,7 @@ async function resolveManagedKunLaunchSettings(
 
   const next = await store.patch({ agents: { kun: { port: resolved.port } } })
   runtimeSupervisor.noteLatest(next)
-  logWarn(source, `Kun port ${runtime.port} is unavailable; using ${resolved.port} for the managed runtime`, {
+  logWarn(source, `SnS port ${runtime.port} is unavailable; using ${resolved.port} for the managed runtime`, {
     previousPort: runtime.port,
     port: resolved.port,
     message: resolved.message
@@ -948,7 +948,7 @@ async function ensureManagedKunRuntimeToken(
     agents: { kun: { runtimeToken: generateKunRuntimeToken() } }
   })
   runtimeSupervisor.noteLatest(next)
-  logWarn(source, 'Generated a runtime token for the managed Kun runtime because none was configured.')
+  logWarn(source, 'Generated a runtime token for the managed SnS runtime because none was configured.')
   return { settings: next, generated: true }
 }
 
@@ -956,7 +956,7 @@ async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1>
   const tokenResult = await ensureManagedKunRuntimeToken(settings, 'runtime-start')
   const currentSettings = tokenResult.settings
   if (tokenResult.generated && kunRuntimeAdapter.isChildRunning()) {
-    logWarn('runtime-start', 'Restarting managed Kun to apply the generated runtime token.')
+    logWarn('runtime-start', 'Restarting managed SnS to apply the generated runtime token.')
     await kunRuntimeAdapter.stopAndWait()
   }
 
@@ -976,13 +976,13 @@ async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1>
   if (!hasApiKey) {
     throw runtimeJsonError(
       'missing_api_key',
-      'DeepSeek API Key is required before the GUI can start Kun.'
+      'DeepSeek API Key is required before the GUI can start SnS.'
     )
   }
   if (!runtime.autoStart) {
     throw runtimeJsonError(
       'runtime_offline',
-      'Kun is offline. Enable automatic startup in Settings, or start `kun serve` manually.'
+      'SnS is offline. Enable automatic startup in Settings, or start `kun serve` manually.'
     )
   }
 
@@ -1012,7 +1012,7 @@ async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1>
       }
       logWarn(
         'runtime-start',
-        `managed Kun child stopped responding on port ${runtime.port}; restarting it in place`
+        `managed SnS child stopped responding on port ${runtime.port}; restarting it in place`
       )
       await kunRuntimeAdapter.stopAndWait()
     }
@@ -1023,14 +1023,14 @@ async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1>
   try {
     await adapter.ensureRunning(launchSettings)
   } catch (e) {
-    console.error('[kun-gui] failed to start kun:', e)
+    console.error('[sns-gui] failed to start kun:', e)
     throw e
   }
   const started = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000)
   if (!started) {
     throw runtimeJsonError(
       'runtime_unhealthy',
-      'Kun did not become healthy after launch.'
+      'SnS did not become healthy after launch.'
     )
   }
 
@@ -1057,13 +1057,13 @@ async function restartRuntimeOnce(settings: AppSettingsV1): Promise<void> {
   if (!resolveConfiguredApiKey(settings)) {
     throw runtimeJsonError(
       'missing_api_key',
-      'DeepSeek API Key is required before the GUI can start Kun.'
+      'DeepSeek API Key is required before the GUI can start SnS.'
     )
   }
   if (!runtime.autoStart) {
     throw runtimeJsonError(
       'runtime_offline',
-      'Kun is offline. Enable automatic startup in Settings, or start `kun serve` manually.'
+      'SnS is offline. Enable automatic startup in Settings, or start `kun serve` manually.'
     )
   }
 
@@ -1074,7 +1074,7 @@ async function restartRuntimeOnce(settings: AppSettingsV1): Promise<void> {
   try {
     await adapter.ensureRunning(launchSettings)
   } catch (e) {
-    console.error('[kun-gui] failed to restart kun:', e)
+    console.error('[sns-gui] failed to restart kun:', e)
     throw e
   }
 
@@ -1082,7 +1082,7 @@ async function restartRuntimeOnce(settings: AppSettingsV1): Promise<void> {
   if (!healthy) {
     throw runtimeJsonError(
       'runtime_unhealthy',
-      'Kun did not become healthy after restart.'
+      'SnS did not become healthy after restart.'
     )
   }
 
@@ -1168,7 +1168,7 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
 
   window.webContents.on('preload-error', (_event, preloadPath, error) => {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`[kun-gui] failed to load preload ${preloadPath}:`, error)
+    console.error(`[sns-gui] failed to load preload ${preloadPath}:`, error)
     logError('preload', 'Failed to load preload script', { preloadPath, message })
   })
   window.webContents.on('render-process-gone', (_event, details) => {
@@ -1178,7 +1178,7 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
       exitCode: details.exitCode,
       rendererProcessId
     }
-    console.error('[kun-gui] main renderer process exited unexpectedly:', detail)
+    console.error('[sns-gui] main renderer process exited unexpectedly:', detail)
     logError('renderer', 'Main renderer process exited unexpectedly.', detail)
     scheduleRendererRecovery('render-process-gone', detail)
   })
@@ -1195,7 +1195,7 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
         validatedURL,
         frameProcessId
       }
-      console.error('[kun-gui] main renderer failed to load:', detail)
+      console.error('[sns-gui] main renderer failed to load:', detail)
       logError('renderer', 'Main renderer failed to load.', detail)
       scheduleRendererRecovery('did-fail-load', detail)
     }
@@ -1260,7 +1260,7 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
 function validateRuntimeSettingsForApply(next: AppSettingsV1): string | null {
   const runtime = resolveKunRuntimeSettings(next)
   if (!Number.isInteger(runtime.port) || runtime.port < MIN_KUN_LOCAL_PORT || runtime.port > 65_535) {
-    return `Kun port must be an integer between ${MIN_KUN_LOCAL_PORT} and 65535 (got ${String(runtime.port)})`
+    return `SnS port must be an integer between ${MIN_KUN_LOCAL_PORT} and 65535 (got ${String(runtime.port)})`
   }
   const baseUrl = (runtime.baseUrl ?? '').trim()
   if (baseUrl) {
@@ -1354,13 +1354,13 @@ async function applyManagedRuntimeSettingsHot(
       return 'applied'
     }
     if (outcome.result === 'restart_required') {
-      logWarn(source, `Kun hot config apply requested restart: ${outcome.message}`)
+      logWarn(source, `SnS hot config apply requested restart: ${outcome.message}`)
       return 'restart_required'
     }
     throw new Error(outcome.message)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    logWarn(source, `Kun hot config apply failed; falling back to restart: ${message}`)
+    logWarn(source, `SnS hot config apply failed; falling back to restart: ${message}`)
     return 'restart_required'
   }
 }
@@ -1397,7 +1397,7 @@ async function restartManagedRuntimeForSettingsChange(
   if (!nextHasApiKey && Boolean(resolveConfiguredApiKey(prev))) {
     logWarn(
       'settings-apply',
-      'Skipping Kun restart: the new settings resolve to no API key but the running runtime had one — leaving the healthy runtime in place.'
+      'Skipping SnS restart: the new settings resolve to no API key but the running runtime had one — leaving the healthy runtime in place.'
     )
     return
   }
@@ -1408,7 +1408,7 @@ async function restartManagedRuntimeForSettingsChange(
     publishRuntimeStatus({
       state: 'stopped',
       source: 'settings-apply',
-      message: 'Kun was stopped: the new settings have no API key or auto-start is disabled.'
+      message: 'SnS was stopped: the new settings have no API key or auto-start is disabled.'
     })
     return
   }
@@ -1419,13 +1419,13 @@ async function restartManagedRuntimeForSettingsChange(
     await adapter.ensureRunning(launchSettings)
     const healthy = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000)
     if (!healthy) {
-      throw new Error('Kun did not become healthy after the settings change')
+      throw new Error('SnS did not become healthy after the settings change')
     }
     noteRuntimeHealthy('settings-apply')
     publishRuntimeStatus({ state: 'running', source: 'settings-apply' })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    logWarn('settings-apply', `Kun restart failed after settings change: ${message}`)
+    logWarn('settings-apply', `SnS restart failed after settings change: ${message}`)
     await rollbackRuntimeSettingsAfterFailedApply(prev, message)
   }
 }
@@ -1474,7 +1474,7 @@ async function rollbackRuntimeSettingsAfterFailedApply(
       state: 'running',
       source: 'settings-apply',
       rolledBack: true,
-      message: `The new settings failed to apply (${failureMessage}); Kun is running on the previous settings again.`
+      message: `The new settings failed to apply (${failureMessage}); SnS is running on the previous settings again.`
     })
   } catch (error) {
     publishRuntimeStatus({
@@ -1508,17 +1508,17 @@ async function restartManagedRuntimeForMcpConfigChange(settings: AppSettingsV1):
     await adapter.ensureRunning(launchSettings)
     const healthy = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000)
     if (!healthy) {
-      throw new Error('Kun did not become healthy after the MCP config change')
+      throw new Error('SnS did not become healthy after the MCP config change')
     }
     noteRuntimeHealthy('mcp-config')
     publishRuntimeStatus({ state: 'running', source: 'mcp-config' })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    logWarn('mcp-config', `Kun restart failed after MCP config change: ${message}`)
+    logWarn('mcp-config', `SnS restart failed after MCP config change: ${message}`)
     publishRuntimeStatus({
       state: 'failed',
       source: 'mcp-config',
-      message: `Kun failed to restart after the MCP config change: ${message}. Check the MCP config file, then retry.`
+      message: `SnS failed to restart after the MCP config change: ${message}. Check the MCP config file, then retry.`
     })
   }
 }
@@ -1529,14 +1529,14 @@ async function waitForManagedRuntimeReadyBeforeStop(
 ): Promise<void> {
   const healthy = await kunRuntimeHealthMonitor.waitForHealthy(settings, 20_000)
   if (!healthy) {
-    logWarn(source, 'Kun did not become healthy before a managed restart; stopping it anyway')
+    logWarn(source, 'SnS did not become healthy before a managed restart; stopping it anyway')
     return
   }
   const idle = await waitForRuntimeTurnsIdle({ settings })
   if (idle === 'timeout') {
-    logWarn(source, 'Kun still has running turns after waiting; stopping it anyway')
+    logWarn(source, 'SnS still has running turns after waiting; stopping it anyway')
   } else if (idle === 'unavailable') {
-    logWarn(source, 'Could not verify Kun turn idleness before a managed restart; stopping it anyway')
+    logWarn(source, 'Could not verify SnS turn idleness before a managed restart; stopping it anyway')
   }
 }
 
@@ -1575,7 +1575,7 @@ app.whenReady().then(async () => {
     )
     if (cleared) traceStartup('development renderer HTTP cache cleared')
   } catch (error) {
-    console.warn('[kun-gui] failed to clear the development renderer HTTP cache:', error)
+    console.warn('[sns-gui] failed to clear the development renderer HTTP cache:', error)
   }
 
   if (process.platform === 'darwin') {
@@ -1929,7 +1929,7 @@ app.whenReady().then(async () => {
   })
 
   void loadGuiUpdaterModule().catch((error) => {
-    console.warn('[kun-gui updater] failed to initialize on startup:', error)
+    console.warn('[sns-gui updater] failed to initialize on startup:', error)
   })
 
   registerRuntimeSseIpc({ ipcMain, store, ensureRuntime, logError })
@@ -1947,17 +1947,17 @@ app.whenReady().then(async () => {
   void loadGuiUpdaterModule()
     .then((module) => module.showPostUpdateReleaseNotes())
     .catch((error) => {
-      console.warn('[kun-gui updater] failed to show post-update release notes:', error)
+      console.warn('[sns-gui updater] failed to show post-update release notes:', error)
     })
 
   void pruneOnStartup().catch((err) => {
-    console.warn('[kun-gui] prune logs:', err)
+    console.warn('[sns-gui] prune logs:', err)
   })
 
   if (resolveConfiguredApiKey(initial)) {
     setTimeout(() => {
       void kunRuntimeAdapter.resolveExecutable(initial).catch((err) => {
-        console.warn('[kun-gui] prewarm Kun binary:', err)
+        console.warn('[sns-gui] prewarm SnS binary:', err)
       })
     }, 1500)
   }
@@ -1972,15 +1972,15 @@ app.whenReady().then(async () => {
   })
 }).catch((error) => {
   const message = error instanceof Error ? error.message : String(error)
-  console.error('[kun-gui] startup failed:', error)
-  dialog.showErrorBox('Kun failed to start', message)
+  console.error('[sns-gui] startup failed:', error)
+  dialog.showErrorBox('SnS failed to start', message)
   app.quit()
 })
 }
 
 app.on('window-all-closed', () => {
   void stopManagedRuntimes().catch((error) => {
-    console.warn('[kun-gui] failed to stop Kun runtime:', error)
+    console.warn('[sns-gui] failed to stop SnS runtime:', error)
   })
   if (process.platform !== 'darwin') {
     app.quit()
@@ -1996,7 +1996,7 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   void stopManagedRuntimesForQuit()
     .catch((error) => {
-      console.warn('[kun-gui] failed to stop Kun runtime:', error)
+      console.warn('[sns-gui] failed to stop SnS runtime:', error)
     })
     .finally(() => {
       app.quit()

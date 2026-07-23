@@ -1429,7 +1429,7 @@ function AssistantExportButton({
     try {
       const parsedDate = createdAt ? new Date(createdAt) : new Date()
       const date = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate
-      const title = `Kun-answer-${date.toISOString().replace(/[:.]/g, '-')}`
+      const title = `SnS-answer-${date.toISOString().replace(/[:.]/g, '-')}`
       const result = await window.kunGui.exportWriteDocument({
         title,
         workspaceRoot: workspaceRoot || undefined,

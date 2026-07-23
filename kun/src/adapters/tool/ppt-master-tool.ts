@@ -20,9 +20,9 @@ const MAX_GUIDE_OUTPUT_BYTES = 24_000
 const DEFAULT_GUIDE_LINES = 180
 const MAX_GUIDE_LINES = 400
 const PPTX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-const MANAGED_SKILL_DIR = join(homedir(), '.kun', 'skills', 'ppt-master')
+const MANAGED_SKILL_DIR = join(homedir(), '.sns', 'skills', 'ppt-master')
 const INSTALL_METADATA_FILE = '.kun-ppt-master.json'
-const MANAGED_BY = 'kun-gui'
+const MANAGED_BY = 'sns-gui'
 // Keep synchronized with src/main/services/ppt-master-service.ts. This marker
 // prevents a workspace-provided skill with the same id from becoming executable.
 const MANAGED_VERSION = '3.1.0'

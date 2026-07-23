@@ -9,7 +9,7 @@ export function createApprovalConsentToken(input: {
   decision: 'allow' | 'deny'
   expiresAt: number
 }): string {
-  if (!input.runtimeToken) throw new Error('Kun runtime token is required for protected approval.')
+  if (!input.runtimeToken) throw new Error('SnS runtime token is required for protected approval.')
   if (!Number.isSafeInteger(input.expiresAt)) throw new Error('Approval consent expiry is invalid.')
   const nonce = randomBytes(24).toString('base64url')
   const signature = createHmac('sha256', input.runtimeToken)

@@ -83,7 +83,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
   })
   return {
     version: 1,
-    locale: isAppLocale(maybeSettings.locale) ? maybeSettings.locale : 'en',
+    locale: isAppLocale(maybeSettings.locale) ? maybeSettings.locale : 'zh',
     theme:
       maybeSettings.theme === 'light' || maybeSettings.theme === 'dark' || maybeSettings.theme === 'system'
         ? maybeSettings.theme
@@ -315,5 +315,10 @@ function shouldMigrateLegacySettings(settings: AppSettingsV1): boolean {
   const dataDir = typeof raw.agents.kun.dataDir === 'string'
     ? raw.agents.kun.dataDir.replace(/\\/g, '/').toLowerCase()
     : ''
-  return dataDir === '~/.deepseekgui/coreagent' || dataDir.endsWith('/.deepseekgui/coreagent')
+  return (
+    dataDir === '~/.deepseekgui/coreagent'
+    || dataDir.endsWith('/.deepseekgui/coreagent')
+    || dataDir === '~/.kun/data'
+    || dataDir.endsWith('/.kun/data')
+  )
 }

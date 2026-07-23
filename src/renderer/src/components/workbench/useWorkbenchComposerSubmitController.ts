@@ -1,6 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ModelProviderModelGroup } from '@shared/sns-gui-api'
 import {
   isComposerChatModelId,
   modelProfileSupportsTextChat
@@ -22,9 +22,14 @@ import { parseGuiPlanCommand } from '../../plan/plan-command'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import {
   buildComposerFileContextPrompt,
+  imageMimeTypeForReference,
   isComposerDirectoryReference,
   type ComposerFileContextEntry
 } from '../../lib/composer-file-references'
+import {
+  runtimeImagePreviewUrl,
+  uploadRuntimeImageAttachment
+} from '../../lib/runtime-image-attachment'
 import { loadWorkspaceDirectoryContextFiles } from '../../lib/workspace-file-index'
 import { resolveCodeCanvasComposerRoute } from '../../design/canvas/code-canvas'
 import { useCanvasSelectionStore } from '../../design/canvas/canvas-selection-store'
@@ -241,6 +246,9 @@ export function useWorkbenchComposerSubmitController({
           : (reference.relativePath || reference.path)
       })
       if (!result.ok) {
+        // 二进制文件(图片已在发送前转成附件;其余如 zip/二进制)无法当文本读,
+        // 优雅跳过而不是抛错中断整条发送。
+        if (/binary/i.test(result.message)) return
         if (!strict) return
         throw new Error(t('composerFileReadFailed', {
           path: reference.relativePath,
@@ -470,15 +478,65 @@ export function useWorkbenchComposerSubmitController({
     workspaceRoot
   ])
 
+  // 图片型“文件引用”不能当文本读(二进制),这里逐个走图片附件专用通道上传。
+  // 模型不支持图片 / 上传失败时优雅跳过并给出提示,绝不中断整条发送。
+  const uploadImageFileReferencesAsAttachments = useCallback(async (
+    references: ComposerFileReference[]
+  ): Promise<AttachmentReference[]> => {
+    if (references.length === 0) return []
+    if (!attachmentUploadEnabled || typeof window.kunGui?.uploadRuntimeImageAttachment !== 'function') {
+      setAttachmentUploadError(t('composerAttachmentModelUnsupported'))
+      return []
+    }
+    const workspace = normalizeWorkspaceRoot(
+      threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot
+    )
+    const uploaded: AttachmentReference[] = []
+    for (const reference of references) {
+      const path = reference.path?.trim()
+      if (!path) continue
+      try {
+        const result = await uploadRuntimeImageAttachment({
+          source: { kind: 'localPath', path },
+          name: reference.name || 'image',
+          ...(activeThreadId ? { threadId: activeThreadId } : {}),
+          ...(workspace ? { workspace } : {})
+        })
+        const attachment = result.attachment
+        uploaded.push({
+          id: attachment.id,
+          kind: 'image',
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          width: attachment.width,
+          height: attachment.height,
+          previewUrl: runtimeImagePreviewUrl(result)
+        })
+      } catch (error) {
+        setAttachmentUploadError(error instanceof Error ? error.message : String(error))
+      }
+    }
+    return uploaded
+  }, [activeThreadId, attachmentUploadEnabled, setAttachmentUploadError, t, threads, workspaceRoot])
+
   const handleSend = useCallback((): void => {
     void (async (): Promise<void> => {
       const v = input.trim()
       const attachmentScope = getAttachmentScope()
-      const attachments = route === 'chat' || route === 'write' ? composerAttachments : []
+      const baseAttachments = route === 'chat' || route === 'write' ? composerAttachments : []
+      const rawFileReferences = route === 'chat' ? composerFileReferences : []
+      const imageFileReferences = rawFileReferences.filter(
+        (reference) => imageMimeTypeForReference(reference) !== null
+      )
+      const textFileReferences = rawFileReferences.filter(
+        (reference) => imageMimeTypeForReference(reference) === null
+      )
+      const uploadedImageAttachments = await uploadImageFileReferencesAsAttachments(imageFileReferences)
+      const attachments = [...baseAttachments, ...uploadedImageAttachments]
       const documentAttachments = attachments.filter((attachment) => attachment.kind === 'document')
       const attachmentIds = attachments.map((attachment) => attachment.id)
       const publicAttachments = stripTransientAttachmentFields(attachments)
-      const fileReferences = route === 'chat' ? composerFileReferences : []
+      const fileReferences = textFileReferences
       const userFileReferences = composerReferencesToUserFileReferences(fileReferences)
       const reasoningEffort = composerReasoningEffortRequestValue(composerReasoningEffort)
       if (!v && attachmentIds.length === 0 && documentAttachments.length === 0 && fileReferences.length === 0) return
@@ -708,6 +766,7 @@ export function useWorkbenchComposerSubmitController({
     input,
     mirrorClawCommand,
     readComposerFileContextEntries,
+    uploadImageFileReferencesAsAttachments,
     resetClawChannelSession,
     rightPanelMode,
     route,

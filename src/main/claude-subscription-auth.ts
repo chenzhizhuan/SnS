@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import type {
   ClaudeSubscriptionLoginResult,
   ClaudeSubscriptionStatus
-} from '../shared/kun-gui-api'
+} from '../shared/sns-gui-api'
 
 // `claude setup-token` prints a long-lived OAuth token; capture the first match.
 const OAUTH_TOKEN_PATTERN = /sk-ant-oat[\w-]+/

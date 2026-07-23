@@ -64,7 +64,7 @@ export function normalizeKunTurnItem(
   }
 }
 
-/** Pure Kun wire-event to normalized projection-action conversion. */
+/** Pure SnS wire-event to normalized projection-action conversion. */
 export function normalizeKunRuntimeEvent(
   event: CoreRuntimeEventJson,
   deps: KunEventNormalizerDeps
@@ -165,7 +165,7 @@ export function normalizeKunRuntimeEvent(
         const tool = deps.childTool(event)
         return tool ? [{ type: 'tool_updated', payload: tool }] : []
       }
-      const payload = deps.runtimeError(event, 'Kun turn failed')
+      const payload = deps.runtimeError(event, 'SnS turn failed')
       return [
         { type: 'runtime_error_received', payload },
         { type: 'turn_failed', error: deps.errorFromRuntime(payload), options: { terminal: true } }

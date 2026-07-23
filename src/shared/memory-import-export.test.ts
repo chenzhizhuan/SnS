@@ -106,7 +106,7 @@ describe('buildMemoryMarkdownExport', () => {
       ]
     })
 
-    expect(markdown).toContain('# Kun 记忆导出')
+    expect(markdown).toContain('# SnS 记忆导出')
     expect(markdown).toContain('记录数量: 2')
     expect(markdown).toContain('## 指令')
     expect(markdown).toContain('[2026-07-01] - 回答要直接。')

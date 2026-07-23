@@ -27,7 +27,7 @@ import type {
   ComputerUsePermissions,
   ComputerUsePermissionState,
   SkillRootListItem
-} from '@shared/kun-gui-api'
+} from '@shared/sns-gui-api'
 import {
   Ban,
   Check,

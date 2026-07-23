@@ -74,6 +74,8 @@ import {
 } from './local-whisper'
 
 const LEGACY_COREAGENT_DATA_DIR = '~/.deepseekgui/coreagent'
+// 上一代默认数据目录(品牌 Kun);现默认已升级为 ~/.sns/data。
+const LEGACY_KUN_DATA_DIR = '~/.kun/data'
 const LEGACY_KUN_DEFAULT_MODEL = 'deepseek-chat'
 // 旧版真实落盘默认值, 用于把升级前配置迁移到当前 Kun 默认端口。
 const LEGACY_LOCAL_HTTP_DEFAULT_PORT = 7878
@@ -1225,7 +1227,9 @@ function upgradeLegacyKunDefaultDataDir(value: unknown): string {
   if (
     !trimmed ||
     normalized === LEGACY_COREAGENT_DATA_DIR ||
-    normalized.endsWith('/.deepseekgui/coreagent')
+    normalized.endsWith('/.deepseekgui/coreagent') ||
+    normalized === LEGACY_KUN_DATA_DIR ||
+    normalized.endsWith('/.kun/data')
   ) {
     return DEFAULT_KUN_DATA_DIR
   }

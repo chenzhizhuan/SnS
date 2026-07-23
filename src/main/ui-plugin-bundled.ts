@@ -26,9 +26,11 @@ const BUNDLED_SEED_MARKER = '.bundled-seed-v1'
  */
 const BUNDLED_IKUN_MANIFEST = {
   id: UI_PLUGIN_BUNDLED_IKUN_ID,
-  name: 'iKun 模式',
-  version: '1.0.0',
-  author: 'Kun Team',
+  name: 'iSnS 模式',
+  // 1.1.0:品牌 iKun → iSnS 重命名。version 变化会触发对【已播种且未被用户
+  // 删除】的插件做一次性重播,把磁盘上旧的 manifest（name 仍是 iKun）刷新。
+  version: '1.1.0',
+  author: 'SnS Team',
   description: '预装示例插件:坤鸡全家福,附手工运球/快攻/喝奶茶动画与出没彩蛋。',
   figures: {
     swim: 'img/dribble.png',
@@ -74,12 +76,43 @@ export function ensureBundledUiPlugins(kunHomeDir: string): Promise<void> {
   seedPromise ??= (async () => {
     const rootDir = uiPluginsRootDir(kunHomeDir)
     const markerPath = join(rootDir, BUNDLED_SEED_MARKER)
+    const pluginDir = join(rootDir, UI_PLUGIN_BUNDLED_IKUN_ID)
+    const seedVersion = BUNDLED_IKUN_MANIFEST.version
+
+    // marker 现在记录已播种的 manifest 版本(旧版本写的是 'ikun',视为 <当前版本)。
+    let markerVersion: string | null = null
     try {
-      await stat(markerPath)
-      return
+      markerVersion = (await readFile(markerPath, 'utf8')).trim()
     } catch {
       // 尚未播种
     }
+
+    // 已经是当前版本 → 无需任何动作。
+    if (markerVersion === seedVersion) return
+
+    const firstSeed = markerVersion === null
+    if (!firstSeed) {
+      // 之前播种过更早版本。仅当插件目录仍在(用户没删)才重播刷新;
+      // 用户主动删掉的不复活,只把 marker 推进到当前版本避免每次启动重试。
+      let pluginExists = false
+      try {
+        await stat(pluginDir)
+        pluginExists = true
+      } catch {
+        // 插件已被移除
+      }
+      if (!pluginExists) {
+        try {
+          await mkdir(rootDir, { recursive: true })
+          await writeFile(markerPath, seedVersion, 'utf8')
+        } catch {
+          // 标记写入失败可接受,下次再判定
+        }
+        return
+      }
+    }
+
+    // 首次播种,或旧版本且插件仍在 →(重新)播种。seedUiPlugin 会先清空目标目录再写入。
     let seeded = false
     try {
       const figureBytes: Record<string, Buffer> = {}
@@ -99,7 +132,7 @@ export function ensureBundledUiPlugins(kunHomeDir: string): Promise<void> {
     if (seeded) {
       try {
         await mkdir(rootDir, { recursive: true })
-        await writeFile(markerPath, 'ikun\n', 'utf8')
+        await writeFile(markerPath, seedVersion, 'utf8')
       } catch {
         // 标记写入失败可接受,下次会重试播种
       }

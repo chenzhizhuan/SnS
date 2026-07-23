@@ -22,8 +22,8 @@ export function createLegacyDesignSystemMigrationDraft(raw: string): LegacyDesig
     'Migrated from `.kun-design/design-system.json`.',
     'The legacy file was not modified or deleted.',
     componentNames.length
-      ? `Rich Kun component trees remain in the legacy sidecar: ${componentNames.join(', ')}.`
-      : 'No rich Kun component trees were present.'
+      ? `Rich SnS component trees remain in the legacy sidecar: ${componentNames.join(', ')}.`
+      : 'No rich SnS component trees were present.'
   ]
   return {
     content: `${base.trimEnd()}\n\n## Migration Notes\n\n${notes.map((note) => `- ${note}`).join('\n')}\n`,

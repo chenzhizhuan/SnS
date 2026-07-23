@@ -123,7 +123,7 @@ export function buildMemoryMarkdownExport({ records, exportedAt = new Date().toI
   const activeRecords = records.filter((record) => !record.deletedAt)
   const grouped = groupRecordsByCategory(activeRecords)
   const lines = [
-    '# Kun 记忆导出',
+    '# SnS 记忆导出',
     '',
     `导出时间: ${exportedAt}`,
     `记录数量: ${activeRecords.length}`,

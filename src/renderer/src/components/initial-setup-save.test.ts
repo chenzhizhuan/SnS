@@ -13,7 +13,8 @@ import {
   initialSetupAutoWirePlan,
   initialSetupDrafts,
   initialSetupProfileId,
-  initialSetupSelection
+  initialSetupSelection,
+  withInitialSetupUiFields
 } from './initial-setup-save'
 import { settingsPatchSchema } from '../../../main/ipc/app-ipc-schemas'
 
@@ -358,5 +359,24 @@ describe('initialSetupProfileId', () => {
     expect(initialSetupProfileId({ presetId: 'deepseek', mode: 'api' })).toBe('deepseek')
     expect(initialSetupProfileId({ presetId: 'xiaomi', mode: 'token-plan' })).toBe('xiaomi-token-plan')
     expect(initialSetupProfileId({ presetId: 'minimax', mode: 'api' })).toBe('minimax')
+  })
+})
+
+describe('withInitialSetupUiFields', () => {
+  it('forces the onboarding locale and theme into the persisted patch', () => {
+    // 回归:引导页选中文/暗色后,这两个 form 层字段必须进入 patch 才能存下。
+    const patch = withInitialSetupUiFields({ workspaceRoot: '/ws' }, { locale: 'zh', theme: 'dark' })
+    expect(patch.locale).toBe('zh')
+    expect(patch.theme).toBe('dark')
+    expect(patch.workspaceRoot).toBe('/ws')
+  })
+
+  it('produces a patch accepted by the settings patch schema', () => {
+    const patch = withInitialSetupUiFields(
+      buildInitialSetupSettingsPatch(settings(), initialSetupDrafts(settings()), { presetId: 'deepseek', mode: 'api' }),
+      { locale: 'zh', theme: 'system' }
+    )
+    expect(patch.locale).toBe('zh')
+    expect(() => settingsPatchSchema.parse(patch)).not.toThrow()
   })
 })

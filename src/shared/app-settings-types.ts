@@ -118,12 +118,12 @@ export const MIN_KUN_LOCAL_PORT = 10_000
 export const DEFAULT_SCHEDULE_INTERNAL_PORT = 18788
 // 这些默认目录与 legacy-data-migration.ts 的 HOME_DATA_MIGRATION_MAPPINGS
 // 一一对应:老安装的 ~/.deepseekgui/* 在启动期被搬到这里。
-export const DEFAULT_WRITE_WORKSPACE_ROOT = '~/.kun/write_workspace'
+export const DEFAULT_WRITE_WORKSPACE_ROOT = '~/.sns/write_workspace'
 // 对话工作目录的默认值按平台不同:macOS/Windows 用 ~/Documents/Kun,
 // Linux 用 ~/.local/share/Kun/conversations。该默认值由 main 层
 // (DEFAULT_CONVERSATION_WORKSPACE_ROOT_ABSOLUTE)和 renderer 层
 // (defaultConversationWorkspaceRoot)各自按平台推导。
-export const DEFAULT_KUN_DATA_DIR = '~/.kun/data'
+export const DEFAULT_KUN_DATA_DIR = '~/.sns/data'
 export const DEFAULT_KUN_MODEL = 'deepseek-v4-pro'
 export const DEFAULT_PROMPT_OPTIMIZATION_PROMPT = [
   'You rewrite rough spoken or typed instructions into a clear prompt for a coding agent.',

@@ -34,7 +34,7 @@ import {
   applyWriteTypography
 } from '../lib/apply-theme'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
-import type { KunProjectConfigFileResult, SkillRootListItem } from '@shared/kun-gui-api'
+import type { KunProjectConfigFileResult, SkillRootListItem } from '@shared/sns-gui-api'
 import { defaultConversationWorkspaceRoot, normalizeWorkspaceRoot } from '../lib/workspace-path'
 import {
   compactHomePathForSettingsDisplay,
@@ -200,7 +200,7 @@ export function SettingsView(): ReactElement {
   const [skillRoots, setSkillRoots] = useState<SkillRootListItem[]>([])
   const [skillRootsLoading, setSkillRootsLoading] = useState(false)
   const [skillNotice, setSkillNotice] = useState<InlineNotice | null>(null)
-  const [mcpConfigPath, setMcpConfigPath] = useState('~/.kun/mcp.json')
+  const [mcpConfigPath, setMcpConfigPath] = useState('~/.sns/mcp.json')
   const [mcpConfigText, setMcpConfigText] = useState('')
   const [mcpConfigExists, setMcpConfigExists] = useState(false)
   const [mcpLoading, setMcpLoading] = useState(false)

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   HOME_DATA_MIGRATION_MAPPINGS,
+  KUN_TO_SNS_HOME_MIGRATION_MAPPINGS,
   migrateLegacyHomeDataDirs,
   migrateLegacyUserDataDir,
   rewriteLegacyPathsInSettingsFile,
@@ -179,6 +180,27 @@ describe('migrateLegacyHomeDataDirs', () => {
     const results = migrateLegacyHomeDataDirs({ homeDir: home })
     expect(results.every((r) => r.outcome === 'skipped-missing' && r.rewriteSafe)).toBe(true)
   })
+
+  it('migrates the Kun conversation dir to SnS and links the old location', async () => {
+    const home = await makeTempRoot()
+    await mkdir(join(home, 'Documents', 'Kun', '2026-07-20T10-00-00'), { recursive: true })
+    await writeFile(join(home, 'Documents', 'Kun', '2026-07-20T10-00-00', 'note.txt'), 'hi', 'utf8')
+
+    const results = migrateLegacyHomeDataDirs({
+      homeDir: home,
+      mappings: KUN_TO_SNS_HOME_MIGRATION_MAPPINGS
+    })
+
+    const docsMapping = results.find((r) => r.nextPath === join(home, 'Documents', 'SnS'))
+    expect(docsMapping?.outcome).toBe('migrated')
+    expect(docsMapping?.rewriteSafe).toBe(true)
+    // 数据搬到新位置。
+    expect(await readFile(join(home, 'Documents', 'SnS', '2026-07-20T10-00-00', 'note.txt'), 'utf8')).toBe('hi')
+    // 旧位置留兼容链接,sqlite 里记录的会话 cwd 仍可解析。
+    expect(await isSymlinkTo(join(home, 'Documents', 'Kun'), join(home, 'Documents', 'SnS'))).toBe(true)
+    // 当前平台不存在的那条(Linux 变体)判为 skipped-missing,不报错。
+    expect(results.some((r) => r.outcome === 'skipped-missing')).toBe(true)
+  })
 })
 
 describe('rewriteLegacyPathsInSettingsFile', () => {
@@ -261,6 +283,42 @@ describe('rewriteLegacyPathsInSettingsFile', () => {
     expect(rewritten).toBe(true)
     const updated = JSON.parse(await readFile(join(userData, 'kun-settings.json'), 'utf8'))
     expect(updated.agents.kun.dataDir).toBe(`${join(home, '.kun', 'data').replace(/\//g, '\\')}\\sessions`)
+  })
+
+  it('rewrites ~/.kun home paths to ~/.sns and leaves out-of-scope .kun tokens alone', async () => {
+    const home = await makeTempRoot()
+    const userData = join(home, 'userData')
+    await mkdir(userData, { recursive: true })
+    await writeFile(
+      join(userData, 'kun-settings.json'),
+      JSON.stringify({
+        agents: { kun: { dataDir: '~/.kun/data' } },
+        workspaceRoot: join(home, '.kun', 'default_workspace'),
+        write: { defaultWorkspaceRoot: '~/.kun/write_workspace' },
+        // 范围外:workspace 相对协议 & .kunx 扩展名不应被改写。
+        projectConfig: '.kun/project.json',
+        pluginPackage: join(home, 'downloads', 'demo.kunx'),
+        note: 'mentions ~/.kunx casually'
+      }),
+      'utf8'
+    )
+
+    const rewritten = rewriteLegacyPathsInSettingsFile({
+      userDataPath: userData,
+      homeDir: home,
+      mappings: KUN_TO_SNS_HOME_MIGRATION_MAPPINGS
+    })
+
+    expect(rewritten).toBe(true)
+    const updated = JSON.parse(await readFile(join(userData, 'kun-settings.json'), 'utf8'))
+    // HOME 型 .kun → .sns(~ 形式与绝对路径都改)
+    expect(updated.agents.kun.dataDir).toBe('~/.sns/data')
+    expect(updated.workspaceRoot).toBe(join(home, '.sns', 'default_workspace'))
+    expect(updated.write.defaultWorkspaceRoot).toBe('~/.sns/write_workspace')
+    // 范围外的不动:workspace 相对协议 + .kunx 扩展名(边界不是分隔符)
+    expect(updated.projectConfig).toBe('.kun/project.json')
+    expect(updated.pluginPackage).toBe(join(home, 'downloads', 'demo.kunx'))
+    expect(updated.note).toBe('mentions ~/.kunx casually')
   })
 })
 

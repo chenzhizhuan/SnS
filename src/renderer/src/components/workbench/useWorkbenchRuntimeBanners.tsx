@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
+import type { KunRuntimeStatusPayload } from '@shared/sns-gui-api'
 import { RuntimeBanner } from '../RuntimeBanner'
 import {
   resolveWriteRuntimeBannerMessage,

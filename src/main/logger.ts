@@ -3,7 +3,9 @@ import { join } from 'node:path'
 import { DEFAULT_LOG_RETENTION_DAYS } from '../shared/app-settings'
 
 export type LogLevel = 'error' | 'warn' | 'info'
-export type ManagedLogFilePrefix = 'deepseek-gui' | 'kun'
+// 'sns' 是当前写入前缀;'kun'/'deepseek-gui' 是历史前缀,保留在
+// MANAGED_LOG_FILE_PREFIXES 中仅用于按保留期清理旧日志。
+export type ManagedLogFilePrefix = 'deepseek-gui' | 'kun' | 'sns'
 
 type LoggerConfig = {
   /** Directory where log files are stored. */
@@ -15,7 +17,7 @@ type LoggerConfig = {
 }
 
 let cfg: LoggerConfig = { dir: '', enabled: true, retentionDays: DEFAULT_LOG_RETENTION_DAYS }
-const MANAGED_LOG_FILE_PREFIXES: ManagedLogFilePrefix[] = ['deepseek-gui', 'kun']
+const MANAGED_LOG_FILE_PREFIXES: ManagedLogFilePrefix[] = ['deepseek-gui', 'kun', 'sns']
 
 export function configureLogger(config: Partial<LoggerConfig>): void {
   cfg = { ...cfg, ...config }
@@ -77,7 +79,7 @@ export async function appendManagedLogLine(
 async function writeLogLine(level: LogLevel, category: string, message: string): Promise<void> {
   const stamp = new Date().toISOString()
   const line = `[${stamp}] [${level.toUpperCase()}] [${category}] ${message}\n`
-  await appendManagedLogLine('kun', line)
+  await appendManagedLogLine('sns', line)
 }
 
 export function logError(category: string, message: string, detail?: unknown): void {

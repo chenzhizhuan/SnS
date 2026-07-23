@@ -14,7 +14,7 @@
   &nbsp;·&nbsp;
   <strong>English</strong>
   &nbsp;·&nbsp;
-  <a href="https://github.com/KunAgent/Kun/releases">Download</a>
+  <a href="https://github.com/SnSAgent/SnS/releases">Download</a>
   &nbsp;·&nbsp;
   <a href="#documentation-map">Docs</a>
   &nbsp;·&nbsp;
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/KunAgent/Kun/releases"><img src="https://img.shields.io/github/v/release/KunAgent/Kun?label=release" alt="GitHub release"></a>
+  <a href="https://github.com/SnSAgent/SnS/releases"><img src="https://img.shields.io/github/v/release/SnSAgent/SnS?label=release" alt="GitHub release"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue" alt="License: PolyForm Noncommercial 1.0.0"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/Electron-43-47848F?logo=electron&logoColor=white" alt="Electron 43">
@@ -137,7 +137,7 @@ This stack lets Kun route different jobs to the right capability: fast models fo
 
 ### Path A: Download a Release
 
-Download the latest build from [GitHub Releases](https://github.com/KunAgent/Kun/releases).
+Download the latest build from [GitHub Releases](https://github.com/SnSAgent/SnS/releases).
 
 | Platform | Package | Architecture |
 | --- | --- | --- |
@@ -167,7 +167,7 @@ Requirements:
 | Model credentials | At least one of DeepSeek / Xiaomi MiMo / MiniMax / custom provider |
 
 ```bash
-git clone https://github.com/KunAgent/Kun.git
+git clone https://github.com/SnSAgent/SnS.git
 cd Kun
 npm install
 npm run dev
@@ -235,7 +235,7 @@ Include your GitHub username, links to the 5 merged pull requests, and the areas
 
 Thanks to [LobsterAI](https://github.com/netease-youdao/LobsterAI), DeepSeek, Xiaomi MiMo, MiniMax, and everyone who contributes issues, ideas, code, and documentation.
 
-<a href="https://github.com/KunAgent/Kun/graphs/contributors">
+<a href="https://github.com/SnSAgent/SnS/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=KunAgent/Kun" />
 </a>
 

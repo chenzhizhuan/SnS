@@ -31,10 +31,12 @@ import { basename, dirname, join } from 'node:path'
 export type MigrationLogger = (message: string, detail?: unknown) => void
 
 /** 旧版 userData 目录名。顺序即优先级:先匹配近期版本用的名字。 */
-export const LEGACY_USER_DATA_DIR_NAMES = ['DeepSeek GUI', 'deepseek-gui'] as const
+export const LEGACY_USER_DATA_DIR_NAMES = ['Kun', 'DeepSeek GUI', 'deepseek-gui'] as const
 
 export const LEGACY_HOME_DATA_ROOT = '.deepseekgui'
 export const NEW_HOME_DATA_ROOT = '.kun'
+// 第三代品牌:整个家目录数据家从 ~/.kun 迁到 ~/.sns。
+export const SNS_HOME_DATA_ROOT = '.sns'
 
 export type HomeDataMigrationMapping = {
   /** 相对 home 的旧路径段,如 ['.deepseekgui', 'kun'] */
@@ -54,6 +56,33 @@ export const HOME_DATA_MIGRATION_MAPPINGS: readonly HomeDataMigrationMapping[] =
   { legacySegments: [LEGACY_HOME_DATA_ROOT, 'default_workspace'], nextSegments: [NEW_HOME_DATA_ROOT, 'default_workspace'] },
   { legacySegments: [LEGACY_HOME_DATA_ROOT, 'claw'], nextSegments: [NEW_HOME_DATA_ROOT, 'claw'] },
   { legacySegments: [LEGACY_HOME_DATA_ROOT, 'write_workspace'], nextSegments: [NEW_HOME_DATA_ROOT, 'write_workspace'] }
+] as const
+
+/**
+ * 品牌迁移(Kun → SnS)映射,含两部分:
+ *  1. 对话工作目录(不在 ~/.kun 下,而在 ~/Documents 或 ~/.local/share)。
+ *     两平台都列出,不匹配的那条在对应平台判为 skipped-missing,无害。
+ *  2. 整个家目录数据家 ~/.kun → ~/.sns(root 级整目录搬迁)。这一条**必须放最后**:
+ *     deepseek→kun 的子目录搬迁(HOME_DATA_MIGRATION_MAPPINGS)先跑、可能创建/填充
+ *     ~/.kun,随后这条把整棵 ~/.kun 搬进 ~/.sns,同一次启动完成链式迁移。
+ *     搬迁后 ~/.kun 留一个指向 ~/.sns 的 junction(Windows 普通用户即可创建),
+ *     让所有残留的 ~/.kun/... 绝对路径(sqlite 会话 cwd、config.toml、运行时硬编码等)
+ *     仍能解析;settings 里的 ~/.kun 路径由路径改写一并修正为 ~/.sns。
+ */
+export const KUN_TO_SNS_HOME_MIGRATION_MAPPINGS: readonly HomeDataMigrationMapping[] = [
+  { legacySegments: ['Documents', 'Kun'], nextSegments: ['Documents', 'SnS'] },
+  {
+    legacySegments: ['.local', 'share', 'Kun', 'conversations'],
+    nextSegments: ['.local', 'share', 'SnS', 'conversations']
+  },
+  // 整目录搬迁必须最后执行(见上)。
+  { legacySegments: [NEW_HOME_DATA_ROOT], nextSegments: [SNS_HOME_DATA_ROOT] }
+] as const
+
+/** 启动期真正执行的全部家目录迁移映射(deepseek→kun 与 kun→sns 两代拼接)。 */
+export const ALL_HOME_DATA_MIGRATION_MAPPINGS: readonly HomeDataMigrationMapping[] = [
+  ...HOME_DATA_MIGRATION_MAPPINGS,
+  ...KUN_TO_SNS_HOME_MIGRATION_MAPPINGS
 ] as const
 
 export type HomeMappingOutcome =
@@ -461,7 +490,11 @@ export function runLegacyKunDataMigration(input: {
 
   let home: HomeDataMigrationResult[] = []
   try {
-    home = migrateLegacyHomeDataDirs({ homeDir: input.homeDir, log })
+    home = migrateLegacyHomeDataDirs({
+      homeDir: input.homeDir,
+      mappings: ALL_HOME_DATA_MIGRATION_MAPPINGS,
+      log
+    })
   } catch (error) {
     log('legacy-migration: unexpected home migration failure', {
       message: error instanceof Error ? error.message : String(error)

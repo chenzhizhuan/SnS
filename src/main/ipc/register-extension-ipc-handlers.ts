@@ -247,7 +247,7 @@ export function startExtensionNotificationPump(
       if (!result.ok) return
       const parsed = extensionNotificationSnapshotResponseSchema.safeParse(safeJsonParse(result.body))
       if (!parsed.success) {
-        options.logError?.('extension-notification', 'Kun returned an invalid notification snapshot.', {
+        options.logError?.('extension-notification', 'SnS returned an invalid notification snapshot.', {
           issues: parsed.error.issues.map((issue) => ({
             path: issue.path.join('.'),
             message: issue.message
@@ -314,14 +314,14 @@ export function registerExtensionIpcHandlers(
     const parent = options.getMainWindow()
     const result = parent
       ? await dialog.showOpenDialog(parent, {
-          title: 'Install Kun extension package',
+          title: 'Install SnS extension package',
           properties: ['openFile'],
-          filters: [{ name: 'Kun Extension', extensions: ['kunx'] }]
+          filters: [{ name: 'SnS Extension', extensions: ['kunx'] }]
         })
       : await dialog.showOpenDialog({
-          title: 'Install Kun extension package',
+          title: 'Install SnS extension package',
           properties: ['openFile'],
-          filters: [{ name: 'Kun Extension', extensions: ['kunx'] }]
+          filters: [{ name: 'SnS Extension', extensions: ['kunx'] }]
         })
     return { canceled: result.canceled, path: result.canceled ? null : result.filePaths[0] ?? null }
   })
@@ -331,11 +331,11 @@ export function registerExtensionIpcHandlers(
     const parent = options.getMainWindow()
     const result = parent
       ? await dialog.showOpenDialog(parent, {
-          title: 'Load Kun extension development directory',
+          title: 'Load SnS extension development directory',
           properties: ['openDirectory']
         })
       : await dialog.showOpenDialog({
-          title: 'Load Kun extension development directory',
+          title: 'Load SnS extension development directory',
           properties: ['openDirectory']
         })
     return { canceled: result.canceled, path: result.canceled ? null : result.filePaths[0] ?? null }
@@ -594,9 +594,9 @@ export function registerExtensionIpcHandlers(
         : `Change permissions for ${request.extensionId} ${expectedVersion}?`,
       detail: [
         enableAfterApply === 'global'
-          ? 'After approval, Kun will apply these permissions to the selected workspace and enable the extension globally.'
+          ? 'After approval, SnS will apply these permissions to the selected workspace and enable the extension globally.'
           : enableAfterApply === 'workspace'
-            ? 'After approval, Kun will apply these permissions and enable the extension in the selected workspace.'
+            ? 'After approval, SnS will apply these permissions and enable the extension in the selected workspace.'
             : '',
         formatPermissionChangeReviewDetail(currentPermissions, nextPermissions)
       ].filter(Boolean).join('\n\n')
@@ -703,7 +703,7 @@ export function registerExtensionIpcHandlers(
     }, consentRequestId, {
       title: 'Roll back extension',
       message: `Roll back ${request.extensionId}?`,
-      detail: 'Kun will switch to the retained previous package and a compatible state snapshot.'
+      detail: 'SnS will switch to the retained previous package and a compatible state snapshot.'
     }, () => options.runtimeRequest(
       `/v1/extensions/${encodeURIComponent(request.extensionId)}/rollback`,
       'POST',
@@ -803,7 +803,7 @@ export function registerExtensionIpcHandlers(
     if (!result.ok) throw runtimeResultError(result)
     const response = safeJsonParse(result.body)
     if (!isRecord(response) || response.responded !== true) {
-      throw new Error('Kun returned an invalid extension notification response.')
+      throw new Error('SnS returned an invalid extension notification response.')
     }
     return true
   })
@@ -916,12 +916,12 @@ function registerViewIpcHandlers(
     )
     if (!result.ok) throw runtimeResultError(result)
     const runtimeSession = parseRuntimeViewSession(result.body)
-    if (!runtimeSession) throw new Error('Kun returned an invalid extension View Session.')
+    if (!runtimeSession) throw new Error('SnS returned an invalid extension View Session.')
     if (
       runtimeSession.extensionId !== identity.extensionId ||
       runtimeSession.extensionVersion !== view.extensionVersion ||
       runtimeSession.contributionId !== request.contributionId
-    ) throw new Error('Kun returned a mismatched extension View Session.')
+    ) throw new Error('SnS returned a mismatched extension View Session.')
     const record = options.viewSessions.create({
       sessionId: runtimeSession.sessionId,
       runtimeSessionId: runtimeSession.sessionId,
@@ -1429,7 +1429,7 @@ function registerAccountIpcHandlers(options: RegisterExtensionIpcHandlersOptions
       title: 'Connect provider account',
       message: `Start account authorization for ${request.providerId}?`,
       detail: [
-        `Kun will activate ${request.extensionId} for the declared authentication flow. Extension Webviews cannot approve this action.`,
+        `SnS will activate ${request.extensionId} for the declared authentication flow. Extension Webviews cannot approve this action.`,
         effectiveScopes.length ? `OAuth scopes: ${effectiveScopes.join(', ')}` : undefined
       ].filter(Boolean).join('\n\n')
     }, () => options.runtimeRequest(
@@ -1480,7 +1480,7 @@ function registerAccountIpcHandlers(options: RegisterExtensionIpcHandlersOptions
     const callback = await options.credentialSurface.prompt(options.getMainWindow(), {
       title: 'Complete provider authorization',
       message: 'Paste the final OAuth callback URL from your browser.',
-      detail: `Kun will validate the authorization state and connect it to ${request.extensionId}. The callback URL is never exposed to extension code or Webviews.`,
+      detail: `SnS will validate the authorization state and connect it to ${request.extensionId}. The callback URL is never exposed to extension code or Webviews.`,
       label: 'OAuth callback URL',
       placeholder: 'https://callback.example/?code=...&state=...',
       submitLabel: 'Complete authorization'
@@ -1588,7 +1588,7 @@ function registerAccountIpcHandlers(options: RegisterExtensionIpcHandlersOptions
     const credential = await options.credentialSurface.prompt(options.getMainWindow(), {
       title: 'Add provider account',
       message: `Enter an API key for ${request.providerId}.`,
-      detail: `The key will be stored by Kun and associated with ${request.extensionId}. Extension Webviews never receive it.`,
+      detail: `The key will be stored by SnS and associated with ${request.extensionId}. Extension Webviews never receive it.`,
       label: 'API key',
       placeholder: 'Paste API key',
       submitLabel: 'Save account'
@@ -1680,7 +1680,7 @@ function registerAccountIpcHandlers(options: RegisterExtensionIpcHandlersOptions
     const credential = await options.credentialSurface.prompt(options.getMainWindow(), {
       title: 'Replace provider API key',
       message: `Enter the replacement API key for the selected ${request.providerId} account.`,
-      detail: 'Kun replaces the protected credential atomically. The account reference and existing provider bindings stay unchanged.',
+      detail: 'SnS replaces the protected credential atomically. The account reference and existing provider bindings stay unchanged.',
       label: 'Replacement API key',
       placeholder: 'Paste replacement API key',
       submitLabel: 'Replace API key'
@@ -1751,14 +1751,14 @@ function registerAccountIpcHandlers(options: RegisterExtensionIpcHandlersOptions
       senderId: event.sender.id
     }, undefined, {
       title: 'Use extension model provider',
-      message: `Allow ${extension.manifest.displayName ?? request.extensionId} to handle Kun model requests?`,
+      message: `Allow ${extension.manifest.displayName ?? request.extensionId} to handle SnS model requests?`,
       detail: [
         `Provider: ${provider.displayName} (${request.providerId})`,
         `Model: ${request.modelId}`,
         `Account reference: ${request.accountId}`,
         'The extension Node adapter can receive:',
         ...dataCategories.map((category) => `• ${category}`),
-        'Kun stores only the provider, opaque account reference, model, extension version, and acknowledgement. Credential material is not copied into this binding. Requests will fail explicitly if this exact provider/account/model becomes unavailable.'
+        'SnS stores only the provider, opaque account reference, model, extension version, and acknowledgement. Credential material is not copied into this binding. Requests will fail explicitly if this exact provider/account/model becomes unavailable.'
       ].join('\n')
     }, () => options.runtimeRequest(
       '/v1/extensions/model-providers/binding',
@@ -2048,7 +2048,7 @@ function contributionRiskLabels(manifest: ReturnType<typeof ExtensionManifestSch
     labels.unshift('Runs Node code with your operating-system user privileges.')
   }
   if (manifest.contributes.hostContentScripts.length > 0) {
-    labels.push(`Direct DOM: can read or change visible Kun workbench content (${manifest.contributes.hostContentScripts.length} contribution(s)).`)
+    labels.push(`Direct DOM: can read or change visible SnS workbench content (${manifest.contributes.hostContentScripts.length} contribution(s)).`)
   }
   if (manifest.contributes.modelProviders.length > 0) {
     labels.push(`Model provider: receives complete model-visible prompts, attachments, and tool definitions when selected (${manifest.contributes.modelProviders.length} provider(s)).`)
@@ -2082,7 +2082,7 @@ function permissionRiskLabels(permissions: readonly string[]): string[] {
     labels.push('Media export permission can write to user-approved output targets.')
   }
   if (permissions.some((permission) => permission === 'agent.run' || permission === 'tools.register')) {
-    labels.push('Agent and tool permissions can start private Agent runs and expose declared tools to Kun.')
+    labels.push('Agent and tool permissions can start private Agent runs and expose declared tools to SnS.')
   }
   if (permissions.some((permission) => permission === 'hostDom')) {
     labels.push('Direct DOM permission can read and alter visible workbench content and may imitate ordinary UI.')
@@ -2131,7 +2131,7 @@ function formatInstallReviewDetail(review: ExtensionInstallReview): string {
   const signature = review.signatureStatus === 'verified'
     ? 'verified'
     : review.signatureStatus === 'present-unverified'
-      ? 'signature present, but not verified by Kun'
+      ? 'signature present, but not verified by SnS'
       : 'unsigned'
   const permissions = boundedReviewList(review.requestedPermissions, 40)
   const risks = boundedReviewList(review.contributionRisks, 12)
@@ -2147,8 +2147,8 @@ function formatInstallReviewDetail(review: ExtensionInstallReview): string {
       ? `Requested broker permissions:\n${permissions}`
       : 'This package requests no broker permissions.',
     review.sourceKind === 'Custom HTTPS Index'
-      ? 'Kun will download this exact version, verify the displayed SHA-256, then revalidate the package manifest, integrity, compatibility, and permission metadata before activation.'
-      : 'Kun will revalidate package integrity, compatibility, and declared resources before activation.'
+      ? 'SnS will download this exact version, verify the displayed SHA-256, then revalidate the package manifest, integrity, compatibility, and permission metadata before activation.'
+      : 'SnS will revalidate package integrity, compatibility, and declared resources before activation.'
   ].join('\n\n').slice(0, 16_384)
 }
 
@@ -2433,7 +2433,7 @@ async function syncWorkbenchEnvironmentToRuntime(
       JSON.stringify(environment)
     )
     if (!result.ok) {
-      options.logError?.('extension-workbench', 'Kun rejected the workbench environment update.', {
+      options.logError?.('extension-workbench', 'SnS rejected the workbench environment update.', {
         status: result.status
       })
     }
@@ -2480,7 +2480,7 @@ async function presentProtectedAccountAuthorization(
     await options.credentialSurface.presentAuthorization(options.getMainWindow(), {
       title: 'Authorize provider account',
       message: `Complete authorization for ${providerId}.`,
-      detail: `This protected Kun window is isolated from ${extensionId}, its Webviews, and host content scripts.`,
+      detail: `This protected SnS window is isolated from ${extensionId}, its Webviews, and host content scripts.`,
       verificationUrl,
       ...(session.userCode ? { userCode: session.userCode } : {}),
       ...(session.expiresAt ? { expiresAt: session.expiresAt } : {})
@@ -2498,7 +2498,7 @@ async function presentProtectedAccountAuthorization(
     })
     return runtimeFailure(
       'EXTENSION_PROTECTED_SURFACE_FAILED',
-      'Kun could not present the protected account authorization window.',
+      'SnS could not present the protected account authorization window.',
       502
     )
   }
@@ -2529,7 +2529,7 @@ function runtimeResultError(result: ExtensionRuntimeRequestResult): Error {
   const parsed = safeJsonParse(result.body)
   const message = isRecord(parsed) && typeof parsed.message === 'string'
     ? parsed.message
-    : `Kun extension request failed (${result.status}).`
+    : `SnS extension request failed (${result.status}).`
   return new Error(message.slice(0, 2_000))
 }
 

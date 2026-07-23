@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { DesktopCommand } from '@shared/kun-gui-api'
+import type { DesktopCommand } from '@shared/sns-gui-api'
 import {
   resolveKeyboardShortcutBindings,
   type KeyboardShortcutBindingsV1,

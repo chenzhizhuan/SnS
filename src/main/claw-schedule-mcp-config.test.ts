@@ -89,8 +89,8 @@ const launch: ClawScheduleMcpLaunchConfig = {
 
 describe('claw schedule MCP config', () => {
   it('uses Kun config files by default', () => {
-    expect(resolveKunConfigPath()).toBe(join(homedir(), '.kun', 'config.toml'))
-    expect(resolveKunMcpJsonPath()).toBe(join(homedir(), '.kun', 'mcp.json'))
+    expect(resolveKunConfigPath()).toBe(join(homedir(), '.sns', 'config.toml'))
+    expect(resolveKunMcpJsonPath()).toBe(join(homedir(), '.sns', 'mcp.json'))
     expect(resolveDeepseekConfigPath()).toBe(resolveKunConfigPath())
   })
 

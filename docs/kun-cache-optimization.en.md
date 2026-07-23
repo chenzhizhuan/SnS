@@ -354,5 +354,5 @@ Points worth learning from in the next stage:
 ## Related documents
 
 - Architecture overview: `docs/kun-architecture.md`
-- Kun Contributing Guide: `docs/kun-contributing.md`
+- SnS Contributing Guide: `docs/kun-contributing.md`
 - Kun usage instructions: `kun/README.md`

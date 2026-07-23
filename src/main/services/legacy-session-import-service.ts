@@ -6,7 +6,7 @@ import type {
   LegacySessionDetectedSource,
   LegacySessionImportSummary,
   LegacySessionSourceKind
-} from '../../shared/kun-gui-api'
+} from '../../shared/sns-gui-api'
 
 /**
  * 把“DeepSeek GUI”时代遗留的会话目录导入到当前 Kun 数据目录。

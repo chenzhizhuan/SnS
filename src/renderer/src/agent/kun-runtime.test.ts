@@ -77,7 +77,7 @@ describe('KunRuntimeProvider', () => {
   it('reports the kun id and Kun display name', () => {
     const provider = new KunRuntimeProvider()
     expect(provider.id).toBe('kun')
-    expect(provider.displayName).toBe('Kun')
+    expect(provider.displayName).toBe('SnS')
   })
 
   it('exposes the local HTTP/SSE capabilities', () => {

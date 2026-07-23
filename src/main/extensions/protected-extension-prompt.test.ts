@@ -112,7 +112,7 @@ describe('protected extension prompt localization', () => {
       title: 'Review permissions and enable extension',
       message: 'Review permissions and enable?',
       detail: [
-        'After approval, Kun will apply these permissions to the selected workspace and enable the extension globally.',
+        'After approval, SnS will apply these permissions to the selected workspace and enable the extension globally.',
         'Resulting broker permissions:\n• ui.views'
       ].join('\n\n')
     }, 'zh')
@@ -140,7 +140,7 @@ describe('protected extension prompt localization', () => {
         'Signature: unsigned.',
         'Host-authored risk summary:\n• Runs Node code with your operating-system user privileges.',
         'Requested broker permissions:\n• media.read',
-        'Kun will revalidate package integrity, compatibility, and declared resources before activation.'
+        'SnS will revalidate package integrity, compatibility, and declared resources before activation.'
       ].join('\n\n')
     }, 'zh')
 
@@ -174,7 +174,7 @@ describe('protected extension prompt localization', () => {
       operationKind: 'provider.bind'
     }), {
       title: 'Use extension model provider',
-      message: 'Allow Example Provider to handle Kun model requests?',
+      message: 'Allow Example Provider to handle SnS model requests?',
       detail: [
         'Provider: Example (provider.example)',
         'Model: example-model',
@@ -184,11 +184,11 @@ describe('protected extension prompt localization', () => {
         '• system and mode instructions',
         '• attachments when present (text, image)',
         '• advertised tool names, descriptions, and input schemas',
-        'Kun stores only the provider, opaque account reference, model, extension version, and acknowledgement. Credential material is not copied into this binding. Requests will fail explicitly if this exact provider/account/model becomes unavailable.'
+        'SnS stores only the provider, opaque account reference, model, extension version, and acknowledgement. Credential material is not copied into this binding. Requests will fail explicitly if this exact provider/account/model becomes unavailable.'
       ].join('\n')
     }, 'zh')
 
-    expect(prompt.message).toBe('要允许 Example Provider 处理 Kun 的模型请求吗？')
+    expect(prompt.message).toBe('要允许 Example Provider 处理 SnS 的模型请求吗？')
     expect(prompt.detail).toContain('提供商： Example (provider.example)')
     expect(prompt.detail).toContain('模型： example-model')
     expect(prompt.detail).toContain('账户引用： account-1')

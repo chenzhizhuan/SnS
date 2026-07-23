@@ -352,6 +352,22 @@ describe('component prototype hardening', () => {
       .toThrow(/forbidden embedded/)
   })
 
+  it('auto-injects the component marker when the model omits it', () => {
+    const withoutMarker = validHtml().replace(
+      '<meta name="kun-component-prototype" content="1">',
+      ''
+    )
+    // 缺标记不再抛错
+    const hardened = hardenComponentPrototypeHtml(withoutMarker)
+    // 工具自动补上标记(且只出现一次)
+    expect(hardened.match(/name="kun-component-prototype"/g)).toHaveLength(1)
+  })
+
+  it('keeps a single marker when the model already included it', () => {
+    const hardened = hardenComponentPrototypeHtml(validHtml())
+    expect(hardened.match(/name="kun-component-prototype"/g)).toHaveLength(1)
+  })
+
   it('rejects browser storage in otherwise standalone prototypes', () => {
     expect(() => hardenComponentPrototypeHtml(
       validHtml().replace('</body>', '<script>localStorage.setItem("state", "1")</script></body>')

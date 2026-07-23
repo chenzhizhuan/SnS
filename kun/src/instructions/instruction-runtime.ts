@@ -262,7 +262,7 @@ async function readUtf8Prefix(handle: FileHandle, maxBytes: number): Promise<{ r
 }
 
 function globalAgentsPath(home: string): string {
-  return join(home, '.kun', KUN_AGENTS_FILENAME)
+  return join(home, '.sns', KUN_AGENTS_FILENAME)
 }
 
 function normalizeWorkspaceRoot(path: string, home: string): string {

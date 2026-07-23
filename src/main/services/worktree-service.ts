@@ -51,7 +51,7 @@ function worktreePath(poolDir: string, poolIndex: number): string {
 
 function resolvePoolDir(projectPath: string, worktreeRoot?: string): string {
   const projectBasename = basename(projectPath) || 'project'
-  const root = worktreeRoot?.trim() || join(homedir(), '.kun')
+  const root = worktreeRoot?.trim() || join(homedir(), '.sns')
   return join(root, projectBasename)
 }
 

@@ -302,7 +302,7 @@ export function summarizeDesignProjectContract(
   const motion = buildCanvasMotionSummary(options.canvasDocument)
   return {
     path: STITCH_DESIGN_MD_PATH,
-    title: options.document?.title ?? 'Kun design project',
+    title: options.document?.title ?? 'SnS design project',
     artifactCount: artifacts.length,
     screenCount: artifacts.filter((artifact) => artifact.kind === 'html').length,
     svgArtifactCount: artifacts.filter((artifact) => artifact.kind === 'svg').length,

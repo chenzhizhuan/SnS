@@ -52,8 +52,8 @@ let backgroundCheckPromise: Promise<void> | null = null
 
 const GUI_UPDATE_SCHEDULE_FILE = 'gui-update-schedule.json'
 const GUI_VERSION_STATE_FILE = 'gui-version-state.json'
-const DEFAULT_CHANGELOG_DIRECTORY_URL = 'https://github.com/KunAgent/Kun/tree/master/release'
-const DEFAULT_CHANGELOG_FILE_BASE_URL = 'https://github.com/KunAgent/Kun/blob/master/release'
+const DEFAULT_CHANGELOG_DIRECTORY_URL = 'https://github.com/SnSAgent/SnS/tree/master/release'
+const DEFAULT_CHANGELOG_FILE_BASE_URL = 'https://github.com/SnSAgent/SnS/blob/master/release'
 
 type GuiVersionState = {
   lastSeenVersion?: string
@@ -456,7 +456,7 @@ async function runScheduledGuiUpdateCheck(): Promise<void> {
       await writeLastScheduledCheckAt(nowMs)
       await checkGuiUpdate()
     } catch (error) {
-      console.warn('[kun-gui updater] scheduled GUI update check failed:', error)
+      console.warn('[sns-gui updater] scheduled GUI update check failed:', error)
     } finally {
       backgroundCheckPromise = null
       void scheduleNextBackgroundCheck()
@@ -582,9 +582,9 @@ export function initializeGuiUpdater(
   }
 
   autoUpdater.logger = {
-    info: (message?: unknown) => console.info('[kun-gui updater]', message),
-    warn: (message?: unknown) => console.warn('[kun-gui updater]', message),
-    error: (message?: unknown) => console.error('[kun-gui updater]', message)
+    info: (message?: unknown) => console.info('[sns-gui updater]', message),
+    warn: (message?: unknown) => console.warn('[sns-gui updater]', message),
+    error: (message?: unknown) => console.error('[sns-gui updater]', message)
   }
 
   autoUpdater.on('checking-for-update', () => {
@@ -615,7 +615,7 @@ export function initializeGuiUpdater(
     lastInfo = info
     pendingVersionStateWrite = recordPendingUpdate(event)
       .catch((error) => {
-        console.warn('[kun-gui updater] failed to save release notes:', error)
+        console.warn('[sns-gui updater] failed to save release notes:', error)
       })
       .finally(() => {
         pendingVersionStateWrite = null
@@ -631,7 +631,7 @@ export function initializeGuiUpdater(
   nativeAutoUpdater?.on?.('before-quit-for-update', () => {
     markUpdateInstallQuitting(true)
     void runBeforeInstallUpdate().catch((error) => {
-      console.warn('[kun-gui updater] failed to stop runtimes before update quit:', error)
+      console.warn('[sns-gui updater] failed to stop runtimes before update quit:', error)
     })
   })
 
@@ -658,13 +658,13 @@ export async function showPostUpdateReleaseNotes(): Promise<void> {
   const isZh = locale === 'zh'
   const options: MessageBoxOptions = {
     type: 'info',
-    title: isZh ? 'Kun 已更新' : 'Kun updated',
-    message: isZh ? `已更新到 Kun ${currentVersion}` : `Kun has been updated to ${currentVersion}`,
+    title: isZh ? 'SnS 已更新' : 'SnS updated',
+    message: isZh ? `已更新到 SnS ${currentVersion}` : `SnS has been updated to ${currentVersion}`,
     detail:
       pendingUpdate?.releaseNotes ??
       (isZh
-        ? '此版本的完整更新内容可在 Kun 更新日志中查看。'
-        : 'See the Kun changelog for the complete release notes.'),
+        ? '此版本的完整更新内容可在 SnS 更新日志中查看。'
+        : 'See the SnS changelog for the complete release notes.'),
     buttons: isZh ? ['查看更新日志', '稍后'] : ['View changelog', 'Later'],
     defaultId: 0,
     cancelId: 1,

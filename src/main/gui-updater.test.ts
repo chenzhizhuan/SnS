@@ -370,14 +370,14 @@ describe('showPostUpdateReleaseNotes', () => {
     expect(showMessageBox).toHaveBeenCalledTimes(1)
     expect(showMessageBox).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'Kun 已更新',
-        message: '已更新到 Kun 0.2.0',
+        title: 'SnS 已更新',
+        message: '已更新到 SnS 0.2.0',
         detail: '修复更新流程并改进启动体验。',
         buttons: ['查看更新日志', '稍后']
       })
     )
     expect(openExternal).toHaveBeenCalledWith(
-      'https://github.com/KunAgent/Kun/blob/master/release/release-v0.2.0.md'
+      'https://github.com/SnSAgent/SnS/blob/master/release/release-v0.2.0.md'
     )
     expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({
       lastSeenVersion: '0.2.0'

@@ -62,7 +62,7 @@ export type HostContentScriptPlan = {
 }
 
 const UNSUPPORTED_DOM_WARNING =
-  'Direct host DOM selectors and layout are unsupported compatibility dependencies and may change in any Kun release.'
+  'Direct host DOM selectors and layout are unsupported compatibility dependencies and may change in any SnS release.'
 const CONTENT_SCRIPT_CSP =
   "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
 

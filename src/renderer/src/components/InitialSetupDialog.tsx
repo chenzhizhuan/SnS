@@ -13,6 +13,7 @@ import {
 } from '@shared/app-settings'
 import {
   buildInitialSetupSettingsPatch,
+  withInitialSetupUiFields,
   INITIAL_SETUP_PROVIDER_PRESETS,
   initialSetupAutoWirePlan,
   initialSetupDrafts,
@@ -235,6 +236,8 @@ export function InitialSetupDialog(): ReactElement {
         setCurrentForm(s)
         setDrafts(initialSetupDrafts(s))
         setSelection(initialSetupSelection(s))
+        // 引导页首屏即用已保存/默认 locale(默认 zh),避免英文闪一下。
+        void applyI18n(s.locale)
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e))
@@ -323,8 +326,10 @@ export function InitialSetupDialog(): ReactElement {
     setSaving(true)
     setError(null)
     try {
+      // locale / theme 会被 diff 基准吃掉(见 withInitialSetupUiFields 注释),
+      // 显式并回,确保引导页选的语言/主题随保存持久化。
       const next = await rendererRuntimeClient.setSettings(
-        buildInitialSetupSettingsPatch(current, drafts, selection)
+        withInitialSetupUiFields(buildInitialSetupSettingsPatch(current, drafts, selection), current)
       )
       setCurrentForm(next)
       setDrafts(initialSetupDrafts(next))
