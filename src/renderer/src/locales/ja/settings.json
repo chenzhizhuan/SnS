@@ -1373,7 +1373,7 @@
   "memoryScope_project": "プロジェクト",
   "memoryLastInjected": "最後に注入された",
   "memoryLastInjectedDesc": "最新のターンに挿入されたメモリ レコード ID。",
-  "memoryDisabledHint": "メモリは現在無効になっています。メモリ レコードを作成して使用するには、ランタイム設定 (kun config) でこれを有効にします。",
+  "memoryDisabledHint": "メモリは現在無効になっています。メモリ レコードを作成して使用するには、ランタイム設定 (sns config) でこれを有効にします。",
   "memoryEnable": "メモリを有効にする",
   "memoryEnableDesc": "有効にすると、アシスタントはセッション間で事実と設定を保持し、それらをコンテキストに自動的に挿入します。変更は次のターンに適用されます。",
   "codexEndpointLocked": "ChatGPT サブスクリプションは固定エンドポイントを使用するため、変更できません。",
